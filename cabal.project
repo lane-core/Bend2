@@ -1,0 +1,9 @@
+packages: .
+  -- , ../../HVM3
+
+package *
+  optimization: 2
+
+source-repository-package
+  type: git
+  location: https://github.com/HigherOrderCO/HVM3
