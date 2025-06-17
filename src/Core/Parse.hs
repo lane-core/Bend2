@@ -886,10 +886,8 @@ parseDefFunction f = label "function definition" $ do
   returnType <- parseTerm
   _ <- symbol ":"
   body <- parseTerm
-  let (piType, lamBody) = case args of
-        [] -> (All Uni (Lam "_" (\_ -> returnType)), Lam "_" (\_ -> body))
-        _  -> foldr nestTypeBod (returnType, body) args
-  return (f, (Fix f (\v -> lamBody), piType))
+  let (typ, bod) = foldr nestTypeBod (returnType, body) args
+  return (f, (Fix f (\v -> bod), typ))
   where
     parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
     nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (\v -> currType)), Lam argName (\v -> currBod))

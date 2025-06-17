@@ -56,13 +56,13 @@ runMain book = do
       return ()
     Just _ -> do
       let boundBook = bindBook book
-      let mainCall = App (Ref "main") One
+      let mainCall = Ref "main"
       case infer 0 boundBook id mainCall of
         Fail e -> do
           putStrLn $ "Error running main: " ++ show e
           exitFailure
         Done typ -> do
-          let result = normal 1 0 boundBook mainCall
+          let result = normal 2 0 boundBook mainCall
           putStrLn ""
           putStrLn "Running main:"
           putStrLn $ show result

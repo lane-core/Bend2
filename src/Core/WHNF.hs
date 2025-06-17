@@ -14,6 +14,8 @@ whnf lv book term = do
   -- trace ("whnf " ++ show term) $
   case term of
     Let v f -> whnfLet lv book v f
+    Ref k   -> whnfRef lv book k
+    Fix k f -> whnfFix lv book k f
     Ann x _ -> whnf lv book x
     Chk x _ -> whnf lv book x
     App f x -> whnfApp lv book (App f x) f x
@@ -22,12 +24,29 @@ whnf lv book term = do
 whnfLet :: Int -> Book -> Term -> Term -> Term
 whnfLet lv book v f = whnf lv book (App f v)
 
+whnfRef :: Int -> Book -> Name -> Term
+whnfRef lv book k = 
+  case lv of
+    0 -> Ref k
+    1 -> Ref k
+    2 -> case deref book k of
+      Just (term, _) -> whnf lv book term
+      Nothing        -> Ref k
+    _ -> error "unreachable"
+
+whnfFix :: Int -> Book -> String -> Body -> Term
+whnfFix lv book k f =
+  case lv of
+    0 -> Fix k f
+    1 -> Fix k f
+    2 -> whnf lv book (f (Fix k f))
+    _ -> error "unreachable"
+
 whnfAppRef :: Int -> Book -> Term -> Name -> Term -> Term
-whnfAppRef 0 book undo k x = App (Ref k) x
-whnfAppRef 1 book undo k x = case deref book k of
-  Just (term, _) -> whnfApp 1 book undo term x
+whnfAppRef 0  book undo k x = App (Ref k) x
+whnfAppRef lv book undo k x = case deref book k of
+  Just (term, _) -> whnfApp lv book undo term x
   Nothing -> undo
-whnfAppRef _ book undo k x = error "unreachable"
 
 whnfApp :: Int -> Book -> Term -> Term -> Term -> Term
 whnfApp lv book undo f x =
@@ -57,9 +76,8 @@ whnfAppLam :: Int -> Book -> Body -> Term -> Term
 whnfAppLam lv book f x = whnf lv book (f (whnf lv book x))
 
 whnfAppFix :: Int -> Book -> Term -> String -> Body -> Term -> Term
-whnfAppFix 0 book undo k f x = App (Fix k f) x
-whnfAppFix 1 book undo k f x = whnfApp 1 book undo (f (Fix k f)) x
-whnfAppFix _ book undo k f x = error "unreachable"
+whnfAppFix 0  book undo k f x = App (Fix k f) x
+whnfAppFix lv book undo k f x = whnfApp lv book undo (f (Fix k f)) x
 
 whnfAppUse :: Int -> Book -> Term -> Term -> Term -> Term
 whnfAppUse lv book undo f x =
