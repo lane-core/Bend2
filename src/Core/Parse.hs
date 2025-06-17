@@ -34,9 +34,18 @@ import Core.Type
 --     blocks inside `choice` lists—clarity beats cleverness.
 -- 5.  NEVER write a do-block inside a list. Always make a separate function.
 
--- Parser state tracks whether the previous token ended "tight" (no trailing space).
--- This allows us to distinguish between `foo[]` (list type) and `foo []` (application).
-type Parser = ParsecT Void String (Control.Monad.State.Strict.State Bool)
+-- Parser state with two flags:
+-- - tight: tracks whether the previous token ended "tight" (no trailing space).
+--          This allows us to distinguish between `foo[]` (list type) and `foo []` (application).
+-- - noLoc: when True, disables the parseLoc infix operator. This is used when parsing
+--          types in top-level definitions to prevent `foo : T = x` from parsing the `= x`
+--          as part of the type.
+data ParserState = ParserState
+  { tight :: Bool  -- ^ True if previous token had no trailing whitespace
+  , noLoc :: Bool  -- ^ True to disable parseLoc (for parsing types in definitions)
+  }
+
+type Parser = ParsecT Void String (Control.Monad.State.Strict.State ParserState)
 
 -- | Skip spaces and comments (// and /* */)
 skip :: Parser ()
@@ -52,7 +61,8 @@ lexeme p = do
   o1 <- getOffset
   skip
   o2 <- getOffset
-  put (o1 == o2)
+  st <- get
+  put st { tight = o1 == o2 }
   pure x
 
 symbol :: String -> Parser String
@@ -151,10 +161,10 @@ parseTermEnd t = do
 -- | Parse chained postfix operators recursively
 parseTermPostfix :: Term -> Parser Term
 parseTermPostfix t = do
-  tight <- get            -- was the previous token tight?
-  if not tight            -- there was a gap → stop
+  st <- get
+  if not (tight st)      -- there was a gap → stop
     then pure t
-    else do               -- tight → postfixes may follow
+    else do              -- tight → postfixes may follow
       mb <- optional $ choice
               [ parseAppPostfix t
               , parseEql        t
@@ -712,15 +722,19 @@ parseAdd t = label "addition" $ do
 -- - `match v: case x: body` (otherwise)
 parseLoc :: Term -> Parser Term
 parseLoc t = label "location binding" $ do
-  _ <- try $ do
-    _ <- symbol "="
-    notFollowedBy (char '=')
-  v    <- parseTerm
-  _    <- parseSemi
-  body <- parseTerm
-  case t of
-    Var x _ -> return $ Let v (Lam x (\_ -> body))
-    _       -> return $ Pat [v] [] [([t], body)]
+  st <- get
+  if noLoc st
+    then fail "location binding disabled"
+    else do
+      _ <- try $ do
+        _ <- symbol "="
+        notFollowedBy (char '=')
+      v    <- parseTerm
+      _    <- parseSemi
+      body <- parseTerm
+      case t of
+        Var x _ -> return $ Let v (Lam x (\_ -> body))
+        _       -> return $ Pat [v] [] [([t], body)]
 
 -- | HOAS‐style binders
 
@@ -861,7 +875,14 @@ parseContext = braces $ sepEndBy parseTerm (symbol ",")
 -- | Book parsing
 
 parseDefinition :: Parser (Name, Defn)
-parseDefinition = do
+parseDefinition = choice
+  [ parseDefKeyword
+  , parseShortDef
+  ]
+
+-- Parse definitions with 'def' keyword
+parseDefKeyword :: Parser (Name, Defn)
+parseDefKeyword = do
   _ <- symbol "def"
   f <- name
   choice
@@ -892,6 +913,20 @@ parseDefFunction f = label "function definition" $ do
     parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
     nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (\v -> currType)), Lam argName (\v -> currBod))
 
+-- Parse short definitions: name : Type = term (without 'def' keyword)
+parseShortDef :: Parser (Name, Defn)
+parseShortDef = label "short definition" $ try $ do
+  f <- name
+  _ <- symbol ":"
+  -- Temporarily disable parseLoc while parsing the type
+  st <- get
+  put st { noLoc = True }
+  typ <- parseTerm
+  put st { noLoc = False }
+  _ <- symbol "="
+  term <- parseTerm
+  return (f, (term, typ))
+
 parseBook :: Parser Book
 parseBook = do
   defs <- many parseDefinition
@@ -901,7 +936,7 @@ parseBook = do
 
 doParseTerm :: FilePath -> String -> Either String Term
 doParseTerm file input =
-  case evalState (runParserT p file input) True of
+  case evalState (runParserT p file input) (ParserState True False) of
     Left err  -> Left (formatError input err)
     Right res -> Right (bind (flatten res))
   where
@@ -920,7 +955,7 @@ doReadTerm input =
 
 doParseBook :: FilePath -> String -> Either String Book
 doParseBook file input =
-  case evalState (runParserT p file input) True of
+  case evalState (runParserT p file input) (ParserState True False) of
     Left err  -> Left (formatError input err)
     Right res -> Right (bindBook (flattenBook res))
   where
