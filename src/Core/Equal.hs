@@ -69,5 +69,3 @@ cmp lv d book a b =
     (Met _  _  _  , Met _  _  _  ) -> error "not-supported"
     (Pat _  _  _  , Pat _  _  _  ) -> error "not-supported"
     (_            , _            ) -> False
-
-

@@ -1,37 +1,3 @@
--- NOTE: previously, this language did not feature global definitions. instead,
--- we provided a syntax sugar, 'def x : T = val', that desugared to a 'let',
--- allowing users to handle multiple definitions in the same file. this worked,
--- but was contrived and sub-optimal. our goal now is to implement proper global
--- definitions. to do so, we will introduce a new type, Book, which includes a
--- map from names to top-level definitions (Term,Type). then, many files will
--- require change:
--- Bind.hs: must include a bindBook function, which binds all Term/Types on
--- Book. when a variable is unbound, turn it into a Ref (instead of a Var).
--- Check.hs: functions must receive the Book after the 'd' argument, so that it
--- can be passed to equal, whnf, etc. also include a checkBook function, which
--- type-checks all terms of a Book.
--- Equal.hs: must receive Book after the 'd' argument, to pass to whnf
--- Normal.hs: must receive Book after the 'd' argument, to pass to whnf
--- Parse.hs: the old 'def' parser must be removed. we must add a parseBook
--- parser, which parses a series of def's (similar to the old 'def'), and
--- returns a Book.  we must include doParseBook and doReadBook functions for
--- convenience. note that the parser state must remain the same.
--- Pretty.hs: must include a prettifier for the book
--- Rewrite.hs: must receive Book after the 'd' argument
--- Type.hs: must include a Show instance for Book. also include a 'deref'
--- function to get a Maybe (Term,Type) from the Book.
--- WHNF.hs: must receive a Book. then, Ref's must be expanded to the respective
--- value on the book. this must be handled exactly like Fix: we only expand when
--- the Ref is on the function position of an application (i.e., whnfAppRef), and
--- only when lv=1.
--- files on NeoGen/: change as little as possible to make it compile. leave
--- TODO's if needed.
--- app/Main.hs: update the commands so that, when we load a file, we will parse
--- a Book (instead of a single Term). then, to run, we run the 'main'
--- definition. to check, we checkBook the whole book.
--- this isn't an extensive list; there might be some TODO's or small things I'm
--- missing, but the overall idea is here.
-
 module Core.Type where
 
 import qualified Data.Set as S
