@@ -5,6 +5,7 @@ import qualified Data.Map as M
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 
+import Core.AutoImport
 import Core.Bind
 import Core.Check
 import Core.Normal
@@ -19,7 +20,12 @@ parseFile file = do
     Left err -> do
       putStrLn $ "Parse error: " ++ err
       exitFailure
-    Right book -> return book
+    Right book -> do
+      -- Auto-import unbound references
+      autoImportedBook <- autoImport (takeDirectory file) book
+      return autoImportedBook
+  where
+    takeDirectory path = reverse . dropWhile (/= '/') . reverse $ path
 
 -- | Type-check all definitions in a book
 checkDefinitions :: Book -> IO ()

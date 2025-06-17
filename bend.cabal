@@ -19,7 +19,8 @@ common warnings
 
 library
     import:           warnings
-    exposed-modules:  Core.Type,
+    exposed-modules:  Core.AutoImport,
+                      Core.Type,
                       Core.Bind,
                       Core.Check,
                       Core.Equal,
