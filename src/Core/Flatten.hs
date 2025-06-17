@@ -91,7 +91,7 @@ type Moves = [Move]
 -- Convert Pat expression to nested case trees
 flattenPat :: Int -> [Term] -> Moves -> [([Term], Term)] -> Term
 flattenPat d scruts moves clauses = case (scruts, clauses) of
-  ([]  , ([], rhs) : ss) -> flatten rhs -- Base case: RHS is wrapped by buildCase
+  ([]  , [([], rhs)]) -> flatten rhs -- Base case: RHS is wrapped by buildCase
   ([]  , a)           -> Efq
   (s:ss, [])          -> Efq
   (s:ss, _)           -> processColumn d s ss moves (splitColumn clauses)
@@ -100,20 +100,20 @@ flattenPat d scruts moves clauses = case (scruts, clauses) of
 -- Creates the appropriate eliminator based on constructor types
 processColumn :: Int -> Term -> [Term] -> Moves -> ([Term], [([Term], Term)]) -> Term
 processColumn d scrut scruts moves (col, rules) 
-  | allVars col = bindVariablesAndContinue d scrut scruts moves col rules
+  | allVars col = flattenPat d scruts moves rules
   | otherwise   = buildEliminator d scrut scruts moves col rules
 
--- Handle the case where all patterns in a column are variables
--- We need to bind each variable to the scrutinee and continue
-bindVariablesAndContinue :: Int -> Term -> [Term] -> Moves -> [Term] -> [([Term], Term)] -> Term
-bindVariablesAndContinue d scrut scruts moves col rules = 
-  let boundRules = zipWith bindVariable col rules
-  in flattenPat d scruts moves boundRules
-  where
-    -- Bind a variable pattern to the scrutinee in the RHS
-    bindVariable :: Term -> ([Term], Term) -> ([Term], Term)
-    bindVariable (Var name _) (restPats, rhs) = (restPats, Let scrut (Lam name (\_ -> rhs)))
-    bindVariable _ rule = rule -- This shouldn't happen if allVars is true
+-- -- Handle the case where all patterns in a column are variables
+-- -- We need to bind each variable to the scrutinee and continue
+-- bindVariablesAndContinue :: Int -> Term -> [Term] -> Moves -> [Term] -> [([Term], Term)] -> Term
+-- bindVariablesAndContinue d scrut scruts moves col rules = 
+  -- let boundRules = zipWith bindVariable col rules
+  -- in flattenPat d scruts moves boundRules
+  -- where
+    -- -- Bind a variable pattern to the scrutinee in the RHS
+    -- bindVariable :: Term -> ([Term], Term) -> ([Term], Term)
+    -- bindVariable (Var name _) (restPats, rhs) = (restPats, Let scrut (Lam name (\_ -> rhs)))
+    -- bindVariable _ rule = rule -- This shouldn't happen if allVars is true
 
 -- Check if all patterns in column are variables
 allVars :: [Term] -> Bool
@@ -251,13 +251,14 @@ buildCase d moves ctr col rules scruts =
 specializeRules :: Term -> [Term] -> [([Term], Term)] -> [([Term], Term)]
 specializeRules ctr col rules = concat (zipWith spec col rules) where
   spec pat (pats, rhs) = case (matches ctr pat, getFields ctr pat) of
-    (True, fields) -> [(fields ++ pats, bindVariableIfNeeded ctr pat rhs)]
+    -- (True, fields) -> [(fields ++ pats, bindVariableIfNeeded ctr pat rhs)]
+    (True, fields) -> [(fields ++ pats, rhs)]
     _              -> []
 
--- Bind variable to constructor if the pattern is a variable
-bindVariableIfNeeded :: Term -> Term -> Term -> Term
-bindVariableIfNeeded ctr (Var name 0) rhs = Let ctr (Lam name (\_ -> rhs))
-bindVariableIfNeeded _ _ rhs = rhs
+-- -- Bind variable to constructor if the pattern is a variable
+-- bindVariableIfNeeded :: Term -> Term -> Term -> Term
+-- bindVariableIfNeeded ctr (Var name 0) rhs = Let ctr (Lam name (\_ -> rhs))
+-- bindVariableIfNeeded _ _ rhs = rhs
 
 
 -- Check if a pattern matches a constructor

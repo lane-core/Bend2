@@ -143,9 +143,11 @@ def VecInd
   ) -> P(n,x):
   match x:
     case (ctr, bag):
-      (match ctr:
+      match ctr:
+        with bag
         case @Nil:
-          ()
+          {==} = bag
+          N
         case @Cons:
-          ()
-      bag)
+          (tLen, head, tail, {==}) = bag
+          C(tLen,head,tail,VecInd(A,P,N,C,tLen,tail))
