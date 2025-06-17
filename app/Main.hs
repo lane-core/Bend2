@@ -47,7 +47,7 @@ runMain :: Book -> IO ()
 runMain book = do
   case deref book "main" of
     Nothing -> do
-      exitSuccess
+      return ()
     Just _ -> do
       let boundBook = bindBook book
       let mainCall = App (Ref "main") One

@@ -144,7 +144,7 @@ deref (Book defs) name = M.lookup name defs
 
 instance Show Term where
   show (Var k i)      = k
-  show (Ref k)        = k
+  show (Ref k)        = "@"++k
   show (Sub t)        = error "unreachable"
   -- show (Fix k f)      = "μ" ++ k ++ "." ++ show (f (Var k 0))
   show (Fix k f)      = k

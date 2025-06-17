@@ -6,6 +6,7 @@
 module Core.Check where
 
 import Debug.Trace
+
 import qualified Data.Map as M
 
 import Core.Equal
@@ -29,9 +30,11 @@ extend d book ctx k t v = \f -> ctx (Let (Chk (normal 1 d book v) (normal 1 d bo
 -- ------------
 
 -- Check all definitions in a Book
-checkBook :: Int -> Book -> Result ()
-checkBook d book@(Book defs) = mapM_ checkDefn (M.toList defs)
-  where checkDefn (name, (term, typ)) = check d book id term typ
+checkBook :: Book -> Result ()
+checkBook book@(Book defs) = mapM_ checkDef (M.toList defs)
+  where
+    checkDef (name, (term, typ)) = do
+      check 0 book id term typ
 
 -- Infer the type of a term
 infer :: Int -> Book -> Context -> Term -> Result Term
