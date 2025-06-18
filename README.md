@@ -1,29 +1,28 @@
 # Bend2 - Work in Progress
 
-Bend is many things, some of which may interest you.
+Bend combines all my former work into one final language to "rule them all".
 
-**A High-Level GPU Language**
+It has several goals:
 
-Bend is the only true high-level language that runs natively on GPUs. Most
-alternatives, like CUDA, are very low-level, C-like, and don't offer modern
-features like closures, recursion, or a fast object allocator. Bend does that.
+## Target *everything*: GPUs, CPUs, Web, HVM
 
-**Unprecedented Automation**
+Most GPU languages, like CUDA, are low-level, C-like, based on buffers and
+matrixes. Bend2 is the first GPU-targetting language that includes modern
+featuers like first-class functions, unrestricted recursion and fast object
+allocation. But it also targets CPU (via Haskell), web (via JS), and, obviously,
+the HVM (for optimal λ-Calculus evaluation).
 
-Bend is the first programming language built for the AI era. It includes the
-world's fastest algorithm synthesizer, which means the compiler infers parts of
-your code, including complete algorithms, for you.
+## Maximal AI Automation
 
-**A Powerful Proof Assistant**
+Bend is designed, from scratch, to be used by AIs, aiming to become the most
+automated language in the world. This includes features like dependency tree
+injection (generating small, complete contexts for the LLMs) and auto-repair of
+LLM mistakes (via NeoGen theorem prover).
 
-Bend doubles as a proof assistant capable of stating and verifying mathematical
-theorems. Its type-checker is very fast, and includes modern features like
-observational equality, making it very convenient for formalization.
+## A Powerful Proof Assistant
 
-**The Culmination of my Work**
-
-For these familiar with my work, Bend2 combines it all - Kind, HVM3-Strict,
-HVM3-Lazy, Bend and NeoGen (an automated program synthesizer) into a single
-language to rule them all. It will be actively developed.
+Bend is, like Lean and Kind, a proof assistant capable of stating and verifying
+mathematical theorems. Its type-checker is very fast, and includes modern
+features like observational equality, making it ergonomic for proving work.
 
 **THIS REPOSITORY IS A WORK IN PROGRESS**
