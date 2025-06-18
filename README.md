@@ -1,16 +1,29 @@
 # Bend2 - Work in Progress
 
-Bend2 aims to combine all my previous work into one language to rule them all:
+Bend is many things, some of which may interest you.
 
-- Parallel Evaluation (via [HVM3-Strict](https://github.com/higherorderco/hvm3))
+**A High-Level GPU Language**
 
-- Optimal Evaluation (via [HVM3-Lazy](https://github.com/higherorderco/hvm3))
+Bend is the only true high-level language that runs natively on GPUs. Most
+alternatives, like CUDA, are very low-level, C-like, and don't offer modern
+features like closures, recursion, or a fast object allocator. Bend does that.
 
-- A Proof Verifier (superseding [Kind](https://github.com/HigherOrderCO/Kind))
+**Unprecedented Automation**
 
-- A Proof Generator (watch the [NeoGen Demo](https://x.com/VictorTaelin/status/1881392823246729640))
+Bend is the first programming language built for the AI era. It includes the
+world's fastest algorithm synthesizer, which means the compiler infers parts of
+your code, including complete algorithms, for you.
 
-It is also built, from scratch, aiming *full AI automation*. I'll be writing
-more about this in the future. For now, I'll leave this repo up as a WIP.
+**A Powerful Proof Assistant**
 
+Bend doubles as a proof assistant capable of stating and verifying mathematical
+theorems. Its type-checker is very fast, and includes modern features like
+observational equality, making it very convenient for formalization.
 
+**The Culmination of my Work**
+
+For these familiar with my work, Bend2 combines it all - Kind, HVM3-Strict,
+HVM3-Lazy, Bend and NeoGen (an automated program synthesizer) into a single
+language to rule them all. It will be actively developed.
+
+**THIS REPOSITORY IS A WORK IN PROGRESS**
