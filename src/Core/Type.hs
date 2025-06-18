@@ -1,19 +1,5 @@
 module Core.Type where
 
--- NOTE: this is how the parser shows parsing errors
--- formatError :: String -> ParseErrorBundle String Void -> String
--- formatError input bundle = do
-  -- let errorPos = NE.head $ fst $ attachSourcePos errorOffset (bundleErrors bundle) (bundlePosState bundle)
-  -- let err = fst errorPos
-  -- let pos = snd errorPos
-  -- let lin = unPos $ sourceLine pos
-  -- let col = unPos $ sourceColumn pos
-  -- let msg = parseErrorTextPretty err
-  -- let highlighted = highlightError (lin, col) (lin, col+1) input
-  -- "\nPARSE_ERROR\n" ++ msg
-    -- ++ "\nAt line " ++ show lin ++ ", column " ++ show col ++ ":\n"
-    -- ++ highlighted
-
 import Data.List (intercalate)
 import Debug.Trace
 import Highlight (highlightError)
@@ -206,45 +192,36 @@ instance Show Book where
     where defn (k,(x,t)) = k ++ " : " ++ show x ++ " = " ++ show t
 
 instance Show Span where
-  show span = "At line " ++ show (fst $ spanBeg span) 
-           ++ ", column " ++ show (snd $ spanBeg span) ++ ":\n"
-           ++ highlightError (spanBeg span) (spanEnd span) (spanSrc span)
+  show span = "\n\x1b[1mLocation:\x1b[0m "
+    ++ "\x1b[2m(line "++show (fst $ spanBeg span)++ ", column "++show (snd $ spanBeg span)++")\x1b[0m\n"
+    ++ highlightError (spanBeg span) (spanEnd span) (spanSrc span)
 
 instance Show Error where
-  show (CantInfer span term) = 
-    "\nTYPE_ERROR: Cant-Infer\n"
-    ++ "Term: " ++ show term ++ "\n"
-    ++ show span
-  show (TypeMismatch span goal expected actual) = 
-    "\nTYPE_ERROR: Type-Mismatch\n"
-    ++ "- Expected: " ++ show expected ++ "\n"
-    ++ "- Actual: " ++ show actual ++ "\n"
-    ++ "- Goal: " ++ show goal ++ "\n"
-    ++ show span
-  show (TermMismatch span expected actual goal) = 
-    "\nTYPE_ERROR: Term-Mismatch\n"
-    ++ "- Expected: " ++ show expected ++ "\n"
-    ++ "- Actual: " ++ show actual ++ "\n"
-    ++ "- Goal: " ++ show goal ++ "\n"
-    ++ show span
+  show (CantInfer span ctx) = 
+    "\x1b[1mCantInfer:\x1b[0m" ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ showContext ctx ++
+    show span
+  show (TypeMismatch span ctx goal typp) = 
+    "\x1b[1mMismatch:\x1b[0m" ++
+    "\n- Goal: " ++ show goal ++ 
+    "\n- Type: " ++ show typp ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ showContext ctx ++
+    show span
+  show (TermMismatch span ctx a b) = 
+    "\x1b[1mMismatch:\x1b[0m" ++
+    "\n- " ++ show a ++ 
+    "\n- " ++ show b ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ showContext ctx ++
+    show span
 
 showContext :: Term -> String
-showContext ctx = unlines (map snd (reverse (dedup S.empty (reverse (go ctx []))))) where
-
-  isTopFun :: Term -> Bool
-  isTopFun t = case t of
-    (Fix  _ _)         -> True
-    (Chk (Fix _ _) _ ) -> True
-    (Loc _ t)          -> isTopFun t
-    _                  -> False
+showContext ctx = init (unlines (map snd (reverse (dedup S.empty (reverse (go ctx [])))))) where
 
   go :: Term -> [(Name, String)] -> [(Name, String)]
-  go (Let v (Lam k f)) acc
-    | isTopFun v = go (f (Var k 0)) acc
-    | otherwise  = case v of
-        (Chk _ ty) -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k ++ " : " ++ show ty)])
-        ty         -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k)])
-  go term acc = acc ++ [("", "Term: " ++ show term)]
+  go (Let v (Lam k f)) acc = case v of
+    (Chk _ ty) -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k ++ " : " ++ show ty)])
+    ty         -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k)])
+  go term acc = acc ++ [("", "\x1b[1mExpression:\x1b[0m\n- " ++ show term)]
 
   dedup :: S.Set Name -> [(Name,String)] -> [(Name,String)]
   dedup _    []                             = []
