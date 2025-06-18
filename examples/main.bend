@@ -123,7 +123,7 @@ def is_even_ab_theo(n: Nat) -> Bool{(is_even_a n) == (is_even_b n)}:
 #   nil : Vec A 0
 #   con : all m (x : A) (xs : Vec A m) -> Vec A (suc m)
 def Vec(A: Set, len: Nat) -> Set:
-  any ctr: {@Nil,@Cons}.
+  any ctr: @{@Nil,@Cons}.
   match ctr:
     case @Nil: # Nil
       Nat{len == 0}
@@ -151,3 +151,4 @@ def VecInd
         case @Cons:
           (tLen, head, tail, {==}) = bag
           C(tLen,head,tail,VecInd(A,P,N,C,tLen,tail))
+

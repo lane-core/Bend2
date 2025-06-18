@@ -383,7 +383,7 @@ parseMatLambda = label "list eliminator" $ do
 
 parseEnu :: Parser Term
 parseEnu = label "enum type" $ do
-  _ <- try $ symbol "{"
+  _ <- try $ symbol "@{"
   s <- sepBy parseSymbolName (symbol ",")
   _ <- symbol "}"
   return (Enu s)
@@ -468,13 +468,14 @@ parsePat = label "pattern match" $ do
   moves <- parseWithStatements
   clauses <- parseClauses (length scruts) initCov []
   _ <- optional (symbol ";")
+  _ <- optional (symbol "}")
   return (Pat scruts moves clauses)
   where
     -- Parse 'match scrut1 scrut2 ... :'
     parseMatchHeader = try $ do
       _ <- symbol "match"
       x <- some parseTerm
-      _ <- symbol ":"
+      choice [symbol ":", symbol "{"]
       return x
     
     -- Parse 'with' statements
