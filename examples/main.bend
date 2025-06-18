@@ -151,3 +151,11 @@ def VecInd
         case @Cons:
           (tLen, head, tail, {==}) = bag
           C(tLen,head,tail,VecInd(A,P,N,C,tLen,tail))
+
+def and1(a: Bool, b: Bool) -> Bool:
+  match a b:
+    case False _:
+      True
+    case True x :
+      x
+

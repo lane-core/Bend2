@@ -91,8 +91,8 @@ type Moves = [Move]
 -- Convert Pat expression to nested case trees
 flattenPat :: Int -> [Term] -> Moves -> [([Term], Term)] -> Term
 flattenPat d scruts moves clauses = case (scruts, clauses) of
-  ([]  , [([], rhs)]) -> flatten rhs -- Base case: RHS is wrapped by buildCase
-  ([]  , a)           -> Efq
+  ([]  , ([], rhs) : ss) -> flatten rhs
+  ([]  , _)           -> Efq
   (s:ss, [])          -> Efq
   (s:ss, _)           -> processColumn d s ss moves (splitColumn clauses)
 
@@ -100,20 +100,17 @@ flattenPat d scruts moves clauses = case (scruts, clauses) of
 -- Creates the appropriate eliminator based on constructor types
 processColumn :: Int -> Term -> [Term] -> Moves -> ([Term], [([Term], Term)]) -> Term
 processColumn d scrut scruts moves (col, rules) 
-  | allVars col = flattenPat d scruts moves rules
+  | allVars col = bindVariablesAndContinue d scrut scruts moves col rules
   | otherwise   = buildEliminator d scrut scruts moves col rules
 
--- -- Handle the case where all patterns in a column are variables
--- -- We need to bind each variable to the scrutinee and continue
--- bindVariablesAndContinue :: Int -> Term -> [Term] -> Moves -> [Term] -> [([Term], Term)] -> Term
--- bindVariablesAndContinue d scrut scruts moves col rules = 
-  -- let boundRules = zipWith bindVariable col rules
-  -- in flattenPat d scruts moves boundRules
-  -- where
-    -- -- Bind a variable pattern to the scrutinee in the RHS
-    -- bindVariable :: Term -> ([Term], Term) -> ([Term], Term)
-    -- bindVariable (Var name _) (restPats, rhs) = (restPats, Let scrut (Lam name (\_ -> rhs)))
-    -- bindVariable _ rule = rule -- This shouldn't happen if allVars is true
+
+bindVariablesAndContinue :: Int -> Term -> [Term] -> Moves -> [Term] -> [([Term], Term)] -> Term
+bindVariablesAndContinue d scrut scruts moves col rules =
+  let boundRules = zipWith bindVariable col rules
+  in flattenPat d scruts moves boundRules
+  where
+    bindVariable (Var name _) (restPats, rhs) = (restPats, subst name scrut rhs)
+    bindVariable _ rule = rule
 
 -- Check if all patterns in column are variables
 allVars :: [Term] -> Bool
@@ -251,15 +248,8 @@ buildCase d moves ctr col rules scruts =
 specializeRules :: Term -> [Term] -> [([Term], Term)] -> [([Term], Term)]
 specializeRules ctr col rules = concat (zipWith spec col rules) where
   spec pat (pats, rhs) = case (matches ctr pat, getFields ctr pat) of
-    -- (True, fields) -> [(fields ++ pats, bindVariableIfNeeded ctr pat rhs)]
     (True, fields) -> [(fields ++ pats, rhs)]
     _              -> []
-
--- -- Bind variable to constructor if the pattern is a variable
--- bindVariableIfNeeded :: Term -> Term -> Term -> Term
--- bindVariableIfNeeded ctr (Var name 0) rhs = Let ctr (Lam name (\_ -> rhs))
--- bindVariableIfNeeded _ _ rhs = rhs
-
 
 -- Check if a pattern matches a constructor
 matches :: Term -> Term -> Bool
@@ -351,3 +341,39 @@ applyWithVals ms t = foldl App t (map snd ms)
 -- Outer wrapper: creates (λr.λs. ... core) val_r val_s
 wrapLamApplyVals :: Moves -> Term -> Term
 wrapLamApplyVals ms core = applyWithVals ms (wrapWithLam ms core)
+
+
+-- Helper for variable patterns
+-- -----------------------------
+
+-- Subst a var for a value in a term
+subst :: Name -> Term -> Term -> Term
+subst name val term = case term of
+  Var n i | n == name && i == 0 -> val
+  Var _ _ -> term
+  Let v f -> Let (subst name val v) (subst name val f)
+  Fix k f -> Fix k (\x -> subst name val (f x))
+  Ann x t -> Ann (subst name val x) (subst name val t)
+  Chk x t -> Chk (subst name val x) (subst name val t)
+  Use f -> Use (subst name val f)
+  Bif f t -> Bif (subst name val f) (subst name val t)
+  Swi z s -> Swi (subst name val z) (subst name val s)
+  Mat n c -> Mat (subst name val n) (subst name val c)
+  Cse c -> Cse (map (\(s, t) -> (s, subst name val t)) c)
+  Get f -> Get (subst name val f)
+  Rwt f -> Rwt (subst name val f)
+  Lst t -> Lst (subst name val t)
+  Con h t -> Con (subst name val h) (subst name val t)
+  Sig a b -> Sig (subst name val a) (subst name val b)
+  Tup a b -> Tup (subst name val a) (subst name val b)
+  All a b -> All (subst name val a) (subst name val b)
+  Lam k f -> Lam k (\x -> subst name val (f x))
+  App f x -> App (subst name val f) (subst name val x)
+  Eql t a b -> Eql t (subst name val a) (subst name val b)
+  Ind t -> Ind (subst name val t)
+  Frz t -> Frz (subst name val t)
+  Sup l a b -> Sup l (subst name val a) (subst name val b)
+  Suc n -> Suc (subst name val n)
+  Pat s ms k -> Pat (map (subst name val) s) ms (map (\(pats, rhs) -> (map (subst name val) pats, subst name val rhs)) k)
+  _ -> term
+
