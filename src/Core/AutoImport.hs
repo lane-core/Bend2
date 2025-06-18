@@ -64,6 +64,7 @@ collectRefs term = case term of
   Met _ t ctx -> S.unions (collectRefs t : map collectRefs ctx)
   Ind t       -> collectRefs t
   Frz t       -> collectRefs t
+  Loc _ t     -> collectRefs t
   Era         -> S.empty
   Sup _ a b   -> S.union (collectRefs a) (collectRefs b)
   Pat s m c   -> S.unions $ map collectRefs s ++ map (collectRefs . snd) m ++ concatMap (\ (p, b) -> collectRefs b : map collectRefs p) c

@@ -56,6 +56,7 @@ rewriteGo d book old neo val = case val of
   Rwt f     -> Rwt (rewrite d book old neo f)
   Ind t     -> Ind (rewrite d book old neo t)
   Frz t     -> Frz (rewrite d book old neo t)
+  Loc l t   -> Loc l (rewrite d book old neo t)
   Era       -> Era
   Sup l a b -> Sup l (rewrite d book old neo a) (rewrite d book old neo b)
   Met _ _ _ -> error "not-supported"

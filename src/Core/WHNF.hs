@@ -19,6 +19,7 @@ whnf lv book term = do
     Ann x _ -> whnf lv book x
     Chk x _ -> whnf lv book x
     App f x -> whnfApp lv book (App f x) f x
+    Loc _ t -> whnf lv book t
     _       -> term
 
 whnfLet :: Int -> Book -> Term -> Term -> Term

@@ -153,6 +153,8 @@ infer d book ctx term =
       Fail $ CantInfer (ctx term)
     Frz _ -> do
       Fail $ CantInfer (ctx term)
+    Loc _ t ->
+      infer d book ctx t
     Era -> do
       Fail $ CantInfer (ctx term)
     Sup l a b -> do
@@ -259,6 +261,8 @@ check d book ctx term goal' =
     (App f x, goal) -> do
       xT <- infer d book ctx x
       check d book ctx (App f (Ann x xT)) goal
+    (Loc _ t, goal) -> do
+      check d book ctx t goal
     (Pat _ _ _, _) -> do
       error "not-supported"
     (_, _) -> do

@@ -1,9 +1,10 @@
 module Core.Type where
 
-import qualified Data.Set as S
-import qualified Data.Map as M
 import Data.List (intercalate)
 import Debug.Trace
+import Text.Megaparsec (SourcePos)
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 data Bits = O Bits | I Bits | E deriving Show
 type Name = String
@@ -88,6 +89,9 @@ data Term
   | Era               -- *
   | Sup Int Term Term -- &L{a,b}
 
+  -- Errors
+  | Loc Span Term -- (NEW CONSTRUCTOR)
+
   -- Pattern-Match
   -- match x y ...:
   --   with a=r with b=s ...
@@ -95,18 +99,38 @@ data Term
   --   case (C ...) (D ...): ...
   | Pat [Term] [Move] [Case]
 
--- New Types ↓
+-- Book of Definitions
 type Defn = (Term,Type)
 data Book = Book (M.Map Name Defn)
 
-instance Show Book where
-  show (Book defs) = "Book {" ++ intercalate ", " entries ++ "}"
-    where entries = map showDefn (M.toList defs)
-          showDefn (name, (term, typ)) = name ++ " : " ++ show typ ++ " = " ++ show term
+-- Error Location (NEW TYPE)
+data Span = Span
+  { spanBeg :: SourcePos
+  , spanEnd :: SourcePos
+  } deriving Show
 
--- Get a definition from the Book
-deref :: Book -> Name -> Maybe Defn
-deref (Book defs) name = M.lookup name defs
+data Error
+  = CantInfer Term
+  | TypeMismatch Term Term Term
+  | TermMismatch Term Term Term
+
+data Result a
+  = Done a
+  | Fail Error
+
+instance Functor Result where
+  fmap f (Done a) = Done (f a)
+  fmap _ (Fail e) = Fail e
+
+instance Applicative Result where
+  pure              = Done
+  Done f <*> Done a = Done (f a)
+  Fail e <*> _      = Fail e
+  _      <*> Fail e = Fail e
+
+instance Monad Result where
+  Done a >>= f = f a
+  Fail e >>= _ = Fail e
 
 instance Show Term where
   show (Var k i)      = k
@@ -155,34 +179,16 @@ instance Show Term where
   show (Rwt f)        = "λ{{==}:" ++ show f ++ "}"
   show (Ind t)        = "~{" ++ show t ++ "}"
   show (Frz t)        = "∅" ++ show t
+  show (Loc _ t)      = show t
   show (Era)          = "*"
   show (Sup l a b)    = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
   show (Met _ _ _)    = "?"
   show (Pat s m c)    = "match " ++ unwords (map show s) ++ ":\n" ++ unlines (map clause c) where
     clause (pats,bod) = "  case " ++ unwords (map show pats) ++ " : " ++ show bod
 
-data Error
-  = CantInfer Term
-  | TypeMismatch Term Term Term
-  | TermMismatch Term Term Term
-
-data Result a
-  = Done a
-  | Fail Error
-
-instance Functor Result where
-  fmap f (Done a) = Done (f a)
-  fmap _ (Fail e) = Fail e
-
-instance Applicative Result where
-  pure              = Done
-  Done f <*> Done a = Done (f a)
-  Fail e <*> _      = Fail e
-  _      <*> Fail e = Fail e
-
-instance Monad Result where
-  Done a >>= f = f a
-  Fail e >>= _ = Fail e
+instance Show Book where
+  show (Book defs) = "Book {" ++ intercalate ", " (map defn (M.toList defs)) ++ "}"
+    where defn (k,(x,t)) = k ++ " : " ++ show x ++ " = " ++ show t
 
 instance Show Error where
   show (CantInfer ctx) = 
@@ -206,6 +212,7 @@ showContext ctx = unlines (map snd (reverse (dedup S.empty (reverse (go ctx []))
   isTopFun t = case t of
     (Fix  _ _)         -> True
     (Chk (Fix _ _) _ ) -> True
+    (Loc _ t)          -> isTopFun t
     _                  -> False
 
   go :: Term -> [(Name, String)] -> [(Name, String)]
@@ -225,8 +232,17 @@ showContext ctx = unlines (map snd (reverse (dedup S.empty (reverse (go ctx []))
 -- Utils
 -- -----
 
+deref :: Book -> Name -> Maybe Defn
+deref (Book defs) name = M.lookup name defs
+
+-- Strip Loc wrappers
+strip :: Term -> Term
+strip (Loc _ t) = strip t
+strip t         = t
+
 collectArgs :: Term -> ([(String, Term)], Term)
 collectArgs = go [] where
+  go acc (Loc _ t)         = go acc t
   go acc (All t (Lam k f)) = go (acc ++ [(k, t)]) (f (Var k 0))
   go acc goal              = (acc, goal)
 
@@ -235,9 +251,10 @@ collectApps (App f x) args = collectApps f (x:args)
 collectApps f         args = (f, args)
 
 natToInt :: Term -> Maybe Int
-natToInt Zer     = Just 0
-natToInt (Suc n) = fmap (+1) (natToInt n)
-natToInt _       = Nothing
+natToInt Zer       = Just 0
+natToInt (Suc n)   = fmap (+1) (natToInt n)
+natToInt (Loc _ t) = natToInt t
+natToInt _         = Nothing
 
 unwrap :: String -> String
 unwrap ('(' : txt) = init txt

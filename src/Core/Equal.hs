@@ -64,6 +64,8 @@ cmp lv d book a b =
     (a            , Ind tb       ) -> eql lv d book a tb
     (Frz ta       , b            ) -> eql lv d book ta b
     (a            , Frz tb       ) -> eql lv d book a tb
+    (Loc _ ta     , b            ) -> eql lv d book ta b
+    (a            , Loc _ tb     ) -> eql lv d book a tb
     (Era          , Era          ) -> True
     (Sup la aa ba , Sup lb ab bb ) -> la == lb && eql lv d book aa ab && eql lv d book ba bb
     (Met _  _  _  , Met _  _  _  ) -> error "not-supported"

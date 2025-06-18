@@ -1,3 +1,5 @@
+{-./Type.hs-}
+
 {-# LANGUAGE BangPatterns #-}
 
 -- Pattern Matching Flattener
@@ -50,34 +52,51 @@ import qualified Data.Map as M
 -- Main Flattener
 -- --------------
 
--- Flatten all sub-terms except Pat, which gets special treatment
 flatten :: Term -> Term
-flatten term = case term of
-  Let v f   -> Let (flatten v) (flatten f)
-  Fix k f   -> Fix k (\x -> flatten (f x))
-  Ann x t   -> Ann (flatten x) (flatten t)
-  Chk x t   -> Chk (flatten x) (flatten t)
-  Use f     -> Use (flatten f)
-  Bif f t   -> Bif (flatten f) (flatten t)
-  Swi z s   -> Swi (flatten z) (flatten s)
-  Mat n c   -> Mat (flatten n) (flatten c)
-  Cse c     -> Cse (map (\(s, t) -> (s, flatten t)) c)
-  Get f     -> Get (flatten f)
-  Rwt f     -> Rwt (flatten f)
-  Lst t     -> Lst (flatten t)
-  Con h t   -> Con (flatten h) (flatten t)
-  Sig a b   -> Sig (flatten a) (flatten b)
-  Tup a b   -> Tup (flatten a) (flatten b)
-  All a b   -> All (flatten a) (flatten b)
-  Lam k f   -> Lam k (\x -> flatten (f x))
-  App f x   -> App (flatten f) (flatten x)
-  Eql t a b -> Eql t (flatten a) (flatten b)
-  Ind t     -> Ind (flatten t)
-  Frz t     -> Frz (flatten t)
-  Sup l a b -> Sup l (flatten a) (flatten b)
-  Suc n     -> Suc (flatten n)
-  Pat s ms k -> wrapLamApplyVals ms (flattenPat 0 s ms k)
-  _         -> term
+flatten (Var n i)      = Var n i
+flatten (Ref n)        = Ref n
+flatten (Sub t)        = Sub (flatten t)
+flatten (Fix n f)      = Fix n (\x -> flatten (f x))
+flatten (Let v f)      = Let (flatten v) (flatten f)
+flatten Set            = Set
+flatten (Ann x t)      = Ann (flatten x) (flatten t)
+flatten (Chk x t)      = Chk (flatten x) (flatten t)
+flatten Emp            = Emp
+flatten Efq            = Efq
+flatten Uni            = Uni
+flatten One            = One
+flatten (Use f)        = Use (flatten f)
+flatten Bit            = Bit
+flatten Bt0            = Bt0
+flatten Bt1            = Bt1
+flatten (Bif f t)      = Bif (flatten f) (flatten t)
+flatten Nat            = Nat
+flatten Zer            = Zer
+flatten (Suc n)        = Suc (flatten n)
+flatten (Swi z s)      = Swi (flatten z) (flatten s)
+flatten (Lst t)        = Lst (flatten t)
+flatten Nil            = Nil
+flatten (Con h t)      = Con (flatten h) (flatten t)
+flatten (Mat n c)      = Mat (flatten n) (flatten c)
+flatten (Enu s)        = Enu s
+flatten (Sym s)        = Sym s
+flatten (Cse c)        = Cse [(s, flatten t) | (s, t) <- c]
+flatten (Sig a b)      = Sig (flatten a) (flatten b)
+flatten (Tup a b)      = Tup (flatten a) (flatten b)
+flatten (Get f)        = Get (flatten f)
+flatten (All a b)      = All (flatten a) (flatten b)
+flatten (Lam n f)      = Lam n (\x -> flatten (f x))
+flatten (App f x)      = App (flatten f) (flatten x)
+flatten (Eql t a b)    = Eql (flatten t) (flatten a) (flatten b)
+flatten Rfl            = Rfl
+flatten (Rwt f)        = Rwt (flatten f)
+flatten (Met i t xs)   = Met i (flatten t) (map flatten xs)
+flatten (Ind t)        = Ind (flatten t)
+flatten (Frz t)        = Frz (flatten t)
+flatten Era            = Era
+flatten (Sup l a b)    = Sup l (flatten a) (flatten b)
+flatten (Loc s t)      = Loc s (flatten t)
+flatten (Pat s m c)    = wrapLamApplyVals m (flattenPat 0 s m c)
 
 flattenBook :: Book -> Book
 flattenBook (Book defs) = Book (M.map flattenDefn defs)
@@ -122,6 +141,7 @@ allVars = all isVar
 -- Check if a pattern is a variable
 isVar :: Term -> Bool
 isVar (Var _ 0) = True
+isVar (Loc _ t) = isVar t
 isVar _         = False
 
 -- Build the appropriate eliminator for the column
@@ -146,18 +166,19 @@ data CtrType = NatT | LstT | BitT | SigT | EqlT | UniT | EnuT | Unknown
 getCtrType :: [Term] -> CtrType
 getCtrType []    = Unknown
 getCtrType (p:ps) = case p of
-  Zer      -> NatT
-  Suc _    -> NatT
-  Nil      -> LstT
-  Con _ _  -> LstT
-  Bt0      -> BitT
-  Bt1      -> BitT
-  Tup _ _  -> SigT
-  Rfl      -> EqlT
-  One      -> UniT
-  Sym _    -> EnuT
-  Var _ _  -> getCtrType ps
-  _        -> Unknown
+  Zer     -> NatT
+  Suc _   -> NatT
+  Nil     -> LstT
+  Con _ _ -> LstT
+  Bt0     -> BitT
+  Bt1     -> BitT
+  Tup _ _ -> SigT
+  Rfl     -> EqlT
+  One     -> UniT
+  Sym _   -> EnuT
+  Loc _ t -> getCtrType (t:ps)
+  Var _ _ -> getCtrType ps
+  _       -> Unknown
 
 -- Natural Number Eliminator
 -- -------------------------
@@ -227,13 +248,19 @@ buildCse d moves col rules scruts = Cse cases where
 -- Get all unique symbols from a column
 getSymbols :: [Term] -> [Term]
 getSymbols = uniqueSymbols . filter isSymbol where
-  isSymbol (Sym _) = True
-  isSymbol _       = False
-  uniqueSymbols [] = []
-  uniqueSymbols (Sym s : xs) = Sym s : uniqueSymbols (filter (not . eqSym s) xs)
-  uniqueSymbols (_ : xs) = uniqueSymbols xs
-  eqSym s1 (Sym s2) = s1 == s2
-  eqSym _ _ = False
+
+  isSymbol (Sym _)   = True
+  isSymbol (Loc _ t) = isSymbol t
+  isSymbol _         = False
+
+  uniqueSymbols []             = []
+  uniqueSymbols (Loc _ t : xs) = uniqueSymbols (t : xs)
+  uniqueSymbols (Sym s   : xs) = Sym s : uniqueSymbols (filter (not . eqSym s) xs)
+  uniqueSymbols (_       : xs) = uniqueSymbols xs
+
+  eqSym s1 (Sym s2)   = s1 == s2
+  eqSym s1 (Loc _ s2) = eqSym s1 s2
+  eqSym _  _          = False
 
 -- Case Building
 -- -------------
@@ -273,6 +300,8 @@ matches (Tup _ _) (Tup _ _) = True
 matches Rfl       Rfl       = True
 matches One       One       = True
 matches (Sym s1)  (Sym s2)  = s1 == s2
+matches (Loc _ a) b         = matches a b
+matches a         (Loc _ b) = matches a b
 matches _         (Var _ 0) = True  -- Variables match anything
 matches _         _         = False
 
@@ -280,12 +309,13 @@ matches _         _         = False
 -- ----------------
 
 getFields :: Term -> Term -> [Term]
-getFields ctr (Suc n)    = [n]
-getFields ctr (Con h t)  = [h, t]
-getFields ctr (Tup a b)  = [a, b]
-getFields ctr (Sym _)    = []
-getFields ctr (Var _ 0)  = wildcards (ctrArity ctr)
-getFields ctr _          = []
+getFields ctr (Suc n)   = [n]
+getFields ctr (Con h t) = [h, t]
+getFields ctr (Tup a b) = [a, b]
+getFields ctr (Sym _)   = []
+getFields ctr (Var _ 0) = wildcards (ctrArity ctr)
+getFields ctx (Loc _ t) = getFields ctx t
+getFields ctr _         = []
 
 ctrArity :: Term -> Int
 ctrArity Zer       = 0
@@ -298,6 +328,7 @@ ctrArity (Tup _ _) = 2
 ctrArity Rfl       = 0
 ctrArity One       = 0
 ctrArity (Sym _)   = 0
+ctrArity (Loc _ t) = ctrArity t
 ctrArity _         = 0
 
 wildcards :: Int -> [Term]
@@ -342,7 +373,7 @@ wrapWithLam ms t = foldr (\(n,_) b -> Lam n (\_ -> b)) t ms
 
 -- Apply with variables to term: term r s
 applyWithVars :: Moves -> Term -> Term
-applyWithVars ms t = foldl App t (map (\(n,_) -> Var n 0) ms)
+applyWithVars ms t = foldl App t (map (\ (n,_) -> Var n 0) ms)
 
 -- Apply with values to term: term F(k) 123
 applyWithVals :: Moves -> Term -> Term

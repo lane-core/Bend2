@@ -53,6 +53,7 @@ binder lv term ctx vars = case term of
   Rwt f     -> Rwt (binder lv f ctx vars)
   Ind t     -> Ind (binder lv t ctx vars)
   Frz t     -> Frz (binder lv t ctx vars)
+  Loc s t   -> Loc s (binder lv t ctx vars)
   Era       -> Era
   Sup l a b -> Sup l (binder lv a ctx vars) (binder lv b ctx vars)
   Met k t c -> Met k (binder lv t ctx vars) (map (\x -> binder lv x ctx vars) c)

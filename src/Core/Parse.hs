@@ -1,3 +1,5 @@
+{-./Type.hs-}
+
 module Core.Parse where
 
 import Control.Monad.State.Strict (State, get, put)
@@ -37,12 +39,12 @@ import Core.Type
 -- Parser state with two flags:
 -- - tight: tracks whether the previous token ended "tight" (no trailing space).
 --          This allows us to distinguish between `foo[]` (list type) and `foo []` (application).
--- - noLoc: when True, disables the parseLoc infix operator. This is used when parsing
+-- - noAss: when True, disables the parseAss infix operator. This is used when parsing
 --          types in top-level definitions to prevent `foo : T = x` from parsing the `= x`
 --          as part of the type.
 data ParserState = ParserState
   { tight :: Bool  -- ^ True if previous token had no trailing whitespace
-  , noLoc :: Bool  -- ^ True to disable parseLoc (for parsing types in definitions)
+  , noAss :: Bool  -- ^ True to disable parseAss (for parsing types in definitions)
   }
 
 type Parser = ParsecT Void String (Control.Monad.State.Strict.State ParserState)
@@ -102,9 +104,22 @@ reserved = ["match","case","else","if","end","all","any","lam"]
 parseSemi :: Parser ()
 parseSemi = optional (symbol ";") >> return ()
 
+-- Location tracking helpers
+withSpan :: Parser a -> Parser (Span, a)
+withSpan p = do
+  start <- getSourcePos
+  x <- p
+  end <- getSourcePos
+  return (Span start end, x)
+
+located :: Parser Term -> Parser Term
+located p = do
+  (sp, t) <- withSpan p
+  return (Loc sp t)
+
 -- | Top‐level entry point
 parseTerm :: Parser Term
-parseTerm = do
+parseTerm = located $ do
   ini <- parseTermIni
   val <- parseTermEnd ini
   return val
@@ -180,7 +195,7 @@ parseTermInfix t = choice
   , parseAnd t
   , parseChk t
   , parseAdd t
-  , parseLoc t
+  , parseAss t
   , return t
   ]
 
@@ -475,7 +490,7 @@ parsePat = label "pattern match" $ do
     parseMatchHeader = try $ do
       _ <- symbol "match"
       x <- some parseTerm
-      choice [symbol ":", symbol "{"]
+      _ <- choice [symbol ":", symbol "{"]
       return x
     
     -- Parse 'with' statements
@@ -528,21 +543,24 @@ parsePat = label "pattern match" $ do
     -- Classify a pattern
     classifyPattern p = case p of
       Var _ _ -> PatVar
-      Bt0 -> PatCon ConBt0 True
-      Bt1 -> PatCon ConBt1 True  
-      Zer -> PatCon ConZer True
-      Suc x -> PatCon ConSuc (isVar x)
-      Nil -> PatCon ConNil True
+      Bt0     -> PatCon ConBt0 True
+      Bt1     -> PatCon ConBt1 True
+      Zer     -> PatCon ConZer True
+      Suc x   -> PatCon ConSuc (isVar x)
+      Nil     -> PatCon ConNil True
       Con x y -> PatCon ConCon (isVar x && isVar y)
       Tup x y -> PatCon ConTup (isVar x && isVar y)
-      One -> PatCon ConOne True
-      Rfl -> PatCon ConRfl True
-      Sym s -> PatCon (ConSym s) True
-      _ -> PatVar  -- treat other patterns as wildcards
+      One     -> PatCon ConOne True
+      Rfl     -> PatCon ConRfl True
+      Sym s   -> PatCon (ConSym s) True
+      Loc _ t -> classifyPattern t
+      _       -> PatVar  -- treat other patterns as wildcards
     
     -- Check if term is a variable
-    isVar (Var _ _) = True
-    isVar _ = False
+    isVar t = case t of
+      Var _ _ -> True
+      Loc _ t -> isVar t
+      _       -> False
     
     -- Check if coverage is exhaustive
     isExhaustive CovWild = True
@@ -713,18 +731,18 @@ parseAdd :: Term -> Parser Term
 parseAdd t = label "addition" $ do
   _ <- try $ symbol "+"
   b <- parseTerm
-  case t of
+  case strip t of
     (Suc Zer) -> return (Suc b)
     _         -> fail "Addition is only supported for (1 + n) which expands to successor"
 
--- TODO: implement below the 'parseLoc' sugar
+-- TODO: implement below the 'parseAss' sugar
 -- it interprets 'x = v; body' as:
 -- - `let x = v; body` (if `x` is a Var)
 -- - `match v: case x: body` (otherwise)
-parseLoc :: Term -> Parser Term
-parseLoc t = label "location binding" $ do
+parseAss :: Term -> Parser Term
+parseAss t = label "location binding" $ do
   st <- get
-  if noLoc st
+  if noAss st
     then fail "location binding disabled"
     else do
       _ <- try $ do
@@ -800,22 +818,6 @@ parseLetTyped x = do
   _ <- parseSemi
   f <- parseTerm
   return $ (Let (Chk v t) (Lam x (\_ -> f)))
-
-
--- parseGen :: Parser Term
--- parseGen = label "gen statement" $ do
---   _ <- try $ symbol "gen"
---   k <- name
---   args <- parens $ sepEndBy parseArg (symbol ",")
---   t <- parseTerm
---   let piType = foldr nestType t args
---   c <- option [] parseContext
---   b <- parseTerm
---   let metaId = 1
---   return (Let (Ann (Met metaId t c) t) (Lam k (\_ -> b)))
---   where
---     parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
---     nestType (argName, argType) currType = All argType $ Lam argName (\v -> currType)
 
 parseGen :: Parser Term
 parseGen = label "generation" $ do
@@ -919,11 +921,11 @@ parseShortDef :: Parser (Name, Defn)
 parseShortDef = label "short definition" $ try $ do
   f <- name
   _ <- symbol ":"
-  -- Temporarily disable parseLoc while parsing the type
+  -- Temporarily disable parseAss while parsing the type
   st <- get
-  put st { noLoc = True }
+  put st { noAss = True }
   typ <- parseTerm
-  put st { noLoc = False }
+  put st { noAss = False }
   _ <- symbol "="
   term <- parseTerm
   return (f, (term, typ))

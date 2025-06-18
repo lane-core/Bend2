@@ -16,6 +16,7 @@ common warnings
                  -Wno-name-shadowing
                  -Wno-unused-local-binds
                  -Wno-unused-imports
+                 -Wno-x-partial
 
 library
     import:           warnings

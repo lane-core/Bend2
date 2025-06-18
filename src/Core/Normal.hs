@@ -51,6 +51,7 @@ normal lv d book term =
     Rwt f     -> Rwt (normal lv d book f)
     Ind t     -> Ind (normal lv d book t)
     Frz t     -> Frz (normal lv d book t)
+    Loc l t   -> Loc l (normal lv d book t)
     Era       -> Era
     Sup l a b -> Sup l (normal lv d book a) (normal lv d book b)
     Met _ _ _ -> error "not-supported"
