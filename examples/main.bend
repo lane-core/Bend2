@@ -141,5 +141,20 @@ def VecInd
   , n: Nat
   , x: Vec(A,n)
   ) -> P(n,x):
-  ()
+  match x:
+    case (ctr, bag):
+      match ctr:
+        with bag
+        case @Nil:
+          {==} = bag
+          N
+        case @Cons:
+          (tLen, head, tail, {==}) = bag
+          C(tLen,head,tail,VecInd(A,P,N,C,tLen,tail))
 
+def and1(a: Bool, b: Bool) -> Bool:
+  match a b:
+    case False _:
+      True
+    case True x :
+      x
