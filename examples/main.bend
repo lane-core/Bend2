@@ -149,6 +149,11 @@ def VecInd
           {==} = bag
           N
         case @Cons:
-          (tLen, head, tail, {==}) = bag
-          C(tLen,head,tail,VecInd(A,P,N,C,tLen,tail))
+          ()
+
+
+
+
+
+#- Goal: !(VecInd::∀A:Set.∀P:∀n:Nat.∀xs:(@Vec A n).Set.∀N:(P 0 (@Nil,{==})).∀C:∀s:Nat.∀x:A.∀xs:(@Vec A s).(P s xs)→(P ↑s (@Cons,s,x,xs,{==})).∀n:Nat.∀x:(@Vec A n).(P n x));λVecInd.!(A::Set);λA.!(P::∀n:Nat.∀xs:(@Vec A n).Set);λP.!(N::(P 0 (@Nil,{==})));λN.!(C::∀s:Nat.∀x:A.∀xs:(@Vec A s).(P s xs)→(P ↑s (@Cons,s,x,xs,{==})));λC.!(n::Nat);λn.!(x::Σctr:{@Nil,@Cons}.(λ{@Nil:Nat{n==0};@Cons:ΣtLen:Nat.Σhead:A.Σtail:(Vec A tLen).Nat{n==↑tLen}} ctr));λx.!(ctr::{@Nil,@Cons});λctr.!(bag::(λctr.(λ{@Nil:Nat{n==0};@Cons:ΣtLen:Nat.Σhead:A.Σtail:(Vec A tLen).Nat{n==↑tLen}} ctr) ctr));λbag.!(bag::(λctr.(λ{@Nil:Nat{n==0};@Cons:ΣtLen:Nat.Σhead:A.Σtail:(Vec A tLen).Nat{n==↑tLen}} ctr) ctr));λbag.!(bag::ΣtLen:Nat.Σhead:A.Σtail:(Vec A tLen).Nat{n==↑tLen});λbag.()
 

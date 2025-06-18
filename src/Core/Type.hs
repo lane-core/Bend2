@@ -1,8 +1,22 @@
 module Core.Type where
 
+-- NOTE: this is how the parser shows parsing errors
+-- formatError :: String -> ParseErrorBundle String Void -> String
+-- formatError input bundle = do
+  -- let errorPos = NE.head $ fst $ attachSourcePos errorOffset (bundleErrors bundle) (bundlePosState bundle)
+  -- let err = fst errorPos
+  -- let pos = snd errorPos
+  -- let lin = unPos $ sourceLine pos
+  -- let col = unPos $ sourceColumn pos
+  -- let msg = parseErrorTextPretty err
+  -- let highlighted = highlightError (lin, col) (lin, col+1) input
+  -- "\nPARSE_ERROR\n" ++ msg
+    -- ++ "\nAt line " ++ show lin ++ ", column " ++ show col ++ ":\n"
+    -- ++ highlighted
+
 import Data.List (intercalate)
 import Debug.Trace
-import Text.Megaparsec (SourcePos)
+import Highlight (highlightError)
 import qualified Data.Map as M
 import qualified Data.Set as S
 
@@ -105,14 +119,15 @@ data Book = Book (M.Map Name Defn)
 
 -- Error Location (NEW TYPE)
 data Span = Span
-  { spanBeg :: SourcePos
-  , spanEnd :: SourcePos
-  } deriving Show
+  { spanBeg :: (Int,Int)
+  , spanEnd :: (Int,Int)
+  , spanSrc :: String -- original file
+  }
 
 data Error
-  = CantInfer Term
-  | TypeMismatch Term Term Term
-  | TermMismatch Term Term Term
+  = CantInfer Span Term
+  | TypeMismatch Span Term Term Term
+  | TermMismatch Span Term Term Term
 
 data Result a
   = Done a
@@ -190,20 +205,28 @@ instance Show Book where
   show (Book defs) = "Book {" ++ intercalate ", " (map defn (M.toList defs)) ++ "}"
     where defn (k,(x,t)) = k ++ " : " ++ show x ++ " = " ++ show t
 
+instance Show Span where
+  show span = "At line " ++ show (fst $ spanBeg span) 
+           ++ ", column " ++ show (snd $ spanBeg span) ++ ":\n"
+           ++ highlightError (spanBeg span) (spanEnd span) (spanSrc span)
+
 instance Show Error where
-  show (CantInfer ctx) = 
-    "Cant-Infer:" ++
-    "\nContext:\n" ++ showContext ctx
-  show (TypeMismatch ctx goal typp) = 
-    "Type-Mismatch:" ++
-    "\n- Goal: " ++ show goal ++ 
-    "\n- Type: " ++ show typp ++
-    "\nContext:\n" ++ showContext ctx
-  show (TermMismatch ctx a b) = 
-    "Term-Mismatch:" ++
-    "\n- " ++ show a ++ 
-    "\n- " ++ show b ++
-    "\nContext:\n" ++ showContext ctx
+  show (CantInfer span term) = 
+    "\nTYPE_ERROR: Cant-Infer\n"
+    ++ "Term: " ++ show term ++ "\n"
+    ++ show span
+  show (TypeMismatch span goal expected actual) = 
+    "\nTYPE_ERROR: Type-Mismatch\n"
+    ++ "- Expected: " ++ show expected ++ "\n"
+    ++ "- Actual: " ++ show actual ++ "\n"
+    ++ "- Goal: " ++ show goal ++ "\n"
+    ++ show span
+  show (TermMismatch span expected actual goal) = 
+    "\nTYPE_ERROR: Term-Mismatch\n"
+    ++ "- Expected: " ++ show expected ++ "\n"
+    ++ "- Actual: " ++ show actual ++ "\n"
+    ++ "- Goal: " ++ show goal ++ "\n"
+    ++ show span
 
 showContext :: Term -> String
 showContext ctx = unlines (map snd (reverse (dedup S.empty (reverse (go ctx []))))) where
@@ -259,3 +282,6 @@ natToInt _         = Nothing
 unwrap :: String -> String
 unwrap ('(' : txt) = init txt
 unwrap txt         = txt
+
+noSpan :: Span
+noSpan = Span (0,0) (0,0) ""

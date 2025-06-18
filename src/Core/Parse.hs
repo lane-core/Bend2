@@ -36,15 +36,17 @@ import Core.Type
 --     blocks inside `choice` lists—clarity beats cleverness.
 -- 5.  NEVER write a do-block inside a list. Always make a separate function.
 
--- Parser state with two flags:
+-- Parser state with three fields:
 -- - tight: tracks whether the previous token ended "tight" (no trailing space).
 --          This allows us to distinguish between `foo[]` (list type) and `foo []` (application).
 -- - noAss: when True, disables the parseAss infix operator. This is used when parsing
 --          types in top-level definitions to prevent `foo : T = x` from parsing the `= x`
 --          as part of the type.
+-- - source: the original source file content for error reporting
 data ParserState = ParserState
-  { tight :: Bool  -- ^ True if previous token had no trailing whitespace
-  , noAss :: Bool  -- ^ True to disable parseAss (for parsing types in definitions)
+  { tight  :: Bool   -- ^ True if previous token had no trailing whitespace
+  , noAss  :: Bool   -- ^ True to disable parseAss (for parsing types in definitions)
+  , source :: String -- ^ Original source file content
   }
 
 type Parser = ParsecT Void String (Control.Monad.State.Strict.State ParserState)
@@ -107,15 +109,21 @@ parseSemi = optional (symbol ";") >> return ()
 -- Location tracking helpers
 withSpan :: Parser a -> Parser (Span, a)
 withSpan p = do
-  start <- getSourcePos
-  x <- p
+  beg <- getSourcePos
+  x   <- p
   end <- getSourcePos
-  return (Span start end, x)
+  let begLine = unPos (sourceLine beg)
+  let begCol  = unPos (sourceColumn beg)
+  let endLine = unPos (sourceLine end)
+  let endCol  = unPos (sourceColumn end)
+  st <- get
+  return (Span (begLine, begCol) (endLine, endCol) (source st), x)
 
 located :: Parser Term -> Parser Term
 located p = do
   (sp, t) <- withSpan p
   return (Loc sp t)
+  -- return t
 
 -- | Top‐level entry point
 parseTerm :: Parser Term
@@ -939,7 +947,7 @@ parseBook = do
 
 doParseTerm :: FilePath -> String -> Either String Term
 doParseTerm file input =
-  case evalState (runParserT p file input) (ParserState True False) of
+  case evalState (runParserT p file input) (ParserState True False input) of
     Left err  -> Left (formatError input err)
     Right res -> Right (bind (flatten res))
   where
@@ -958,7 +966,7 @@ doReadTerm input =
 
 doParseBook :: FilePath -> String -> Either String Book
 doParseBook file input =
-  case evalState (runParserT p file input) (ParserState True False) of
+  case evalState (runParserT p file input) (ParserState True False input) of
     Left err  -> Left (formatError input err)
     Right res -> Right (bindBook (flattenBook res))
   where

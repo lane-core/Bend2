@@ -38,7 +38,7 @@ checkDefinitions book = do
     checkAll :: Book -> [(Name, Defn)] -> IO Bool
     checkAll _ [] = return True
     checkAll bBook ((name, (term, typ)):rest) = do
-      case check 0 bBook id term typ of
+      case check 0 noSpan bBook id term typ of
         Done () -> do
           putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
           checkAll bBook rest
@@ -57,7 +57,7 @@ runMain book = do
     Just _ -> do
       let boundBook = bindBook book
       let mainCall = Ref "main"
-      case infer 0 boundBook id mainCall of
+      case infer 0 noSpan boundBook id mainCall of
         Fail e -> do
           putStrLn $ "Error running main: " ++ show e
           exitFailure

@@ -1,6 +1,7 @@
 {-./Type.hs-}
 
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- Pattern Matching Flattener
 -- ==========================
@@ -347,14 +348,15 @@ findPattern ctr = find (matches ctr)
 
 preserveName :: Int -> Int -> [Term] -> Term
 preserveName d i fields = case drop i fields of
-  (Var name 0 : _) -> Var name 0
-  _                -> freshVar d i
+  ((strip -> Var name 0) : _) -> Var name 0
+  _                           -> freshVar d i
 
 freshVar :: Int -> Int -> Term
 freshVar d i = Var ("_p" ++ show d ++ show i) 0
 
 nameOf :: Term -> String
 nameOf (Var n _) = n
+nameOf (Loc _ t) = nameOf t
 nameOf _         = "_"
 
 -- Utilities
