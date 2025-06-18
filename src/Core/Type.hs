@@ -32,11 +32,11 @@ data Term
   | Chk Term Type -- x::t
 
   -- Empty
-  | Emp -- ⊥
+  | Emp -- Empty
   | Efq -- λ{}
 
   -- Unit
-  | Uni      -- ⊤
+  | Uni      -- Unit
   | One      -- ()
   | Use Term -- λ{():f}
 
@@ -145,7 +145,7 @@ instance Show Term where
   show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
   show (Emp)          = "⊥"
   show (Efq)          = "λ{}"
-  show (Uni)          = "⊤"
+  show (Uni)          = "Unit"
   show (One)          = "()"
   show (Use f)        = "λ{():" ++ show f ++ "}"
   show (Bit)          = "Bool"
@@ -257,6 +257,7 @@ natToInt (Loc _ t) = natToInt t
 natToInt _         = Nothing
 
 unwrap :: String -> String
+unwrap "()"        = "()"
 unwrap ('(' : txt) = init txt
 unwrap txt         = txt
 

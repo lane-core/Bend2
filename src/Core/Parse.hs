@@ -224,13 +224,13 @@ parseSet :: Parser Term
 parseSet = label "type universe (Set)" $ symbol "Set" >> return Set
 
 parseEmp :: Parser Term
-parseEmp = label "empty type (⊥)" $ symbol "⊥" >> return Emp
+parseEmp = label "empty type (Empty)" $ symbol "Empty" >> return Emp
 
 parseEfq :: Parser Term
 parseEfq = label "empty type eliminator (λ{})" $ symbol "λ{}" >> return Efq
 
 parseUni :: Parser Term
-parseUni = label "unit type (⊤)" $ symbol "⊤" >> return Uni
+parseUni = label "unit type (Unit)" $ symbol "Unit" >> return Uni
 
 parseOne :: Parser Term
 parseOne = label "unit value (())" $ symbol "()" >> return One

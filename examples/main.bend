@@ -126,31 +126,36 @@ def Vec(A: Set, len: Nat) -> Set:
   any ctr: @{@Nil,@Cons}.
   match ctr:
     case @Nil: # Nil
-      Nat{len == 0}
+      any eLen: Nat{len == 0}.
+      Unit
     case @Cons: # Cons
-      any tLen : Nat.
-      any head : A.
-      any tail : Vec(A,tLen).
-      Nat{len == 1+tLen}
+      any tLen: Nat.
+      any head: A.
+      any tail: Vec(A,tLen).
+      any eLen: Nat{len == 1+tLen}.
+      Unit
 
 def VecInd
   ( A: Set
   , P: all n:Nat xs:Vec(A,n). Set
-  , N: P(0,(@Nil,{==}))
-  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,{==}))
+  , N: P(0,(@Nil,{==},()))
+  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,{==},()))
   , n: Nat
   , x: Vec(A,n)
   ) -> P(n,x):
   match x:
-    case (ctr, bag):
+    case (ctr, fields):
       match ctr:
-        with bag
+        with fields
         case @Nil:
-          {==} = bag
+          (e, ()) = fields
+          {==} = e
           N
         case @Cons:
-          (tLen, head, tail, {==}) = bag
-          C(tLen,head,tail,VecInd(A,P,N,C,tLen,tail))
+          (l, x, xs, e, ()) = fields
+          {==} = e
+          ind = VecInd(A,P,N,C,l,xs)
+          C(l,x,xs)
 
 def and1(a: Bool, b: Bool) -> Bool:
   match a b:
