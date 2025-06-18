@@ -155,7 +155,7 @@ def VecInd
           (l, x, xs, e, ()) = fields
           {==} = e
           ind = VecInd(A,P,N,C,l,xs)
-          C(l,x,xs)
+          C(l,x,xs,ind)
 
 def and1(a: Bool, b: Bool) -> Bool:
   match a b:
