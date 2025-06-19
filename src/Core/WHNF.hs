@@ -125,7 +125,7 @@ whnfAppCse lv book undo c x =
 
 force :: Book -> Term -> Term
 force book t =
-  case whnf 1 book t of
+  case whnf 2 book t of
     Ind t -> force book t
     Frz t -> force book t
     t     -> t
