@@ -419,8 +419,9 @@ parseSymbolName = do
   return n
 
 parseSym :: Parser Term
-parseSym = label "enum symbol / constructor" $ do
-  _ <- try (symbol "@")
+parseSym = label "enum symbol / constructor" $ try $ do
+  _ <- symbol "@"
+  notFollowedBy (char '{')          -- make sure we are *not* an Enum “@{”
   n <- some (satisfy isNameChar)
   mfields <- optional $ try $ do
     _ <- symbol "{"
@@ -972,7 +973,9 @@ parseDataDecl = label "datatype declaration" $ do
       branches v   = Pat [v] [] [([Sym tag], mkFields flds) | (tag,flds) <- cases]
       body         = Sig (Enu tags)                       -- any ctr: …
                           (Lam "ctr" (\v -> branches v))  -- match ctr …
-  return (tName, (body, Set))
+      defn         = (tName, (body, Set))
+  trace ("[desugar] data " ++ tName ++ "  ↦  " ++ show body) $
+    return defn
 
 -- single constructor line
 parseDataCase :: Parser (String,[Term])
