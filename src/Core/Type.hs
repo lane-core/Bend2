@@ -138,7 +138,7 @@ instance Monad Result where
 
 instance Show Term where
   show (Var k i)      = k
-  show (Ref k)        = "@"++k
+  show (Ref k)        = k
   show (Sub t)        = error "unreachable"
   -- show (Fix k f)      = "μ" ++ k ++ "." ++ show (f (Var k 0))
   show (Fix k f)      = k
@@ -177,7 +177,9 @@ instance Show Term where
     all a (Lam k f)   = "∀" ++ k ++ ":" ++ show a ++ "." ++ show (f (Var k 0))
     all a b           = "∀" ++ show a ++ "." ++ show b
   show (Lam k f)      = "λ" ++ k ++ "." ++ show (f (Var k 0))
-  show (App f x)      = "(" ++ unwrap (show f) ++ " " ++ show x ++ ")"
+  show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
+    (fn, args) = collectApps app []
+    fnStr      = unwrap (show fn)
   show (Eql t a b)    = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)          = "{==}"
   show (Rwt f)        = "λ{{==}:" ++ show f ++ "}"

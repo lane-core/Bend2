@@ -260,8 +260,8 @@ check d span book ctx term goal =
     (App f x, _) -> do
       xT <- infer d span book ctx x
       check d span book ctx (App f (Ann x xT)) goal
-    (Loc newSpan t, _) -> do
-      check d newSpan book ctx t goal
+    (Loc l t, _) -> do
+      check d l book ctx t goal
     (Pat _ _ _, _) -> do
       error "not-supported"
     (_, _) -> do
