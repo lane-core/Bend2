@@ -101,7 +101,7 @@ name = lexeme $ do
      else return n
 
 reserved :: [Name]
-reserved = ["match","case","else","if","end","all","any","lam","data"]
+reserved = ["match","case","else","if","end","all","any","lam"]
 
 -- Parses an Optional semicolon
 parseSemi :: Parser ()
