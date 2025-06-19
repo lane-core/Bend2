@@ -9,6 +9,7 @@ import Debug.Trace
 import Highlight (highlightError)
 import Text.Megaparsec
 import Text.Megaparsec.Char
+import Text.Megaparsec (anySingle, manyTill, lookAhead)
 import qualified Data.List.NonEmpty as NE
 import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.State.Strict (State, get, put, evalState)
@@ -100,7 +101,7 @@ name = lexeme $ do
      else return n
 
 reserved :: [Name]
-reserved = ["match","case","else","if","end","all","any","lam"]
+reserved = ["match","case","else","if","end","all","any","lam","data"]
 
 -- Parses an Optional semicolon
 parseSemi :: Parser ()
@@ -418,10 +419,22 @@ parseSymbolName = do
   return n
 
 parseSym :: Parser Term
-parseSym = label "enum symbol" $ do
-  _ <- try $ symbol "@"
+parseSym = label "enum symbol / constructor" $ do
+  _ <- try (symbol "@")
   n <- some (satisfy isNameChar)
-  return (Sym n)
+  mfields <- optional $ try $ do
+    _ <- symbol "{"
+    fs <- sepEndBy parseTerm (symbol ",")
+    _ <- symbol "}"
+    return fs
+  return $ case mfields of
+    Nothing -> Sym n
+    Just fs -> buildCtor n fs
+  where
+    buildCtor :: String -> [Term] -> Term
+    buildCtor tag fs =
+      let tup = foldl Tup (Sym tag) fs -- (@Tag, f1, f2, …)
+      in  Tup tup One                  -- … , ()
 
 parseCse :: Parser Term
 parseCse = label "enum case match" $ do
@@ -887,7 +900,8 @@ parseContext = braces $ sepEndBy parseTerm (symbol ",")
 
 parseDefinition :: Parser (Name, Defn)
 parseDefinition = choice
-  [ parseDefKeyword
+  [ parseDataDecl          -- NEW (must be first)
+  , parseDefKeyword
   , parseShortDef
   ]
 
@@ -942,6 +956,33 @@ parseBook :: Parser Book
 parseBook = do
   defs <- many parseDefinition
   return $ Book (M.fromList defs)
+
+-- |  data …  declarations
+parseDataDecl :: Parser (Name, Defn)
+parseDataDecl = label "datatype declaration" $ do
+  _      <- symbol "data"
+  tName  <- name
+  -- discard optional parameter / index lists until ‘:’
+  _      <- manyTill anySingle (lookAhead (symbol ":")) <|> pure ()
+  _      <- symbol ":"
+  cases  <- many parseDataCase
+  let tags         = map fst cases
+      mkFields []  = Uni
+      mkFields (f:fs) = Sig f (Lam "_" (\_ -> mkFields fs))
+      branches v   = Pat [v] [] [([Sym tag], mkFields flds) | (tag,flds) <- cases]
+      body         = Sig (Enu tags)                       -- any ctr: …
+                          (Lam "ctr" (\v -> branches v))  -- match ctr …
+  return (tName, (body, Set))
+
+-- single constructor line
+parseDataCase :: Parser (String,[Term])
+parseDataCase = label "datatype constructor" $ do
+  _   <- symbol "case"
+  _   <- symbol "@"
+  tag <- some (satisfy isNameChar)
+  _   <- symbol ":"
+  -- we ignore field declarations for now (enumeration only)
+  return (tag, [])
 
 -- | Main entry points
 
