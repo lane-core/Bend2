@@ -20,7 +20,7 @@ common warnings
 
 library
     import:           warnings
-    exposed-modules:  Core.AutoImport,
+    exposed-modules:  Core.Import,
                       Core.Type,
                       Core.Bind,
                       Core.Check,

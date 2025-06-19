@@ -5,7 +5,7 @@ import qualified Data.Map as M
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 
-import Core.AutoImport
+import Core.Import
 import Core.Bind
 import Core.Check
 import Core.Normal

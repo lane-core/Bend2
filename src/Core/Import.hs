@@ -1,4 +1,4 @@
-module Core.AutoImport where
+module Core.Import where
 
 import Control.Monad (foldM)
 import qualified Data.Map.Strict as M
