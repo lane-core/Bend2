@@ -1,64 +1,41 @@
-{-./../Type.hs-}
+{-./Type.hs-}
 
 module Core.Parse where
 
+import Control.Monad (when, replicateM, void, guard)
 import Control.Monad.State.Strict (State, get, put)
+import Control.Monad.State.Strict (State, get, put, evalState)
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.Void
 import Debug.Trace
 import Highlight (highlightError)
 import Text.Megaparsec
-import Text.Megaparsec.Char
 import Text.Megaparsec (anySingle, manyTill, lookAhead)
+import Text.Megaparsec.Char
 import qualified Data.List.NonEmpty as NE
-import qualified Text.Megaparsec.Char.Lexer as L
-import Control.Monad.State.Strict (State, get, put, evalState)
-
 import qualified Data.Map.Strict as M
 import qualified Data.Set        as S
-import Control.Monad (when, replicateM, void, guard)
+import qualified Text.Megaparsec.Char.Lexer as L
 
 import Core.Bind
 import Core.Flatten
 import Core.Type
 
--- Guideline for future edits
--- --------------------------
--- 1.  Split every rule into:
---       a) a *discriminating prefix* parsed under `try` (so that if the very
---          first token does not match we can still explore other branches);
---       b) the remainder parsed *without* `try` (we are now committed, any
---          failure is a real error, not silent back-tracking).
--- 2.  If several variants share the same prefix (e.g. `Σ (…)` vs `Σ A.`)
---     parse the prefix once, then use `choice` for the mutually exclusive
---     tails—this localises the only back-tracking needed.
--- 3.  Never wrap an entire rule in `try`; doing so degrades error messages
--- 4.  Keep one top-level function per syntactic form; do not inline `do`
---     blocks inside `choice` lists—clarity beats cleverness.
--- 5.  NEVER write a do-block inside a list. Always make a separate function.
-
--- Parser state with three fields:
--- - tight: tracks whether the previous token ended "tight" (no trailing space).
---          This allows us to distinguish between `foo[]` (list type) and `foo []` (application).
--- - noAss: when True, disables the parseAss infix operator. This is used when parsing
---          types in top-level definitions to prevent `foo : T = x` from parsing the `= x`
---          as part of the type.
--- - source: the original source file content for error reporting
+-- Parser state
 data ParserState = ParserState
-  { tight  :: Bool   -- ^ True if previous token had no trailing whitespace
-  , noAss  :: Bool   -- ^ True to disable parseAss (for parsing types in definitions)
-  , source :: String -- ^ Original source file content
+  { tight  :: Bool   -- ^ tracks whether previous token ended with no trailing space
+  , noAss  :: Bool   -- ^ when True, disables the parseAss infix operator
+  , source :: String -- ^ original file source, for error reporting
   }
 
 type Parser = ParsecT Void String (Control.Monad.State.Strict.State ParserState)
 
--- | Skip spaces and comments (// and /* */)
+-- | Skip spaces and comments
 skip :: Parser ()
 skip = L.space space1 (L.skipLineComment "#") (L.skipBlockComment "{-" "-}")
 
 -- Custom lexeme that tracks whether trailing whitespace was consumed.
--- This is necessary to distinguish tight postfix operators (foo[]) from
--- regular function application (foo []).
+-- Allows us to distinguish `foo[]` (postfix) from `(foo [])` (application)
 lexeme :: Parser a -> Parser a
 lexeme p = do
   skip
@@ -124,7 +101,6 @@ located :: Parser Term -> Parser Term
 located p = do
   (sp, t) <- withSpan p
   return (Loc sp t)
-  -- return t
 
 -- | Top‐level entry point
 parseTerm :: Parser Term
@@ -136,8 +112,7 @@ parseTerm = located $ do
 -- | Parse a "core" form (no trailing infix‐style operators)
 parseTermIni :: Parser Term
 parseTermIni = choice
-  [ 
-    parseLet
+  [ parseLet
   , parseGen
   , parseTst
   , parseFix
@@ -163,7 +138,7 @@ parseTermIni = choice
   , parseNat
   , parseZer
   , parseNatLit
-  , parseListLit
+  , parseLstLit
   , parseNil
   , parseRfl
   , parseSuc
@@ -186,35 +161,28 @@ parseTermEnd t = do
 parseTermPostfix :: Term -> Parser Term
 parseTermPostfix t = do
   st <- get
-  if not (tight st)      -- there was a gap → stop
-    then pure t
-    else do              -- tight → postfixes may follow
-      mb <- optional $ choice
-              [ parseAppPostfix t
-              , parseEql        t
-              , parseLst        t
-              ]
-      maybe (pure t) parseTermPostfix mb
+  guard (tight st)
+  mb <- optional $ choice
+    [ parseCall t
+    , parseEql  t
+    , parseLst  t ]
+  maybe (pure t) parseTermPostfix mb
+  <|> pure t
 
 parseTermInfix :: Term -> Parser Term
 parseTermInfix t = choice
-  [
-    parseCon t
+  [ parseCon t
   , parseFun t
   , parseAnd t
   , parseChk t
   , parseAdd t
   , parseAss t
-  , return t
-  ]
+  , return t ]
 
 parseTupApp :: Parser Term
 parseTupApp = do
   _ <- try $ symbol "("
-  choice [
-      parseTup
-    , parseApp
-         ]
+  choice [ parseTup , parseApp ]
 
 -- atomic terms
 
@@ -258,11 +226,7 @@ parseBt1 :: Parser Term
 parseBt1 = label "bit one (True)" $ try $ choice [symbol "True", symbol "True"] >> return Bt1
 
 parseBif :: Parser Term
-parseBif = choice
-  [
-    parseBifLambda,
-    parseBifSugar
-  ]
+parseBif = choice [ parseBifLambda, parseBifSugar ]
 
 parseBifLambda :: Parser Term
 parseBifLambda = label "bit eliminator" $ do
@@ -295,7 +259,6 @@ parseBifIf = label "if clause" $ do
   falseCase <- parseTerm
   return $ App (Bif falseCase trueCase) condition
 
-
 parseSwi :: Parser Term
 parseSwi = parseSwiLambda
 
@@ -316,7 +279,6 @@ parseSwiLambda = label "natural number eliminator" $ do
   _ <- symbol "}"
   return (Swi z s)
 
-
 parseSig :: Parser Term
 parseSig = label "dependent pair type" $ do
   _ <- try $ choice [symbol "Σ", symbol "any"]
@@ -325,8 +287,8 @@ parseSig = label "dependent pair type" $ do
     [] -> parseSigSimple
     _  -> do
       _ <- symbol "."
-      body <- parseTerm
-      return $ foldr (\(x, t) acc -> Sig t (Lam x (\v -> acc))) body bindings
+      b <- parseTerm
+      return $ foldr (\(x, t) acc -> Sig t (Lam x (\v -> acc))) b bindings
   where
     parseBinding = try $ do
       x <- name
@@ -365,8 +327,8 @@ parseAll = label "dependent function type" $ do
     [] -> parseAllSimple
     _  -> do
       _ <- symbol "."
-      body <- parseTerm
-      return $ foldr (\(x, t) acc -> All t (Lam x (\v -> acc))) body bindings
+      b <- parseTerm
+      return $ foldr (\(x, t) acc -> All t (Lam x (\v -> acc))) b bindings
   where
     parseBinding = try $ do
       x <- name
@@ -425,9 +387,9 @@ parseSym = label "enum symbol / constructor" $ try $ do
   n <- some (satisfy isNameChar)
   mfields <- optional $ try $ do
     _ <- symbol "{"
-    fs <- sepEndBy parseTerm (symbol ",")
+    f <- sepEndBy parseTerm (symbol ",")
     _ <- symbol "}"
-    return fs
+    return f
   return $ case mfields of
     Nothing -> Sym n
     Just fs -> buildCtor n fs
@@ -462,18 +424,17 @@ parseCaseClause = do
 
 parsePat :: Parser Term
 parsePat = label "pattern match" $ do
-  matchPos <- getSourcePos                   -- where the keyword starts
-  _        <- symbol "match"
-  scruts   <- some parseTerm
-  delim    <- choice [ ':' <$ symbol ":", '{' <$ symbol "{" ]   -- ':' or '{'
-  let col = unPos (sourceColumn matchPos)                  -- reference column
-  moves    <- many parseWith                               -- unchanged
-  clauses  <- case delim of
-                ':' -> parseIndentClauses col (length scruts)
-                '{' -> parseBraceClauses  (length scruts)
-                _   -> fail "unreachable"
-  when (delim == '{') (void $ symbol "}")   -- explicit block terminator
-  _ <- optional (symbol ";")                -- optional trailing semicolon
+  srcPos  <- getSourcePos
+  _       <- symbol "match"
+  scruts  <- some parseTerm
+  delim   <- choice [ ':' <$ symbol ":", '{' <$ symbol "{" ]
+  moves   <- many parseWith
+  clauses <- case delim of
+    ':' -> parseIndentClauses (unPos (sourceColumn srcPos)) (length scruts)
+    '{' -> parseBraceClauses  (length scruts)
+    _   -> fail "unreachable"
+  when (delim == '{') (void $ symbol "}")
+  _ <- optional (symbol ";")
   pure (Pat scruts moves clauses)
   where
     -- Parse 'with' statements
@@ -484,36 +445,32 @@ parsePat = label "pattern match" $ do
       return (x, v)
 
 -- Indentation-sensitive clause list (stops when out-dented)
-parseIndentClauses :: Int      -- ^ column of the enclosing 'match'
-                   -> Int      -- ^ arity (number of scrutinees)
-                   -> Parser [Case]
-parseIndentClauses col arity = many1
-  where
-    many1 = do first <- clause
-               rest  <- many (try clause)
-               pure (first:rest)
+parseIndentClauses :: Int -> Int -> Parser [Case]
+parseIndentClauses col arity = many1 where
+    many1 = do
+      first <- clause
+      rest  <- many (try clause)
+      pure (first:rest)
 
     clause = label "case clause" . try $ do
       skip                               -- eat leading ws / newlines
-      pos <- getSourcePos
+      pos  <- getSourcePos
       guard (unPos (sourceColumn pos) >= col)
-      _   <- symbol "case"
-      pats <- replicateM arity parseTerm
-      _   <- symbol ":"
-      body <- parseTerm
-      pure (pats, body)
-
--- Braced clause list (runs until the closing '}')
-parseBraceClauses :: Int -> Parser [Case]
-parseBraceClauses arity =
-  manyTill singleClause (lookAhead (symbol "}"))
-  where
-    singleClause = label "case clause" $ do
       _    <- symbol "case"
       pats <- replicateM arity parseTerm
       _    <- symbol ":"
       body <- parseTerm
       pure (pats, body)
+
+-- Braced clause list (runs until the closing '}')
+parseBraceClauses :: Int -> Parser [Case]
+parseBraceClauses arity = manyTill singleClause (lookAhead (symbol "}")) where
+  singleClause = label "case clause" $ do
+    _    <- symbol "case"
+    pats <- replicateM arity parseTerm
+    _    <- symbol ":"
+    body <- parseTerm
+    pure (pats, body)
 
 parseView :: Parser Term
 parseView = label "view" $ do
@@ -548,8 +505,8 @@ parseNatLit = label "natural number literal" $ lexeme $ do
       build k = Suc (build (k - 1))
   return (build n)
 
-parseListLit :: Parser Term
-parseListLit = label "list literal" $ do
+parseLstLit :: Parser Term
+parseLstLit = label "list literal" $ do
   _ <- try $ symbol "["
   terms <- sepEndBy parseTerm (symbol ",")
   _ <- symbol "]"
@@ -581,7 +538,6 @@ parseRwtLambda = label "rewrite eliminator" $ do
   _ <- symbol "}"
   return (Rwt f)
 
-
 parseApp :: Parser Term
 parseApp = label "application" $ do
   f  <- parseTerm
@@ -589,8 +545,8 @@ parseApp = label "application" $ do
   _ <- symbol ")"
   return (foldl App f xs)
 
-parseAppPostfix :: Term -> Parser Term
-parseAppPostfix f = label "function application" $ try $ do
+parseCall :: Term -> Parser Term
+parseCall f = label "function application" $ try $ do
   _ <- try $ symbol "("
   args <- sepEndBy parseTerm (symbol ",")
   _ <- symbol ")"
@@ -681,12 +637,12 @@ parseAss t = label "location binding" $ do
       _ <- try $ do
         _ <- symbol "="
         notFollowedBy (char '=')
-      v    <- parseTerm
-      _    <- parseSemi
-      body <- parseTerm
+      v <- parseTerm
+      _ <- parseSemi
+      b <- parseTerm
       case t of
-        Var x _ -> return $ Let v (Lam x (\_ -> body))
-        _       -> return $ Pat [v] [] [([t], body)]
+        Var x _ -> return $ Let v (Lam x (\_ -> b))
+        _       -> return $ Pat [v] [] [([t], b)]
 
 -- | HOAS‐style binders
 
@@ -696,41 +652,24 @@ parseLam = label "lambda abstraction" $ do
     _ <- choice [symbol "λ", symbol "lam"]
     notFollowedBy (symbol "{")
     return ()
-  names <- some name
-  _ <- symbol "."
-  body <- parseTerm
-  return $ foldr (\k acc -> Lam k (\v -> acc)) body names
+  xs <- some name
+  _  <- symbol "."
+  f  <- parseTerm
+  return $ foldr (\k acc -> Lam k (\v -> acc)) f xs
 
 parseFix :: Parser Term
 parseFix = label "fixed point" $ do
   _ <- try $ symbol "μ"
   k <- name
   _ <- symbol "."
-  body <- parseTerm
-  return (Fix k (\v -> body))
+  f <- parseTerm
+  return (Fix k (\v -> f))
 
 parseLet :: Parser Term
-parseLet = label "let binding" $ choice
-  [ parseLetBang
-  , parseLetKeyword
-  ]
-
-parseLetBang :: Parser Term
-parseLetBang = do
-  _ <- try $ symbol "!"
-  v <- parseTerm
-  _ <- parseSemi
-  f <- parseTerm
-  return (Let v f)
-
-parseLetKeyword :: Parser Term
-parseLetKeyword = do
+parseLet = label "let binding" $ do
   _ <- try $ symbol "let"
   x <- name
-  choice
-    [ parseLetTyped x
-    , parseLetUntyped x
-    ]
+  choice [ parseLetTyped x , parseLetUntyped x ]
 
 -- Parses the untyped part of a 'let' binding: "= v ; f"
 parseLetUntyped :: Name -> Parser Term
@@ -769,7 +708,7 @@ parseGen = label "generation" $ do
 
 parseTst :: Parser Term
 parseTst = label "test statement" $ do
-  _ <- try $ symbol "tst"
+  _ <- try $ symbol "test"
   a <- parseTerm
   _ <- symbol "=="
   b <- parseTerm
@@ -780,6 +719,7 @@ parseTst = label "test statement" $ do
   nxt <- choice [ parseEnd , parseTst ]
   return (Let (Eql t a b) (Lam "_" (\_ -> nxt)))
 
+-- FIXME: what is that for?
 parseEnd :: Parser Term
 parseEnd = label "end gen statement" $ do
   _ <- try $ symbol "end"
@@ -812,17 +752,9 @@ parseContext = braces $ sepEndBy parseTerm (symbol ",")
 
 parseDefinition :: Parser (Name, Defn)
 parseDefinition = choice
-  [ dbg <$> parseDataDecl          -- datatype declarations
-  , dbg <$> parseDefKeyword        -- def …
-  , dbg <$> parseShortDef          -- short a : T = t
-  ]
-  where
-    -- dbg d@(n,(tm,ty)) = trace ("[parse] " ++ n ++ " = " ++ showTerm tm ++ " : " ++ show ty) d
-    dbg d@(n,(tm,ty)) = d
-    -- Expand μ-bindings for better visibility when debugging.
-    showTerm :: Term -> String
-    showTerm (Fix k f) = "μ" ++ k ++ "." ++ show (f (Var k 0))
-    showTerm t         = show t
+  [ parseDataDec
+  , parseDefKeyword
+  , parseShortDef ]
 
 -- Parse definitions with 'def' keyword
 parseDefKeyword :: Parser (Name, Defn)
@@ -831,8 +763,7 @@ parseDefKeyword = do
   f <- name
   choice
     [ parseDefFunction f
-    , parseDefSimple f
-    ]
+    , parseDefSimple f ]
 
 -- Parse simple definitions: def name : Type = term
 parseDefSimple :: Name -> Parser (Name, Defn)
@@ -876,65 +807,31 @@ parseBook = do
   defs <- many parseDefinition
   return $ Book (M.fromList defs)
 
-parseDataDecl :: Parser (Name, Defn)
-parseDataDecl = label "datatype declaration" $ do
-  _     <- symbol "data"
-  -- The datatype name
-  tName <- name
-
-  -- Optional parameter list:  (x:A, y:B, …)
-  -- Parameters: either < ... > or first (…) block.
-  params <- option [] $ choice
-    [ angles (sepEndBy parseArg (symbol ","))
-    , try $ parens (sepEndBy parseArg (symbol ","))
-    ]
-
-  -- Indices: a second (…) block, if present.
-  indices <- option [] $ try $ do
-     _ <- lookAhead (symbol "(")
-     parens (sepEndBy parseArg (symbol ","))
-
-  let args = params ++ indices
-
-  -- Optional return type (defaults to Set)
-  retTy <- option Set (symbol "->" *> parseTerm)
-
-  -- Colon that starts the constructor list
-  _     <- symbol ":"
-
-  -- One or more constructor branches
-  cases <- many parseDataCase
-
+parseDataDec :: Parser (Name, Defn)
+parseDataDec = label "datatype declaration" $ do
+  _       <- symbol "data"
+  tName   <- name
+  params  <- option [] $ angles (sepEndBy parseArg (symbol ","))
+  indices <- option [] $ parens (sepEndBy parseArg (symbol ","))
+  args    <- return $ params ++ indices
+  retTy   <- option Set (symbol "->" *> parseTerm)
+  _       <- symbol ":"
+  cases   <- many parseDataCase
   when (null cases) $ fail "datatype must have at least one constructor case"
-
-  let tags      = map fst cases
-
-      -- Build nested dependent pair chain for constructor fields.
+  let tags = map fst cases
       mkFields :: [(Name, Term)] -> Term
-      mkFields []                 = Uni
+      mkFields []             = Uni
       mkFields ((fn,ft):rest) = Sig ft (Lam fn (\_ -> mkFields rest))
-
       --   match ctr: case @Tag: …
       branches v = Pat [v] [] [([Sym tag], mkFields flds) | (tag, flds) <- cases]
-
       -- The body of the definition (see docstring).
       body0 = Sig (Enu tags) (Lam "ctr" (\v -> branches v))
-
       -- Wrap the body with lambdas for the parameters.
-      nest (n, ty) (tyAcc, bdAcc) =
-        ( All ty  (Lam n (\_ -> tyAcc))
-        , Lam n (\_ -> bdAcc)
-        )
-
+      nest (n, ty) (tyAcc, bdAcc) = (All ty  (Lam n (\_ -> tyAcc)) , Lam n (\_ -> bdAcc))
       (fullTy, fullBody) = foldr nest (retTy, body0) args
-
       term = Fix tName (\_ -> fullBody)
-
   return (tName, (term, fullTy))
-
-  where
-    -- Parse a single argument of the form  x : T
-    parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
+  where parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
 
 -- single constructor line
 -- Parse a single constructor block inside a datatype declaration.
@@ -942,10 +839,10 @@ parseDataDecl = label "datatype declaration" $ do
 -- preserving order.
 parseDataCase :: Parser (String, [(Name, Term)])
 parseDataCase = label "datatype constructor" $ do
-  _   <- symbol "case"
-  _   <- symbol "@"
-  tag <- some (satisfy isNameChar)
-  _   <- symbol ":"
+  _    <- symbol "case"
+  _    <- symbol "@"
+  tag  <- some (satisfy isNameChar)
+  _    <- symbol ":"
   flds <- many parseField
   return (tag, flds)
   where
@@ -1012,35 +909,3 @@ formatError input bundle = do
   "\nPARSE_ERROR\n" ++ msg
     ++ "\nAt line " ++ show lin ++ ", column " ++ show col ++ ":\n"
     ++ highlighted
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
