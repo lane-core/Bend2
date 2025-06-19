@@ -901,10 +901,17 @@ parseContext = braces $ sepEndBy parseTerm (symbol ",")
 
 parseDefinition :: Parser (Name, Defn)
 parseDefinition = choice
-  [ parseDataDecl          -- NEW (must be first)
-  , parseDefKeyword
-  , parseShortDef
+  [ dbg <$> parseDataDecl          -- datatype declarations
+  , dbg <$> parseDefKeyword        -- def …
+  , dbg <$> parseShortDef          -- short a : T = t
   ]
+  where
+    dbg d@(n,(tm,ty)) = trace ("[parse] " ++ n ++ " = " ++ showTerm tm ++ " : " ++ show ty) d
+
+    -- Expand μ-bindings for better visibility when debugging.
+    showTerm :: Term -> String
+    showTerm (Fix k f) = "μ" ++ k ++ "." ++ show (f (Var k 0))
+    showTerm t         = show t
 
 -- Parse definitions with 'def' keyword
 parseDefKeyword :: Parser (Name, Defn)
@@ -959,33 +966,122 @@ parseBook = do
   return $ Book (M.fromList defs)
 
 -- |  data …  declarations
+-- | Top-level @data@ declaration.
+--
+-- A declaration like:
+--
+--   data Bool:
+--     case @True:
+--     case @False:
+--
+-- is desugared to (roughly):
+--
+--   def Bool() -> Set:
+--     any ctr: @{@True,@False}.
+--     match ctr:
+--       case @True:
+--       case @False:
+--
+-- We also support parameterised datatypes, e.g.:
+--
+--   data Vec(A: Set, len: Nat) -> Set:
+--     …
+--
+-- The parameters before the colon are collected and turned into
+-- explicit Π-/Σ-style binders (using ∀/λ) exactly like in normal
+-- @def@ functions so that the generated term has the same shape as
+-- produced by ‘parseDefFunction’.
+--
+-- For the purposes of this sugar, *only* the list of constructor
+-- tags is required – we currently ignore any fields listed in the
+-- individual @case@ branches and desugar them as a plain enum.  This
+-- is sufficient for the use-cases covered in PROMPT (e.g. Bool).  The
+-- implementation, however, already keeps the plumbing needed to
+-- extend it in the future: the parser returns the tag together with a
+-- list of field-types which we just drop for now.
 parseDataDecl :: Parser (Name, Defn)
 parseDataDecl = label "datatype declaration" $ do
-  _      <- symbol "data"
-  tName  <- name
-  -- discard optional parameter / index lists until ‘:’
-  _      <- manyTill anySingle (lookAhead (symbol ":")) <|> pure ()
-  _      <- symbol ":"
-  cases  <- many parseDataCase
-  let tags         = map fst cases
-      mkFields []  = Uni
-      mkFields (f:fs) = Sig f (Lam "_" (\_ -> mkFields fs))
-      branches v   = Pat [v] [] [([Sym tag], mkFields flds) | (tag,flds) <- cases]
-      body         = Sig (Enu tags)                       -- any ctr: …
-                          (Lam "ctr" (\v -> branches v))  -- match ctr …
-      defn         = (tName, (body, Set))
-  trace ("[desugar] data " ++ tName ++ "  ↦  " ++ show body) $
-    return defn
+  _     <- symbol "data"
+  -- The datatype name
+  tName <- name
+
+  -- Optional parameter list:  (x:A, y:B, …)
+  -- Parameters: either < ... > or first (…) block.
+  params <- option [] $ choice
+    [ angles (sepEndBy parseArg (symbol ","))
+    , try $ parens (sepEndBy parseArg (symbol ","))
+    ]
+
+  -- Indices: a second (…) block, if present.
+  indices <- option [] $ try $ do
+     lookAhead (symbol "(")
+     parens (sepEndBy parseArg (symbol ","))
+
+  let args = params ++ indices
+
+  -- Optional return type (defaults to Set)
+  retTy <- option Set (symbol "->" *> parseTerm)
+
+  -- Colon that starts the constructor list
+  _     <- symbol ":"
+
+  -- One or more constructor branches
+  cases <- many parseDataCase
+
+  when (null cases) $ fail "datatype must have at least one constructor case"
+
+  let tags      = map fst cases
+
+      -- Build nested dependent pair chain for constructor fields.
+      mkFields :: [(Name, Term)] -> Term
+      mkFields []                 = Uni
+      mkFields ((fn,ft):rest) = Sig ft (Lam fn (\_ -> mkFields rest))
+
+      --   match ctr: case @Tag: …
+      branches v = Pat [v] [] [([Sym tag], mkFields flds) | (tag, flds) <- cases]
+
+      -- The body of the definition (see docstring).
+      body0 = Sig (Enu tags) (Lam "ctr" (\v -> branches v))
+
+      -- Wrap the body with lambdas for the parameters.
+      nest (n, ty) (tyAcc, bdAcc) =
+        ( All ty  (Lam n (\_ -> tyAcc))
+        , Lam n (\_ -> bdAcc)
+        )
+
+      (fullTy, fullBody) = foldr nest (retTy, body0) args
+
+      term = Fix tName (\_ -> fullBody)
+
+  return (tName, (term, fullTy))
+
+  where
+    -- Parse a single argument of the form  x : T
+    parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
 
 -- single constructor line
-parseDataCase :: Parser (String,[Term])
+-- Parse a single constructor block inside a datatype declaration.
+-- Returns constructor tag together with a list of (fieldName, fieldType)
+-- preserving order.
+parseDataCase :: Parser (String, [(Name, Term)])
 parseDataCase = label "datatype constructor" $ do
   _   <- symbol "case"
   _   <- symbol "@"
   tag <- some (satisfy isNameChar)
   _   <- symbol ":"
-  -- we ignore field declarations for now (enumeration only)
-  return (tag, [])
+  flds <- many parseField
+  return (tag, flds)
+  where
+    -- Parse a field declaration  name : Type
+    parseField :: Parser (Name, Term)
+    parseField = try $ do
+      -- Stop if next token is 'case' (start of next constructor) or 'def'/'data'
+      notFollowedBy (symbol "case")
+      n <- name
+      _ <- symbol ":"
+      t <- parseTerm
+      -- Optional semicolon or newline is already handled by lexeme
+      return (n,t)
 
 -- | Main entry points
 
