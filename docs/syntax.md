@@ -90,12 +90,15 @@ match n:
 ### General Pattern Matching
 
 ```python
-match x y z:
-  with a = expr   # Optional bindings
-  case pat1 pat2:
+match x y ...:
+  with a = val0
+  with b = val1
+  ...
+  case pat1 pat2 ...:
     body1
-  case pat3 pat4:
+  case pat3 pat4 ...:
     body2
+  ...
 ```
 
 The `with` clause serves two purposes:
