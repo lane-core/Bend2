@@ -10,13 +10,13 @@ import Core.Bind
 import Core.Check
 import Core.Normal
 import Core.Type
-import qualified Core.Parse as Parse
+import Core.Parse.Book (doParseBook)
 
 -- | Parse a Bend file into a Book
 parseFile :: FilePath -> IO Book
 parseFile file = do
   content <- readFile file
-  case Parse.doParseBook file content of
+  case doParseBook file content of
     Left err -> do
       putStrLn $ "Parse error: " ++ err
       exitFailure

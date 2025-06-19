@@ -1,4 +1,3 @@
-{-./Type.hs-}
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ViewPatterns #-}

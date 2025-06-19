@@ -436,7 +436,7 @@ construct and eliminate them.
 The Vector type can be declared as:
 
 ```python
-data Vec<A: Set>(len: A):
+type Vec<A: Set>(len: A):
   case @Nil:
     eLen: len == 0
   case @Cons:
@@ -451,7 +451,7 @@ This will desugar to the same `def Vec ...` declaration we wrote before.
 The general form is:
 
 ```
-data Vec<p0: P0, p1: P1, ...>(i0: I0, i1: i1, ...):
+type Vec<p0: P0, p1: P1, ...>(i0: I0, i1: i1, ...):
   case @Ctr0:
     f0: F0
     f1: F1
@@ -479,7 +479,7 @@ data Bool : Set where
 ```
 
 ```python
-data Bool:
+type Bool:
   case @True:
   case @False:
 ```
@@ -491,7 +491,7 @@ data Maybe (A : Set) : Set where
 ```
 
 ```python
-data Maybe(A: Set):
+type Maybe(A: Set):
   case @None:
   case @Some:
     value: A
@@ -504,7 +504,7 @@ data List (A : Set) : Set where
 ```
 
 ```python
-data List(A: Set):
+type List(A: Set):
   case @Nil:
   case @Cons:
     head: A
@@ -517,7 +517,7 @@ data Σ (A : Set) (B : A → Set) : Set where
 ```
 
 ```python
-data Sigma(A: Set, B: A -> Set):
+type Sigma(A: Set, B: A -> Set):
   case @Pair:
     fst: A
     snd: B(fst)
@@ -529,7 +529,7 @@ data Equal (A : Set) (x : A) : A → Set where
 ```
 
 ```python
-data Equal<A: Set, x: A>(y: A):
+type Equal<A: Set, x: A>(y: A):
   case @Refl:
     x: A
     e: y == x

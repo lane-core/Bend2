@@ -122,7 +122,7 @@ def is_even_ab_theo(n: Nat) -> Bool{(is_even_a n) == (is_even_b n)}:
 ## data Vec (A : Set) : Nat -> Set where
 ##   nil : Vec A 0
 ##   con : all m (x : A) (xs : Vec A m) -> Vec A (suc m)
-data Vec<A: Set>(len: Nat) -> Set:
+type Vec<A: Set>(len: Nat) -> Set:
   case @Nil:
     eLen: Nat{len == 0}
   case @Cons:

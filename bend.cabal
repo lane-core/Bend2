@@ -28,6 +28,8 @@ library
                       Core.Flatten,
                       Core.Normal,
                       Core.Parse,
+                      Core.Parse.Term,
+                      Core.Parse.Book,
                       Core.Rewrite,
                       Core.WHNF
     build-depends:    base ^>= 4.21.0.0,

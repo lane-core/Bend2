@@ -7,7 +7,7 @@ import System.Directory (doesFileExist)
 import System.FilePath (takeDirectory, (</>))
 
 import Core.Type
-import Core.Parse (doParseBook)
+import Core.Parse.Book (doParseBook)
 import Core.Bind (bindBook)
 
 -- Auto-import unbound references in a Book
