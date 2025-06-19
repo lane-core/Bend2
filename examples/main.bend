@@ -119,21 +119,17 @@ def is_even_ab_theo(n: Nat) -> Bool{(is_even_a n) == (is_even_b n)}:
 
 # Can we encode inductive datatypes?
 
-# data Vec (A : Set) : Nat -> Set where
-#   nil : Vec A 0
-#   con : all m (x : A) (xs : Vec A m) -> Vec A (suc m)
-def Vec(A: Set, len: Nat) -> Set:
-  any ctr: @{@Nil,@Cons}.
-  match ctr:
-    case @Nil: # Nil
-      any eLen: Nat{len == 0}.
-      Unit
-    case @Cons: # Cons
-      any tLen: Nat.
-      any head: A.
-      any tail: Vec(A,tLen).
-      any eLen: Nat{len == 1+tLen}.
-      Unit
+## data Vec (A : Set) : Nat -> Set where
+##   nil : Vec A 0
+##   con : all m (x : A) (xs : Vec A m) -> Vec A (suc m)
+data Vec<A: Set>(len: Nat) -> Set:
+  case @Nil:
+    eLen: Nat{len == 0}
+  case @Cons:
+    tLen: Nat
+    head: A
+    tail: Vec(A, tLen)
+    eLen: Nat{len == 1+tLen}
 
 def VecInd
   ( A: Set
@@ -148,14 +144,11 @@ def VecInd
       match ctr:
         with fields
         case @Nil:
-          (e, ()) = fields
-          {==} = e
+          ({==}, ()) = fields
           N
         case @Cons:
-          (l, x, xs, e, ()) = fields
-          {==} = e
-          ind = VecInd(A,P,N,C,l,xs)
-          C(l,x,xs,ind)
+          (l, x, xs, {==}, ()) = fields
+          C(l,x,xs,VecInd(A,P,N,C,l,xs))
 
 def and1(a: Bool, b: Bool) -> Bool:
   match a b:

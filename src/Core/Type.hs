@@ -6,6 +6,7 @@ import Highlight (highlightError)
 import qualified Data.Map as M
 import qualified Data.Set as S
 
+
 data Bits = O Bits | I Bits | E deriving Show
 type Name = String
 type Body = Term -> Term
@@ -93,10 +94,11 @@ data Term
   | Loc Span Term -- (NEW CONSTRUCTOR)
 
   -- Pattern-Match
-  -- match x y ...:
+  -- match x y ... {
   --   with a=r with b=s ...
   --   case (A ...) (B ...): ...
   --   case (C ...) (D ...): ...
+  -- }
   | Pat [Term] [Move] [Case]
 
 -- Book of Definitions
@@ -184,8 +186,12 @@ instance Show Term where
   show (Era)          = "*"
   show (Sup l a b)    = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
   show (Met _ _ _)    = "?"
-  show (Pat s m c)    = "match " ++ unwords (map show s) ++ ":\n" ++ unlines (map clause c) where
-    clause (pats,bod) = "  case " ++ unwords (map show pats) ++ " : " ++ show bod
+  show (Pat terms moves cases) = "match " ++ unwords (map show terms) ++ " {" ++ showMoves ++ showCases ++ "}" where
+    showMoves = if null moves then "" else " with " ++ intercalate " with " (map showMove moves) where
+      showMove (name, term) = name ++ "=" ++ show term
+    showCases = if null cases then "" else " " ++ intercalate " " (map showCase cases) where
+      showCase (pats, term) = "case " ++ unwords (map showPat pats) ++ ": " ++ show term
+    showPat pat = "(" ++ show pat ++ ")"
 
 instance Show Book where
   show (Book defs) = "Book {" ++ intercalate ", " (map defn (M.toList defs)) ++ "}"

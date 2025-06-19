@@ -1,4 +1,4 @@
-{-./Type.hs-}
+{-./../Type.hs-}
 
 module Core.Parse where
 
@@ -16,7 +16,7 @@ import Control.Monad.State.Strict (State, get, put, evalState)
 
 import qualified Data.Map.Strict as M
 import qualified Data.Set        as S
-import Control.Monad (when, replicateM, void)
+import Control.Monad (when, replicateM, void, guard)
 
 import Core.Bind
 import Core.Flatten
@@ -421,7 +421,7 @@ parseSymbolName = do
 parseSym :: Parser Term
 parseSym = label "enum symbol / constructor" $ try $ do
   _ <- symbol "@"
-  notFollowedBy (char '{')          -- make sure we are *not* an Enum “@{”
+  notFollowedBy (char '{')          -- make sure we are *not* an Enum "@{"
   n <- some (satisfy isNameChar)
   mfields <- optional $ try $ do
     _ <- symbol "{"
@@ -460,149 +460,60 @@ parseCaseClause = do
   t <- parseTerm
   return (s, t)
 
--- Constructor tags for coverage checking
-data PatClass = PatVar | PatCon ConTag Bool
-data ConTag   = ConBt0 | ConBt1 | ConZer | ConSuc | ConNil | ConCon | ConTup | ConOne | ConRfl | ConSym String deriving (Eq, Ord)
-data Coverage = CovWild | CovNode (M.Map ConTag Coverage)
-
--- | Pattern matching with automatic exhaustiveness detection
--- 
--- Consider:
--- Consider:
--- 
---   match x:
---     case True:
---       match y:
---         case 0:
---           ...
---         case 1+p:
---           ...
---     case False:
---       ...
---
--- Since 'match' can have an arbitrary amount of 'cases', then, without
--- significant indentation, there is no way for the parser to decide whether
--- 'case False' belongs on the body of 'match y' or 'match x'. This would
--- require a ';', which, by design, should never be needed.
--- 
--- To solve this issue, we implement a slightly more complex parser, which
--- automatically detects when patterns are exhaustive and stops consuming 'case'
--- clauses. This avoids requiring explicit semicolons.
---
--- Exhaustiveness is determined by tracking which constructors have been seen
--- for each scrutinee position. Once all constructors of a type are covered
--- (or a wildcard is seen), that position is considered complete.
---
--- Additionally, the parser supports 'with' statements that come after the
--- 'match x y ...:' header. These are shaped like 'with x = v' where 'x' is
--- a name and 'v' is a term. They can also be written as just 'with x',
--- which expands to 'with x = x'.
---
--- FIXME: this is AI-generated and probably has flaws. Review it.
 parsePat :: Parser Term
 parsePat = label "pattern match" $ do
-  scruts <- parseMatchHeader
-  moves <- parseWithStatements
-  clauses <- parseClauses (length scruts) initCov []
-  _ <- optional (symbol ";")
-  _ <- optional (symbol "}")
-  return (Pat scruts moves clauses)
+  matchPos <- getSourcePos                   -- where the keyword starts
+  _        <- symbol "match"
+  scruts   <- some parseTerm
+  delim    <- choice [ ':' <$ symbol ":", '{' <$ symbol "{" ]   -- ':' or '{'
+  let col = unPos (sourceColumn matchPos)                  -- reference column
+  moves    <- many parseWith                               -- unchanged
+  clauses  <- case delim of
+                ':' -> parseIndentClauses col (length scruts)
+                '{' -> parseBraceClauses  (length scruts)
+                _   -> fail "unreachable"
+  when (delim == '{') (void $ symbol "}")   -- explicit block terminator
+  _ <- optional (symbol ";")                -- optional trailing semicolon
+  pure (Pat scruts moves clauses)
   where
-    -- Parse 'match scrut1 scrut2 ... :'
-    parseMatchHeader = try $ do
-      _ <- symbol "match"
-      x <- some parseTerm
-      _ <- choice [symbol ":", symbol "{"]
-      return x
-    
     -- Parse 'with' statements
-    parseWithStatements = many parseWith
-    
-    -- Parse a single 'with x = v' or 'with x'
     parseWith = try $ do
       _ <- symbol "with"
       x <- name
       v <- option (Var x 0) (try (symbol "=" >> parseTerm))
       return (x, v)
-    
-    -- Parse a single 'case pat1 pat2 ... : body'
-    parseClause arity = do
-      _ <- symbol "case"
+
+-- Indentation-sensitive clause list (stops when out-dented)
+parseIndentClauses :: Int      -- ^ column of the enclosing 'match'
+                   -> Int      -- ^ arity (number of scrutinees)
+                   -> Parser [Case]
+parseIndentClauses col arity = many1
+  where
+    many1 = do first <- clause
+               rest  <- many (try clause)
+               pure (first:rest)
+
+    clause = label "case clause" . try $ do
+      skip                               -- eat leading ws / newlines
+      pos <- getSourcePos
+      guard (unPos (sourceColumn pos) >= col)
+      _   <- symbol "case"
       pats <- replicateM arity parseTerm
-      _ <- symbol ":"
+      _   <- symbol ":"
       body <- parseTerm
-      return (pats, body)
-    
-    -- Parse clauses until exhaustive or no more 'case' keywords
-    parseClauses arity cov acc = do
-      hasCase <- isNextCase
-      if not hasCase || isExhaustive cov
-        then return (reverse acc)
-        else do
-          clause@(pats, _) <- parseClause arity
-          let cov' = addPatterns pats cov
-          parseClauses arity cov' (clause : acc)
-    
-    -- Check if next token is 'case'
-    isNextCase = option False (True <$ lookAhead (symbol "case"))
-    
-    -- Coverage tracking
-    initCov = CovNode M.empty
-    
-    -- Add pattern vector to coverage tree
-    addPatterns [] cov = cov
-    addPatterns _ CovWild = CovWild
-    addPatterns (p:ps) (CovNode m) = 
-      case classifyPattern p of
-        PatVar -> CovWild  -- variable covers everything
-        PatCon c generic ->
-          let subtree = M.findWithDefault initCov c m
-              subtree' = if null ps && generic
-                           then CovWild  -- generic constructor
-                           else addPatterns ps subtree
-          in CovNode (M.insert c subtree' m)
-    
-    -- Classify a pattern
-    classifyPattern p = case p of
-      Var _ _ -> PatVar
-      Bt0     -> PatCon ConBt0 True
-      Bt1     -> PatCon ConBt1 True
-      Zer     -> PatCon ConZer True
-      Suc x   -> PatCon ConSuc (isVar x)
-      Nil     -> PatCon ConNil True
-      Con x y -> PatCon ConCon (isVar x && isVar y)
-      Tup x y -> PatCon ConTup (isVar x && isVar y)
-      One     -> PatCon ConOne True
-      Rfl     -> PatCon ConRfl True
-      Sym s   -> PatCon (ConSym s) True
-      Loc _ t -> classifyPattern t
-      _       -> PatVar  -- treat other patterns as wildcards
-    
-    -- Check if term is a variable
-    isVar t = case t of
-      Var _ _ -> True
-      Loc _ t -> isVar t
-      _       -> False
-    
-    -- Check if coverage is exhaustive
-    isExhaustive CovWild = True
-    isExhaustive (CovNode m)
-      | M.null m = False
-      | otherwise = 
-          let have = M.keysSet m
-              need = requiredCons (head $ M.keys m)
-          in have == need && all isExhaustive (M.elems m)
-    
-    -- Get required constructors for a constructor family
-    requiredCons c = case c of
-      ConBt0 -> S.fromList [ConBt0, ConBt1]
-      ConBt1 -> S.fromList [ConBt0, ConBt1]
-      ConZer -> S.fromList [ConZer, ConSuc]
-      ConSuc -> S.fromList [ConZer, ConSuc]
-      ConNil -> S.fromList [ConNil, ConCon]
-      ConCon -> S.fromList [ConNil, ConCon]
-      ConSym _ -> S.empty  -- Enum symbols never exhaustive alone
-      _ -> S.singleton c
+      pure (pats, body)
+
+-- Braced clause list (runs until the closing '}')
+parseBraceClauses :: Int -> Parser [Case]
+parseBraceClauses arity =
+  manyTill singleClause (lookAhead (symbol "}"))
+  where
+    singleClause = label "case clause" $ do
+      _    <- symbol "case"
+      pats <- replicateM arity parseTerm
+      _    <- symbol ":"
+      body <- parseTerm
+      pure (pats, body)
 
 parseView :: Parser Term
 parseView = label "view" $ do
@@ -906,8 +817,8 @@ parseDefinition = choice
   , dbg <$> parseShortDef          -- short a : T = t
   ]
   where
-    dbg d@(n,(tm,ty)) = trace ("[parse] " ++ n ++ " = " ++ showTerm tm ++ " : " ++ show ty) d
-
+    -- dbg d@(n,(tm,ty)) = trace ("[parse] " ++ n ++ " = " ++ showTerm tm ++ " : " ++ show ty) d
+    dbg d@(n,(tm,ty)) = d
     -- Expand μ-bindings for better visibility when debugging.
     showTerm :: Term -> String
     showTerm (Fix k f) = "μ" ++ k ++ "." ++ show (f (Var k 0))
@@ -965,40 +876,6 @@ parseBook = do
   defs <- many parseDefinition
   return $ Book (M.fromList defs)
 
--- |  data …  declarations
--- | Top-level @data@ declaration.
---
--- A declaration like:
---
---   data Bool:
---     case @True:
---     case @False:
---
--- is desugared to (roughly):
---
---   def Bool() -> Set:
---     any ctr: @{@True,@False}.
---     match ctr:
---       case @True:
---       case @False:
---
--- We also support parameterised datatypes, e.g.:
---
---   data Vec(A: Set, len: Nat) -> Set:
---     …
---
--- The parameters before the colon are collected and turned into
--- explicit Π-/Σ-style binders (using ∀/λ) exactly like in normal
--- @def@ functions so that the generated term has the same shape as
--- produced by ‘parseDefFunction’.
---
--- For the purposes of this sugar, *only* the list of constructor
--- tags is required – we currently ignore any fields listed in the
--- individual @case@ branches and desugar them as a plain enum.  This
--- is sufficient for the use-cases covered in PROMPT (e.g. Bool).  The
--- implementation, however, already keeps the plumbing needed to
--- extend it in the future: the parser returns the tag together with a
--- list of field-types which we just drop for now.
 parseDataDecl :: Parser (Name, Defn)
 parseDataDecl = label "datatype declaration" $ do
   _     <- symbol "data"
@@ -1014,7 +891,7 @@ parseDataDecl = label "datatype declaration" $ do
 
   -- Indices: a second (…) block, if present.
   indices <- option [] $ try $ do
-     lookAhead (symbol "(")
+     _ <- lookAhead (symbol "(")
      parens (sepEndBy parseArg (symbol ","))
 
   let args = params ++ indices
@@ -1135,3 +1012,35 @@ formatError input bundle = do
   "\nPARSE_ERROR\n" ++ msg
     ++ "\nAt line " ++ show lin ++ ", column " ++ show col ++ ":\n"
     ++ highlighted
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
