@@ -12,7 +12,7 @@ import Core.Equal
 rewrite :: Int -> Book -> Term -> Term -> Term -> Term
 rewrite d book old neo val
   | equal d book old val = neo
-  | otherwise       = rewriteGo d book old neo val
+  | otherwise            = rewriteGo d book old neo val
 
 -- Recursively rewrites occurrences of 'old' with 'neo' in 'val'
 rewriteGo :: Int -> Book -> Term -> Term -> Term -> Term
