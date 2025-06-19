@@ -257,7 +257,7 @@ check d span book ctx term goal =
       check d span book (extend d book ctx k goal (Var k d)) (f (Ann (Fix k f) goal)) goal
     (App f (Ann v t), _) ->
       check d span book ctx f (All t $ Lam "_" $ \x -> rewrite d book v x goal)
-    (App f x, _) -> do
+    (App f x, goal) -> do
       xT <- infer d span book ctx x
       check d span book ctx (App f (Ann x xT)) goal
     (Loc l t, _) -> do

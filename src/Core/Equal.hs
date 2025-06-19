@@ -9,11 +9,11 @@ import Core.Type
 import Core.WHNF
 
 equal :: Int -> Book -> Term -> Term -> Bool
-equal d book a b = eql 1 d book a b
+equal d book a b = eql 2 d book a b
 
 eql :: Int -> Int -> Book -> Term -> Term -> Bool
 eql 0  d book a b = cmp 0 d book (whnf 0 book a) (whnf 0 book b)
-eql lv d book a b = eql (lv-1) d book a b || cmp lv d book (whnf lv book a) (whnf lv book b)
+eql lv d book a b = eql 0 d book a b || cmp lv d book (whnf lv book a) (whnf lv book b)
 
 cmp :: Int -> Int -> Book -> Term -> Term -> Bool
 cmp lv d book a b =
