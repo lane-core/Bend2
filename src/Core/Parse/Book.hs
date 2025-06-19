@@ -48,7 +48,7 @@ parseDefSimple defName = do
   typ <- parseTerm
   _ <- symbol "="
   term <- parseTerm
-  return (defName, (term, typ))
+  return (defName, (False, term, typ))
 
 -- | Syntax: def name(x: Type1, y: Type2) -> ReturnType: body
 parseDefFunction :: Name -> Parser (Name, Defn)
@@ -59,7 +59,7 @@ parseDefFunction f = label "function definition" $ do
   _ <- symbol ":"
   body <- parseTerm
   let (typ, bod) = foldr nestTypeBod (returnType, body) args
-  return (f, (Fix f (\v -> bod), typ))
+  return (f, (False, Fix f (\v -> bod), typ))
   where
     parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
     nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (\v -> currType)), Lam argName (\v -> currBod))
@@ -76,7 +76,7 @@ parseShortDef = label "short definition" $ try $ do
   put st { noAss = False }
   _ <- symbol "="
   term <- parseTerm
-  return (f, (term, typ))
+  return (f, (False, term, typ))
 
 -- | Syntax: def1 def2 def3 ...
 parseBook :: Parser Book
@@ -108,7 +108,7 @@ parseDataDec = label "datatype declaration" $ do
       nest (n, ty) (tyAcc, bdAcc) = (All ty  (Lam n (\_ -> tyAcc)) , Lam n (\_ -> bdAcc))
       (fullTy, fullBody) = foldr nest (retTy, body0) args
       term = Fix tName (\_ -> fullBody)
-  return (tName, (term, fullTy))
+  return (tName, (True, term, fullTy))
   where parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
 
 -- | Syntax: case @Tag: field1: Type1 field2: Type2

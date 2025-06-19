@@ -19,7 +19,7 @@ autoImport basePath book = do
 -- Collect all unbound references from a Book
 collectUnboundRefs :: Book -> S.Set Name
 collectUnboundRefs (Book defs) = S.unions $ map collectRefsFromDefn (M.elems defs) where
-  collectRefsFromDefn (term, typ) = S.union (collectRefs term) (collectRefs typ)
+  collectRefsFromDefn (_, term, typ) = S.union (collectRefs term) (collectRefs typ)
 
 -- Collect all Ref terms from a Term
 collectRefs :: Term -> S.Set Name

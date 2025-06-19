@@ -33,7 +33,7 @@ extend d book ctx k t v = \f -> ctx (Let (Chk (normal 1 d book v) (normal 1 d bo
 checkBook :: Book -> Result ()
 checkBook book@(Book defs) = mapM_ checkDef (M.toList defs)
   where
-    checkDef (name, (term, typ)) = do
+    checkDef (name, (_, term, typ)) = do
       check 0 noSpan book id term typ
 
 -- Infer the type of a term
@@ -45,8 +45,8 @@ infer d span book ctx term =
       Fail $ CantInfer span (ctx term)
     Ref k -> do
       case deref book k of
-        Just (_, typ) -> Done typ
-        Nothing -> Fail $ CantInfer span (ctx term)
+        Just (_, _, typ) -> Done typ
+        Nothing          -> Fail $ CantInfer span (ctx term)
     Sub x -> do
       infer d span book ctx x
     Let v f -> do
@@ -95,7 +95,7 @@ infer d span book ctx term =
           Done $ Nat
         Eql Nat a b ->
           Done $ Eql Nat (Suc a) (Suc b)
-        otherwise ->
+        _ ->
           Fail $ TypeMismatch span (ctx term) Nat (normal 1 d book nT)
     Swi z s -> do
       Fail $ CantInfer span (ctx term)
@@ -166,11 +166,10 @@ infer d span book ctx term =
 
 -- Check if a term has the expected type
 check :: Int -> Span -> Book -> Context -> Term -> Term -> Result ()
-check d span book ctx term goal' =
-  let goal = force book goal' in
+check d span book ctx term goal =
   -- trace ("- check: " ++ show (term) ++ " :: " ++ show (goal)) $
-  case (term, goal) of
-    (Let v f, goal) -> do
+  case (term, force book goal) of
+    (Let v f, _) -> do
       case v of
         Chk val typ -> do
           check d span book ctx val typ
@@ -256,12 +255,12 @@ check d span book ctx term goal' =
         _ -> Fail $ TypeMismatch span (ctx term) (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0)) (normal 1 d book a)
     (Fix k f, _) -> do
       check d span book (extend d book ctx k goal (Var k d)) (f (Ann (Fix k f) goal)) goal
-    (App f (Ann v t), goal) ->
+    (App f (Ann v t), _) ->
       check d span book ctx f (All t $ Lam "_" $ \x -> rewrite d book v x goal)
-    (App f x, goal) -> do
+    (App f x, _) -> do
       xT <- infer d span book ctx x
       check d span book ctx (App f (Ann x xT)) goal
-    (Loc newSpan t, goal) -> do
+    (Loc newSpan t, _) -> do
       check d newSpan book ctx t goal
     (Pat _ _ _, _) -> do
       error "not-supported"

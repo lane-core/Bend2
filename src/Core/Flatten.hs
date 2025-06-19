@@ -100,7 +100,7 @@ flatten (Pat s m c)    = wrapLamApplyVals m (flattenPat 0 s m c)
 
 flattenBook :: Book -> Book
 flattenBook (Book defs) = Book (M.map flattenDefn defs)
-  where flattenDefn (term, typ) = (flatten term, flatten typ)
+  where flattenDefn (inj, term, typ) = (inj, flatten term, flatten typ)
 
 -- Pattern Match Flattening
 -- ------------------------

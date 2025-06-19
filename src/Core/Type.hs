@@ -102,7 +102,8 @@ data Term
   | Pat [Term] [Move] [Case]
 
 -- Book of Definitions
-type Defn = (Term,Type)
+type Inj  = Bool -- "is injective" flag. improves pretty printing
+type Defn = (Inj, Term, Type)
 data Book = Book (M.Map Name Defn)
 
 -- Error Location (NEW TYPE)
@@ -195,7 +196,7 @@ instance Show Term where
 
 instance Show Book where
   show (Book defs) = "Book {" ++ intercalate ", " (map defn (M.toList defs)) ++ "}"
-    where defn (k,(x,t)) = k ++ " : " ++ show x ++ " = " ++ show t
+    where defn (k,(_,x,t)) = k ++ " : " ++ show x ++ " = " ++ show t
 
 instance Show Span where
   show span = "\n\x1b[1mLocation:\x1b[0m "

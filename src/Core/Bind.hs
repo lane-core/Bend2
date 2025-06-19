@@ -10,7 +10,7 @@ bind term = binder 0 term [] M.empty
 
 bindBook :: Book -> Book
 bindBook (Book defs) = Book (M.map bindDefn defs)
-  where bindDefn (term, typ) = (bind term, bind typ)
+  where bindDefn (inj, term, typ) = (inj, bind term, bind typ)
 
 binder :: Int -> Term -> [Term] -> M.Map Name Term -> Term
 binder lv term ctx vars = case term of

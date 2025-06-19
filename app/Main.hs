@@ -37,7 +37,7 @@ checkDefinitions book = do
   where
     checkAll :: Book -> [(Name, Defn)] -> IO Bool
     checkAll _ [] = return True
-    checkAll bBook ((name, (term, typ)):rest) = do
+    checkAll bBook ((name, (_, term, typ)):rest) = do
       case check 0 noSpan bBook id term typ of
         Done () -> do
           putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"

@@ -26,13 +26,16 @@ whnfLet :: Int -> Book -> Term -> Term -> Term
 whnfLet lv book v f = whnf lv book (App f v)
 
 whnfRef :: Int -> Book -> Name -> Term
-whnfRef lv book k = 
+whnfRef lv book k =
   case lv of
     0 -> Ref k
-    1 -> Ref k
+    1 -> case deref book k of
+      Just (True , term, _) -> Ref k
+      Just (False, term, _) -> whnf lv book term
+      Nothing               -> Ref k
     2 -> case deref book k of
-      Just (term, _) -> whnf lv book term
-      Nothing        -> Ref k
+      Just (_, term, _) -> whnf lv book term
+      Nothing           -> Ref k
     _ -> error "unreachable"
 
 whnfFix :: Int -> Book -> String -> Body -> Term
@@ -44,10 +47,16 @@ whnfFix lv book k f =
     _ -> error "unreachable"
 
 whnfAppRef :: Int -> Book -> Term -> Name -> Term -> Term
-whnfAppRef 0  book undo k x = App (Ref k) x
-whnfAppRef lv book undo k x = case deref book k of
-  Just (term, _) -> whnfApp lv book undo term x
-  Nothing -> undo
+whnfAppRef 0  _    undo k x = App (Ref k) x
+whnfAppRef 1  book undo k x =
+  case deref book k of
+    Just (inj, term, _) | inj       -> App (Ref k) x
+                        | otherwise -> whnfApp 1 book undo term x
+    Nothing -> App (Ref k) x
+whnfAppRef lv book undo k x =
+  case deref book k of
+    Just (_, term, _) -> whnfApp lv book undo term x
+    Nothing           -> undo
 
 whnfApp :: Int -> Book -> Term -> Term -> Term -> Term
 whnfApp lv book undo f x =
