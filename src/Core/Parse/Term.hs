@@ -54,14 +54,8 @@ parseTermIni = choice
   , parseAll
   , parseSig
   , parseInd
-  , parseSet
-  , parseEmp
   , parseEfq
-  , parseUni
   , parseOne
-  , parseBit
-  , parseBt0
-  , parseBt1
   , parseNat
   , parseZer
   , parseNatLit
@@ -145,27 +139,23 @@ parseTupApp = do
 
 -- atomic terms
 
--- | Syntax: x, foo, bar_123, Type<A,B>
+-- | Syntax: x, foo, bar_123, Type<A,B>, Nat/add
 parseVar :: Parser Term
 parseVar = label "variable" $ do
-  v <- name
-  return $ Var v 0
-
--- | Syntax: Set
-parseSet :: Parser Term
-parseSet = label "type universe (Set)" $ symbol "Set" >> return Set
-
--- | Syntax: Empty
-parseEmp :: Parser Term
-parseEmp = label "empty type (Empty)" $ symbol "Empty" >> return Emp
+  n <- name
+  case n of
+    "Set"   -> return Set
+    "Empty" -> return Emp
+    "Unit"  -> return Uni
+    "Bool"  -> return Bit
+    "False" -> return Bt0
+    "True"  -> return Bt1
+    "Nat"   -> return Nat
+    _       -> return $ Var n 0
 
 -- | Syntax: λ{}
 parseEfq :: Parser Term
 parseEfq = label "empty type eliminator (λ{})" $ symbol "λ{}" >> return Efq
-
--- | Syntax: Unit
-parseUni :: Parser Term
-parseUni = label "unit type (Unit)" $ symbol "Unit" >> return Uni
 
 -- | Syntax: ()
 parseOne :: Parser Term
@@ -183,18 +173,6 @@ parseUse = label "unit type eliminator" $ do
   _ <- parseSemi
   _ <- symbol "}"
   return (Use f)
-
--- | Syntax: Bool | Bit
-parseBit :: Parser Term
-parseBit = label "bit type (Bool)" $ choice [symbol "Bool", symbol "Bit"] >> return Bit
-
--- | Syntax: False
-parseBt0 :: Parser Term
-parseBt0 = label "bit zero (False)" $ try $ choice [symbol "False", symbol "False"] >> return Bt0
-
--- | Syntax: True
-parseBt1 :: Parser Term
-parseBt1 = label "bit one (True)" $ try $ choice [symbol "True", symbol "True"] >> return Bt1
 
 -- | Syntax: λ{ False: term; True: term; } | if cond: term else: term
 parseBif :: Parser Term
@@ -485,7 +463,10 @@ parseNil = label "empty list ([])" $ symbol "[]" >> return Nil
 
 -- | Syntax: Nat
 parseNat :: Parser Term
-parseNat = label "natural number type (Nat)" $ choice [symbol "Nat", symbol "Nat"] >> return Nat
+parseNat = label "natural number type (Nat)" $ try $ do
+  _ <- symbol "Nat"
+  notFollowedBy (satisfy isNameChar)
+  return Nat
 
 -- | Syntax: 0
 parseZer :: Parser Term

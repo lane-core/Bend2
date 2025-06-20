@@ -93,7 +93,7 @@ isNameInit :: Char -> Bool
 isNameInit c = isAsciiLower c || isAsciiUpper c || c == '_'
 
 isNameChar :: Char -> Bool
-isNameChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_'
+isNameChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c == '/'
 
 name :: Parser Name
 name = lexeme $ do
