@@ -267,7 +267,7 @@ check d span book ctx term goal =
     -- ------------------------------------
     -- λ{...} :: ∀v:X.(rewrite x by v in T)
     (App f x, goal) ->
-      if isMatch f
+      if isLamApp f
         then do
           (xv,xt) <- case strip x of
             Ann xv xt -> do
@@ -298,14 +298,15 @@ verify d span book ctx term goal = do
 -- Utils
 -- -----
 
-isMatch :: Term -> Bool
-isMatch (strip -> App f x) = isMatch f
-isMatch (strip -> Efq)     = True
-isMatch (strip -> Use _)   = True
-isMatch (strip -> Bif _ _) = True
-isMatch (strip -> Swi _ _) = True
-isMatch (strip -> Mat _ _) = True
-isMatch (strip -> Cse _)   = True
-isMatch (strip -> Get _)   = True
-isMatch (strip -> Rwt _)   = True
-isMatch _                  = False
+isLamApp :: Term -> Bool
+isLamApp (strip -> App f _) = isLamApp f
+isLamApp (strip -> Lam _ _) = True
+isLamApp (strip -> Efq)     = True
+isLamApp (strip -> Use _)   = True
+isLamApp (strip -> Bif _ _) = True
+isLamApp (strip -> Swi _ _) = True
+isLamApp (strip -> Mat _ _) = True
+isLamApp (strip -> Cse _)   = True
+isLamApp (strip -> Get _)   = True
+isLamApp (strip -> Rwt _)   = True
+isLamApp _                  = False
