@@ -57,8 +57,8 @@ def f: T = v    # Top-level definition
 ## Functions
 
 ```python
-lam x. e        # Lambda abstraction
-lam x y z. e    # Multi-argument lambda
+lambda x. e        # Lambda abstraction
+lambda x y z. e    # Multi-argument lambda
 f(a, b, c)      # Function application
 
 # Function definition sugar:
@@ -325,7 +325,7 @@ def f(x: A, y: B) -> C:
   body
 
 # Desugars to:
-f : all x:A. all y:B. C = μf. lam x. lam y. body
+f : all x:A. all y:B. C = μf. lambda x. lambda y. body
 ```
 
 ### Type Declarations

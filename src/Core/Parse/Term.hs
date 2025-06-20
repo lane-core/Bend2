@@ -639,7 +639,7 @@ parseAss t = label "location binding" $ do
 parseLam :: Parser Term
 parseLam = label "lambda abstraction" $ do
   _ <- try $ do
-    _ <- choice [symbol "λ", symbol "lam"]
+    _ <- choice [symbol "λ", symbol "lambda"]
     notFollowedBy (symbol "{")
     return ()
   xs <- some name
