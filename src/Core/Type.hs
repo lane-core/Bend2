@@ -137,64 +137,65 @@ instance Monad Result where
   Fail e >>= _ = Fail e
 
 instance Show Term where
-  show (Var k i)      = k
-  show (Ref k)        = k
-  show (Sub t)        = error "unreachable"
-  show (Fix k f)      = "μ" ++ k ++ "." ++ show (f (Var k 0))
-  -- show (Fix k f)      = k
-  show (Let v f)      = "!" ++ show v ++ ";" ++ show f
-  show (Set)          = "Set"
-  show (Ann x t)      = "<" ++ show x ++ ":" ++ show t ++ ">"
-  show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
-  show (Emp)          = "⊥"
-  show (Efq)          = "λ{}"
-  show (Uni)          = "Unit"
-  show (One)          = "()"
-  show (Use f)        = "λ{():" ++ show f ++ "}"
-  show (Bit)          = "Bool"
-  show (Bt0)          = "False"
-  show (Bt1)          = "True"
-  show (Bif f t)      = "λ{False:" ++ show f ++ ";True:" ++ show t ++ "}"
-  show (Nat)          = "Nat"
-  show (Zer)          = "0"
-  show (Suc n)        = "↑" ++ show n
-  show (Swi z s)      = "λ{0:" ++ show z ++ ";+:" ++ show s ++ "}"
-  show (Lst t)        = show t ++ "[]"
-  show (Nil)          = "[]"
-  show (Con h t)      = show h ++ "<>" ++ show t
-  show (Mat n c)      = "λ{[]:" ++ show n ++ ";<>:" ++ show c ++ "}"
-  show (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
-  show (Sym s)        = "@" ++ s
-  show (Cse c)        = "λ{" ++ intercalate ";" (map (\(s,t) -> "@" ++ s ++ ":" ++ show t) c) ++ "}"
-  show (Sig a b)      = sig a b where
-    sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
-    sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ "." ++ show (f (Var k 0))
-    sig a b           = "Σ" ++ show a ++ "." ++ show b
-  show (Tup a b)      = "(" ++ show a ++ "," ++ unwrap (show b) ++ ")"
-  show (Get f)        = "λ{(,):" ++ show f ++ "}"
-  show (All a b)      = all a b where
-    all a (Lam "_" f) = show a ++ "→" ++ show (f (Var "_" 0))
-    all a (Lam k f)   = "∀" ++ k ++ ":" ++ show a ++ "." ++ show (f (Var k 0))
-    all a b           = "∀" ++ show a ++ "." ++ show b
-  show (Lam k f)      = "λ" ++ k ++ "." ++ show (f (Var k 0))
-  show app@(App _ _)  = "(" ++ fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" ++ ")" where
-    (fn, args) = collectApps app []
-    fnStr      = unwrap (show fn)
-  show (Eql t a b)    = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
-  show (Rfl)          = "{==}"
-  show (Rwt f)        = "λ{{==}:" ++ show f ++ "}"
-  show (Ind t)        = "~{" ++ show t ++ "}"
-  show (Frz t)        = "∅" ++ show t
-  show (Loc _ t)      = show t
-  show (Era)          = "*"
-  show (Sup l a b)    = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
-  show (Met _ _ _)    = "?"
-  show (Pat terms moves cases) = "match " ++ unwords (map show terms) ++ " {" ++ showMoves ++ showCases ++ "}" where
-    showMoves = if null moves then "" else " with " ++ intercalate " with " (map showMove moves) where
-      showMove (name, term) = name ++ "=" ++ show term
-    showCases = if null cases then "" else " " ++ intercalate " " (map showCase cases) where
-      showCase (pats, term) = "case " ++ unwords (map showPat pats) ++ ": " ++ show term
-    showPat pat = "(" ++ show pat ++ ")"
+  show = unwrap . go where
+    go (Var k i)      = k
+    go (Ref k)        = k
+    go (Sub t)        = error "unreachable"
+    go (Fix k f)      = "μ" ++ k ++ "." ++ go (f (Var k 0))
+    -- go (Fix k f)      = k
+    go (Let v f)      = "!" ++ go v ++ ";" ++ go f
+    go (Set)          = "Set"
+    go (Ann x t)      = "<" ++ go x ++ ":" ++ go t ++ ">"
+    go (Chk x t)      = "(" ++ go x ++ "::" ++ go t ++ ")"
+    go (Emp)          = "⊥"
+    go (Efq)          = "λ{}"
+    go (Uni)          = "Unit"
+    go (One)          = "()"
+    go (Use f)        = "λ{():" ++ go f ++ "}"
+    go (Bit)          = "Bool"
+    go (Bt0)          = "False"
+    go (Bt1)          = "True"
+    go (Bif f t)      = "λ{False:" ++ go f ++ ";True:" ++ go t ++ "}"
+    go (Nat)          = "Nat"
+    go (Zer)          = "0"
+    go (Suc n)        = "↑" ++ go n
+    go (Swi z s)      = "λ{0:" ++ go z ++ ";+:" ++ go s ++ "}"
+    go (Lst t)        = go t ++ "[]"
+    go (Nil)          = "[]"
+    go (Con h t)      = go h ++ "<>" ++ go t
+    go (Mat n c)      = "λ{[]:" ++ go n ++ ";<>:" ++ go c ++ "}"
+    go (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
+    go (Sym s)        = "@" ++ s
+    go (Cse c)        = "λ{" ++ intercalate ";" (map (\(s,t) -> "@" ++ s ++ ":" ++ go t) c) ++ "}"
+    go (Sig a b)      = sig a b where
+      sig a (Lam "_" f) = go a ++ "&" ++ go (f (Var "_" 0))
+      sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ go a ++ "." ++ go (f (Var k 0))
+      sig a b           = "Σ" ++ go a ++ "." ++ go b
+    go (Tup a b)      = "(" ++ go a ++ "," ++ unwrap (go b) ++ ")"
+    go (Get f)        = "λ{(,):" ++ go f ++ "}"
+    go (All a b)      = all a b where
+      all a (Lam "_" f) = go a ++ "→" ++ go (f (Var "_" 0))
+      all a (Lam k f)   = "∀" ++ k ++ ":" ++ go a ++ "." ++ go (f (Var k 0))
+      all a b           = "∀" ++ go a ++ "." ++ go b
+    go (Lam k f)      = "λ" ++ k ++ "." ++ go (f (Var k 0))
+    go app@(App _ _)  = "(" ++ fnStr ++ "(" ++ intercalate "," (map go args) ++ ")" ++ ")" where
+      (fn, args) = collectApps app []
+      fnStr      = unwrap (go fn)
+    go (Eql t a b)    = go t ++ "{" ++ go a ++ "==" ++ go b ++ "}"
+    go (Rfl)          = "{==}"
+    go (Rwt f)        = "λ{{==}:" ++ go f ++ "}"
+    go (Ind t)        = "~{" ++ go t ++ "}"
+    go (Frz t)        = "∅" ++ go t
+    go (Loc _ t)      = go t
+    go (Era)          = "*"
+    go (Sup l a b)    = "&" ++ show l ++ "{" ++ go a ++ "," ++ go b ++ "}"
+    go (Met _ _ _)    = "?"
+    go (Pat terms moves cases) = "match " ++ unwords (map go terms) ++ " {" ++ goMoves ++ goCases ++ "}" where
+      goMoves = if null moves then "" else " with " ++ intercalate " with " (map goMove moves) where
+        goMove (name, term) = name ++ "=" ++ go term
+      goCases = if null cases then "" else " " ++ intercalate " " (map goCase cases) where
+        goCase (pats, term) = "case " ++ unwords (map goPat pats) ++ ": " ++ go term
+      goPat pat = "(" ++ go pat ++ ")"
 
 instance Show Book where
   show (Book defs) = "Book {" ++ intercalate ", " (map defn (M.toList defs)) ++ "}"
