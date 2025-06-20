@@ -4,7 +4,7 @@ import Control.Monad (unless)
 import qualified Data.Map as M
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
-import Core.Cli
+import Core.CLI
 
 -- | Show usage information
 showUsage :: IO ()

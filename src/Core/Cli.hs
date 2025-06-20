@@ -1,4 +1,4 @@
-module Core.Cli where
+module Core.CLI where
 
 import Control.Monad (unless)
 import qualified Data.Map as M
