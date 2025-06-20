@@ -151,28 +151,28 @@ instance Show Term where
     go (Efq)          = "λ{}"
     go (Uni)          = "Unit"
     go (One)          = "()"
-    go (Use f)        = "λ{():" ++ go f ++ "}"
+    go (Use f)        = "λ{ ():" ++ go f ++ " }"
     go (Bit)          = "Bool"
     go (Bt0)          = "False"
     go (Bt1)          = "True"
-    go (Bif f t)      = "λ{False:" ++ go f ++ ";True:" ++ go t ++ "}"
+    go (Bif f t)      = "λ{ False: " ++ go f ++ " ; True: " ++ go t ++ " }"
     go (Nat)          = "Nat"
     go (Zer)          = "0"
     go (Suc n)        = "↑" ++ go n
-    go (Swi z s)      = "λ{0:" ++ go z ++ ";+:" ++ go s ++ "}"
+    go (Swi z s)      = "λ{ 0: " ++ go z ++ " ; +: " ++ go s ++ " }"
     go (Lst t)        = go t ++ "[]"
     go (Nil)          = "[]"
     go (Con h t)      = go h ++ "<>" ++ go t
-    go (Mat n c)      = "λ{[]:" ++ go n ++ ";<>:" ++ go c ++ "}"
+    go (Mat n c)      = "λ{ []:" ++ go n ++ " ; <>:" ++ go c ++ " }"
     go (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
     go (Sym s)        = "@" ++ s
-    go (Cse c)        = "λ{" ++ intercalate ";" (map (\(s,t) -> "@" ++ s ++ ":" ++ go t) c) ++ "}"
+    go (Cse c)        = "λ{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ go t) c) ++ " }"
     go (Sig a b)      = sig a b where
       sig a (Lam "_" f) = go a ++ "&" ++ go (f (Var "_" 0))
       sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ go a ++ ". " ++ unwrap (go (f (Var k 0)))
       sig a b           = "Σ" ++ go a ++ ". " ++ unwrap (go b)
     go (Tup a b)      = "(" ++ go a ++ "," ++ unwrap (go b) ++ ")"
-    go (Get f)        = "λ{(,):" ++ go f ++ "}"
+    go (Get f)        = "λ{ (,):" ++ go f ++ " }"
     go (All a b)      = all a b where
       all a (Lam "_" f) = go a ++ "→" ++ go (f (Var "_" 0))
       all a (Lam k f)   = "∀" ++ k ++ ":" ++ go a ++ ". " ++ unwrap (go (f (Var k 0)))
@@ -183,7 +183,7 @@ instance Show Term where
       fnStr      = unwrap (go fn)
     go (Eql t a b)    = go t ++ "{" ++ go a ++ "==" ++ go b ++ "}"
     go (Rfl)          = "{==}"
-    go (Rwt f)        = "λ{{==}:" ++ go f ++ "}"
+    go (Rwt f)        = "λ{ {==}:" ++ go f ++ " }"
     go (Ind t)        = "~{" ++ go t ++ "}"
     go (Frz t)        = "∅" ++ go t
     go (Loc _ t)      = go t
