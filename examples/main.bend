@@ -157,9 +157,8 @@ def VecInd
     case @Cons{l,x,xs,{==}}:
       C(l,x,xs,VecInd(A,P,N,C,l,xs))
 
-def and1(a: Bool, b: Bool) -> Bool:
-  match a b:
-    case False _:
-      True
-    case True x :
-      x
+#- C : ∀s:Nat. ∀x:A. ∀xs:(^Vec(A,s)). P(s,xs))→(P(↑s,(@Cons,s,x,xs,{==},()))
+
+
+
+#- C : ∀s:Nat. ∀x:A. ∀xs:(^Vec(A,s)). (P(s,xs))→(P(↑s,(@Cons,(s,(x,(xs,({==},())))))))

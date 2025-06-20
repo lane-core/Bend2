@@ -19,9 +19,9 @@ cmp :: Int -> Int -> Book -> Term -> Term -> Bool
 cmp lv d book a b =
   -- trace ("E" ++ show lv ++ " " ++ show a ++ "\n== " ++ show b) $
   case (a , b) of
-    (Fix ka fa    , Fix kb fb    ) -> eql lv d book (fa (fb (Var ka d))) (fb (fa (Var kb d)))
-    (Fix ka fa    , b            ) -> eql lv d book (fa b) b
-    (a            , Fix kb fb    ) -> eql lv d book a (fb (Fix kb fb))
+    -- (Fix ka fa    , Fix kb fb    ) -> eql lv d book (fa (fb (Var ka d))) (fb (fa (Var kb d)))
+    -- (Fix ka fa    , b            ) -> eql lv d book (fa b) b
+    -- (a            , Fix kb fb    ) -> eql lv d book a (fb (Fix kb fb))
     (Ref ka       , Ref kb       ) -> True
     (Ref ka       , b            ) -> case deref book ka of { Just (_, term, _) -> eql lv d book term b ; Nothing -> False }
     (a            , Ref kb       ) -> case deref book kb of { Just (_, term, _) -> eql lv d book a term ; Nothing -> False }

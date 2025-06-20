@@ -266,7 +266,7 @@ check d span book ctx term goal =
     -- (λ{...} <x:X>) :: T
     -- ------------------------------------
     -- λ{...} :: ∀v:X.(rewrite x by v in T)
-    (App f x, goal) ->
+    (App f x, _) ->
       if isLamApp f
         then do
           (xv,xt) <- case strip x of
@@ -275,7 +275,7 @@ check d span book ctx term goal =
             xv -> do
               xt <- infer d span book ctx xv
               return (xv, xt)
-          let ft = All xt $ Lam "_" $ \x -> rewrite d book xv x goal
+          let ft = All xt $ Lam "_" $ \x -> rewrite d book xv x (whnf 1 book goal)
           check d span book ctx f ft
         else do
           verify d span book ctx term goal
