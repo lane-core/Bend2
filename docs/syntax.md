@@ -27,8 +27,7 @@ Nat      # Natural number type
 
 ```python
 @{@A, @B, @C}   # Enum type
-@Tag            # Enum symbol
-@Tag{f1, f2}    # Constructor - desugars to (@Tag,f1,f1,())
+@Tag            # Enum value
 ```
 
 ### Compound Types
@@ -48,14 +47,15 @@ T{a == b}       # Propositional Equality type
 
 ```python
 x               # Variable
-x = v           # Let binding
+x = v           # Assignment (untyped)
+x : T = v       # Assignment (typed)
 ```
 
 ## Functions
 
 ```python
-lambda x. e        # Lambda abstraction
-lambda x y z. e    # Multi-argument lambda
+lam x. e        # Lambda abstraction
+lam x y z. e    # Multi-argument lambda
 f(a, b, c)      # Function application
 
 # Function definition sugar:
@@ -129,7 +129,7 @@ h <> t          # Cons
 ### Tuples
 
 ```python
-(a, b)          # Tuple
+(a, b)          # Tuples
 (a, b, c)       # Nested tuples: (a, (b, c))
 ```
 
@@ -145,9 +145,40 @@ h <> t          # Cons
 x :: T          # Type hint
 ```
 
-## Datatype Declarations
+## Simple Datatypes
+
+Declaration:
 
 ```python
+type Maybe<A: Set>:
+  case @None:
+  case @Some:
+    value: A
+```
+
+Constructor:
+
+```python
+@None{}      # desugars to (@None,())
+@Some{value} # desugars to (@Some,value,())
+```
+
+Pattern-Matching:
+
+```python
+match x:
+  case @None{}:
+    ...
+  case @Some{value}:
+    ...
+```
+
+## Inductive Datatypes
+
+Declaration:
+
+```python
+# Same as:
 # data Vec (A : Set) : Nat → Set where
 #   nil  : Vec A zero
 #   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
@@ -157,13 +188,37 @@ type Vec<A: Set>(N: Nat) -> Set:
   case @Cons:
     n: Nat
     h: A
-    t: Vec(A,n)
+    t: Vec(A, n)
     e: Nat{N == 1+n}
 ```
 
 This desugars to a function that returns a dependent pair:
 - First component: an enum tag (@Nil or @Cons)
 - Second component: a record of fields based on the constructor
+
+Constructor:
+
+```
+@Cons{head,tail} # desugars to (@Cons,head,tail,())
+```
+
+You can also pattern-match on constructors.
+
+## Imports
+
+Bend automatically imports definitions from corresponding file names.
+
+For example, in the file:
+
+```
+def main() -> Nat:
+  Foo/bar(123)
+```
+
+Bend will automatically import `Foo/bar` from one of:
+- `./Foo/bar.bend`
+- `./Foo/bar/_.bend`
+
 
 # Examples
 
@@ -206,30 +261,8 @@ def map<A, B>(f: A -> B, xs: A[]) -> B[]:
       f(h) <> map(f, t)
 ```
 
-## Custom Datatypes
 
 ```python
-# Option type
-type Option<A: Set> -> Set:
-  case @None:
-  case @Some:
-    value: A
-
-# Option operations
-def map_option<A, B>(f: A -> B, opt: Option(A)) -> Option(B):
-  match opt:
-    case @None{}:
-      @None{}
-    case @Some{value: x}:
-      @Some{value: f(x)}
-
-def bind_option<A, B>(opt: Option(A), f: A -> Option(B)) -> Option(B):
-  match opt:
-    case @None{}:
-      @None{}
-    case @Some{value: x}:
-      f(x)
-
 # Binary tree
 type Tree<A: Set> -> Set:
   case @Leaf:
@@ -243,15 +276,15 @@ def size<A>(t: Tree(A)) -> Nat:
   match t:
     case @Leaf{}:
       0
-    case @Node{value: v, left: l, right: r}:
-      1 + size(l) + size(r)
+    case @Node{v, l, r}:
+      1 + add(size(l), size(r))
 
 def mirror<A>(t: Tree(A)) -> Tree(A):
   match t:
     case @Leaf{}:
       @Leaf{}
-    case @Node{value: v, left: l, right: r}:
-      @Node{value: v, left: mirror(r), right: mirror(l)}
+    case @Node{v, l, r}:
+      @Node{v, mirror(r), mirror(l)}
 ```
 
 ## Theorem Proving
@@ -280,112 +313,4 @@ def append_assoc<A>(xs: A[], ys: A[], zs: A[]) -> A[]{append(append(xs, ys), zs)
     case h <> t:
       # Goal transforms to: A[]{h <> append(append(t, ys), zs) == h <> append(t, append(ys, zs))}
       1 <> append_assoc(t, ys, zs)
-
-# Size is preserved by mirror
-def mirror_preserves_size<A>(t: Tree(A)) -> Nat{size(mirror(t)) == size(t)}:
-  match t:
-    case @Leaf{}:
-      {==}
-    case @Node{value: v, left: l, right: r}:
-      # Inductive hypothesis
-      ihl = mirror_preserves_size(l)
-      ihr = mirror_preserves_size(r)
-      # Goal requires commutativity of addition
-      # (would need a lemma about add_comm here)
-      {==}
-```
-
-## Using `with` for Specialization
-
-```python
-# The 'with' clause can help with type specialization in proofs
-def vec_head<A>(n: Nat, v: Vec(A, 1+n)) -> A:
-  match v:
-    case (ctr, fields):
-      match ctr:
-        with fields    # Specializes 'fields' based on constructor
-        case @Nil:
-          # Impossible case - would give us proof that 1+n == 0
-          ({==}, ()) = fields
-          0  # Unreachable
-        case @Cons:
-          (_, head, _, {==}, ()) = fields
-          head
-```
-
-
-
-## Desugaring Rules
-
-### Function Definitions
-
-```python
-# Surface syntax:
-def f(x: A, y: B) -> C:
-  body
-
-# Desugars to:
-f : all x:A. all y:B. C = μf. lambda x. lambda y. body
-```
-
-### Type Declarations
-
-```python
-# Surface syntax:
-type Maybe<A: Set> -> Set:
-  case @None:
-  case @Some:
-    value: A
-
-# Desugars to:
-def Maybe(A: Set) -> Set:
-  any ctr: @{@None, @Some}.
-  match ctr:
-    case @None:
-      Unit
-    case @Some:
-      any value: A.
-      Unit
-```
-
-### Other Sugars
-
-```python
-# Function type
-A -> B              # all _:A. B
-
-# Product type  
-A & B               # any _:A. B
-
-# Natural numbers
-1 + n               # ↑n
-123                 # ↑↑...↑0 (123 times)
-
-# If-then-else
-if c: t else: f     # (λ{False: f; True: t} c)
-
-# List literal
-[a, b, c]           # a <> b <> c <> []
-
-# Tuple
-(a, b, c)           # (a, (b, c))
-
-# Constructor sugar
-@Tag{v1, v2}        # (@Tag, v1, v2, ())
-```
-
-### Equality Rewriting
-
-```python
-# Pattern matching on equality proof:
-{==} = proof        # Rewrites all occurrences based on proof
-
-# Example:
-def sym<A>(a: A, b: A, e: A{a == b}) -> A{b == a}:
-  {==} = e    # rewrites 'a' to 'b' on goal
-  {==}        # goal is now A{b == b}, solved by reflexivity
-```
-
----
-
 *Generated by Claude Opus 4*
