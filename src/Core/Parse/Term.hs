@@ -517,13 +517,17 @@ parseApp = label "application" $ do
   _ <- symbol ")"
   return (foldl App f xs)
 
--- | Syntax: function(arg1, arg2, arg3)
+-- | Syntax: function(arg1, arg2, arg3) | function<A, B>(arg1, arg2)
 parseCall :: Term -> Parser Term
 parseCall f = label "function application" $ try $ do
-  _ <- try $ symbol "("
+  -- Parse optional type arguments <A, B, ...>
+  typeArgs <- option [] $ try $ angles $ sepEndBy parseTerm (symbol ",")
+  _ <- symbol "("
   args <- sepEndBy parseTerm (symbol ",")
   _ <- symbol ")"
-  return $ foldl App f args
+  -- Combine type args with regular args
+  let allArgs = typeArgs ++ args
+  return $ foldl App f allArgs
 
 -- | Helper: debugging function to trace parser state
 observe :: String -> Parser ()

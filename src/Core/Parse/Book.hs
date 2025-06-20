@@ -51,9 +51,17 @@ parseDefSimple defName = do
   return (defName, (False, term, typ))
 
 -- | Syntax: def name(x: Type1, y: Type2) -> ReturnType: body
+--          def name<A, B>(x: Type1, y: Type2) -> ReturnType: body
 parseDefFunction :: Name -> Parser (Name, Defn)
 parseDefFunction f = label "function definition" $ do
-  args <- parens $ sepEndBy parseArg (symbol ",")
+  -- Parse optional generic type parameters <A, B, ...>
+  typeParams <- option [] $ angles $ sepEndBy name (symbol ",")
+  -- Convert type params to arguments with type Set
+  let typeArgs = [(tp, Set) | tp <- typeParams]
+  -- Parse regular arguments
+  regularArgs <- parens $ sepEndBy parseArg (symbol ",")
+  -- Combine type params (as Set-typed args) with regular args
+  let args = typeArgs ++ regularArgs
   _ <- symbol "->"
   returnType <- parseTerm
   _ <- symbol ":"

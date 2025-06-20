@@ -1,3 +1,7 @@
+# Identity
+def id<A>(x: A) -> A:
+  x
+
 # Negation on booleans
 # - not(True)  = False
 # - not(False) = True
@@ -113,6 +117,14 @@ def is_even_ab_theo(n: Nat) -> Bool{(is_even_a n) == (is_even_b n)}:
     case 1 + 1 + p:
       {==} = double_neg_theo(is_even_b(p))
       is_even_ab_theo(p)
+
+# List Map
+def map<A, B>(f: A -> B, xs: A[]) -> B[]:
+  match xs:
+    case []:
+      []
+    case x <> xs:
+      f(x) <> map<A,B>(f, xs)
 
 # Types Playground
 # ----------------
