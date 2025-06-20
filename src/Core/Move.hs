@@ -16,7 +16,9 @@ import Core.Type
 -- λ{ (,): λx.(λ{ P0:λy.B0 … Pn:λy.Bn } x) }
 
 move :: Term -> Term
+-- move t = t
 move (Loc s t)   = Loc s (move t)
+-- move (Get f)     = trace ("from:\n- " ++ show (Get f) ++ "\n- " ++ show (Get (moveGet f))) (Get (moveGet f))
 move (Get f)     = Get (moveGet f)
 move (Lam n b)   = Lam n (move . b)
 move (App f x)   = App (move f) (move x)
@@ -45,10 +47,10 @@ move (Pat x m c) = Pat (map move x) [ (n, move m) | (n,m) <- m ] [ (map move ps,
 move t           = t
 
 moveGet :: Term -> Term
-moveGet (val -> Lam x (bod x -> Lam y (bod y -> App (val -> f) (val -> Var x' _))))
+moveGet term@(val -> Lam x (bod x -> Lam y (bod y -> App (val -> f) (val -> Var x' _))))
   | x == x'   = Lam x (\_ -> App (putLam y f) (Var x 0))
-  | otherwise = f
-moveGet f = f
+  | otherwise = term
+moveGet term = term
 
 putLam :: Name -> Term -> Term
 putLam y t = case t of

@@ -140,8 +140,8 @@ instance Show Term where
   show (Var k i)      = k
   show (Ref k)        = k
   show (Sub t)        = error "unreachable"
-  -- show (Fix k f)      = "μ" ++ k ++ "." ++ show (f (Var k 0))
-  show (Fix k f)      = k
+  show (Fix k f)      = "μ" ++ k ++ "." ++ show (f (Var k 0))
+  -- show (Fix k f)      = k
   show (Let v f)      = "!" ++ show v ++ ";" ++ show f
   show (Set)          = "Set"
   show (Ann x t)      = "<" ++ show x ++ ":" ++ show t ++ ">"
@@ -177,7 +177,7 @@ instance Show Term where
     all a (Lam k f)   = "∀" ++ k ++ ":" ++ show a ++ "." ++ show (f (Var k 0))
     all a b           = "∀" ++ show a ++ "." ++ show b
   show (Lam k f)      = "λ" ++ k ++ "." ++ show (f (Var k 0))
-  show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
+  show app@(App _ _)  = "(" ++ fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" ++ ")" where
     (fn, args) = collectApps app []
     fnStr      = unwrap (show fn)
   show (Eql t a b)    = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"

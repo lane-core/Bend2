@@ -118,10 +118,7 @@ parseTupApp = do
 parseVar :: Parser Term
 parseVar = label "variable" $ do
   v <- name
-  -- Try to parse angle bracket type arguments
-  typeArgs <- option [] $ try $ angles $ sepEndBy parseTerm (symbol ",")
-  let base = Var v 0
-  return $ foldl App base typeArgs
+  return $ Var v 0
 
 -- | Syntax: Set
 parseSet :: Parser Term

@@ -131,9 +131,9 @@ def map<A, B>(f: A -> B, xs: A[]) -> B[]:
 
 # Can we encode inductive datatypes?
 
-## data Vec (A : Set) : Nat -> Set where
-##   nil : Vec A 0
-##   con : all m (x : A) (xs : Vec A m) -> Vec A (suc m)
+# data Vec (A : Set) : Nat -> Set where
+#   nil : Vec A 0
+#   con : all m (x : A) (xs : Vec A m) -> Vec A (suc m)
 type Vec<A: Set>(len: Nat) -> Set:
   case @Nil:
     eLen: Nat{len == 0}
@@ -152,15 +152,10 @@ def VecInd
   , x: Vec(A,n)
   ) -> P(n,x):
   match x:
-    case (ctr, fields):
-      match ctr:
-        with fields
-        case @Nil:
-          ({==}, ()) = fields
-          N
-        case @Cons:
-          (l, x, xs, {==}, ()) = fields
-          C(l,x,xs,VecInd(A,P,N,C,l,xs))
+    case @Nil{{==}}:
+      N
+    case @Cons{l,x,xs,{==}}:
+      C(l,x,xs,VecInd(A,P,N,C,l,xs))
 
 def and1(a: Bool, b: Bool) -> Bool:
   match a b:

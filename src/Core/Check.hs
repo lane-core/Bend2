@@ -255,11 +255,31 @@ check d span book ctx term goal =
         _ -> Fail $ TypeMismatch span (ctx term) (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0)) (normal 1 d book a)
     (Fix k f, _) -> do
       check d span book (extend d book ctx k goal (Var k d)) (f (Ann (Fix k f) goal)) goal
-    (App f (Ann v t), _) ->
-      check d span book ctx f (All t $ Lam "_" $ \x -> rewrite d book v x goal)
-    (App f x, goal) -> do
-      xT <- infer d span book ctx x
-      check d span book ctx (App f (Ann x xT)) goal
+
+    -- (App f (Ann v t), _) ->
+      -- check d span book ctx f (All t $ Lam "_" $ \x -> rewrite d book v x goal)
+    -- (App f x, goal) -> do
+      -- xT <- infer d span book ctx x
+      -- check d span book ctx (App f (Ann x xT)) goal
+
+    -- Specializes pattern-matches:
+    -- (λ{...} <x:X>) :: T
+    -- ------------------------------------
+    -- λ{...} :: ∀v:X.(rewrite x by v in T)
+    (App f x, goal) ->
+      if isMatch f
+        then do
+          (xv,xt) <- case strip x of
+            Ann xv xt -> do
+              return (xv, xt)
+            xv -> do
+              xt <- infer d span book ctx xv
+              return (xv, xt)
+          let ft = All xt $ Lam "_" $ \x -> rewrite d book xv x goal
+          check d span book ctx f ft
+        else do
+          verify d span book ctx term goal
+
     (Loc l t, _) -> do
       check d l book ctx t goal
     (Pat _ _ _, _) -> do
@@ -274,3 +294,18 @@ verify d span book ctx term goal = do
   if equal d book t goal
     then Done ()
     else Fail $ TypeMismatch span (ctx term) (normal 1 d book goal) (normal 1 d book t)
+
+-- Utils
+-- -----
+
+isMatch :: Term -> Bool
+isMatch (strip -> App f x) = isMatch f
+isMatch (strip -> Efq)     = True
+isMatch (strip -> Use _)   = True
+isMatch (strip -> Bif _ _) = True
+isMatch (strip -> Swi _ _) = True
+isMatch (strip -> Mat _ _) = True
+isMatch (strip -> Cse _)   = True
+isMatch (strip -> Get _)   = True
+isMatch (strip -> Rwt _)   = True
+isMatch _                  = False

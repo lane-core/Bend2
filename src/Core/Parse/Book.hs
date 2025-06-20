@@ -15,6 +15,8 @@ import Text.Megaparsec.Char
 import qualified Data.Map.Strict as M
 import qualified Text.Megaparsec.Char.Lexer as L
 
+import Debug.Trace
+
 import Core.Type
 import Core.Move
 import Core.Parse (Parser, ParserState(..), skip, lexeme, symbol, parens, angles, 
@@ -28,10 +30,10 @@ import Core.Flatten (flattenBook)
 
 -- | Syntax: def name : Type = term | type Name<T>(i) -> Type: cases | name : Type = term
 parseDefinition :: Parser (Name, Defn)
-parseDefinition = choice
-  [ parseDataDec
-  , parseDefKeyword
-  , parseShortDef ]
+parseDefinition = do
+  (name, defn) <- choice [ parseDataDec , parseDefKeyword , parseShortDef ]
+  -- return $ (trace (show (name, defn)) (name, defn)) -- uncomment to show all parsed definitions
+  return $ (name, defn)
 
 -- | Syntax: def name : Type = term | def name(x: T1, y: T2) -> RetType: body
 parseDefKeyword :: Parser (Name, Defn)
