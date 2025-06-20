@@ -156,9 +156,3 @@ def VecInd
       N
     case @Cons{l,x,xs,{==}}:
       C(l,x,xs,VecInd(A,P,N,C,l,xs))
-
-#- C : ∀s:Nat. ∀x:A. ∀xs:(^Vec(A,s)). P(s,xs))→(P(↑s,(@Cons,s,x,xs,{==},()))
-
-
-
-#- C : ∀s:Nat. ∀x:A. ∀xs:(^Vec(A,s)). (P(s,xs))→(P(↑s,(@Cons,(s,(x,(xs,({==},())))))))

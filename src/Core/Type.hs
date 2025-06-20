@@ -169,7 +169,9 @@ instance Show Term where
     sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
     sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
     sig a b           = "Σ" ++ show a ++ ". " ++ (show b)
-  show (Tup a b)      = "(" ++ show a ++ "," ++ (show b) ++ ")"
+  show tup@(Tup _ _)  = case prettyCtr tup of
+    Just s -> s
+    _      -> "(" ++ intercalate "," (map show (flattenTup tup)) ++ ")"
   show (Get f)        = "λ{ (,):" ++ show f ++ " }"
   show (All a b)      = all a b where
     all a (Lam "_" f) = show a ++ " -> " ++ show (f (Var "_" 0))
@@ -266,3 +268,18 @@ natToInt _         = Nothing
 
 noSpan :: Span
 noSpan = Span (0,0) (0,0) ""
+
+flattenTup :: Term -> [Term]
+flattenTup (Tup l r) = l : flattenTup r
+flattenTup t         = [t]
+
+lastElem :: Term -> Maybe Term
+lastElem (Tup _ r) = lastElem r
+lastElem t         = Just t
+
+prettyCtr :: Term -> Maybe String
+prettyCtr (Tup (Sym name) rest) = 
+  case lastElem rest of
+    Just One -> Just (show (Sym name) ++ "{" ++ intercalate "," (map show (init (flattenTup rest))) ++ "}")
+    _        -> Nothing
+prettyCtr _ = Nothing
