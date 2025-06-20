@@ -169,15 +169,15 @@ instance Show Term where
     go (Cse c)        = "λ{" ++ intercalate ";" (map (\(s,t) -> "@" ++ s ++ ":" ++ go t) c) ++ "}"
     go (Sig a b)      = sig a b where
       sig a (Lam "_" f) = go a ++ "&" ++ go (f (Var "_" 0))
-      sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ go a ++ "." ++ go (f (Var k 0))
-      sig a b           = "Σ" ++ go a ++ "." ++ go b
+      sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ go a ++ ". " ++ unwrap (go (f (Var k 0)))
+      sig a b           = "Σ" ++ go a ++ ". " ++ unwrap (go b)
     go (Tup a b)      = "(" ++ go a ++ "," ++ unwrap (go b) ++ ")"
     go (Get f)        = "λ{(,):" ++ go f ++ "}"
     go (All a b)      = all a b where
       all a (Lam "_" f) = go a ++ "→" ++ go (f (Var "_" 0))
-      all a (Lam k f)   = "∀" ++ k ++ ":" ++ go a ++ "." ++ go (f (Var k 0))
-      all a b           = "∀" ++ go a ++ "." ++ go b
-    go (Lam k f)      = "λ" ++ k ++ "." ++ go (f (Var k 0))
+      all a (Lam k f)   = "∀" ++ k ++ ":" ++ go a ++ ". " ++ unwrap (go (f (Var k 0)))
+      all a b           = "∀" ++ go a ++ ". " ++ unwrap (go b)
+    go (Lam k f)      = "λ" ++ k ++ ". " ++ go (f (Var k 0))
     go app@(App _ _)  = "(" ++ fnStr ++ "(" ++ intercalate "," (map go args) ++ ")" ++ ")" where
       (fn, args) = collectApps app []
       fnStr      = unwrap (go fn)
@@ -190,10 +190,10 @@ instance Show Term where
     go (Era)          = "*"
     go (Sup l a b)    = "&" ++ show l ++ "{" ++ go a ++ "," ++ go b ++ "}"
     go (Met _ _ _)    = "?"
-    go (Pat terms moves cases) = "match " ++ unwords (map go terms) ++ " {" ++ goMoves ++ goCases ++ "}" where
-      goMoves = if null moves then "" else " with " ++ intercalate " with " (map goMove moves) where
+    go (Pat t m c)      = "match " ++ unwords (map go t) ++ " {" ++ goMoves ++ goCases ++ "}" where
+      goMoves = if null m then "" else " with " ++ intercalate " with " (map goMove m) where
         goMove (name, term) = name ++ "=" ++ go term
-      goCases = if null cases then "" else " " ++ intercalate " " (map goCase cases) where
+      goCases = if null c then "" else " " ++ intercalate " " (map goCase c) where
         goCase (pats, term) = "case " ++ unwords (map goPat pats) ++ ": " ++ go term
       goPat pat = "(" ++ go pat ++ ")"
 
