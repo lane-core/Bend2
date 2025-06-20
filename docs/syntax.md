@@ -48,10 +48,7 @@ T{a == b}       # Propositional Equality type
 
 ```python
 x               # Variable
-let x = v; e    # Let binding
-let x: T = v; e # Typed let binding
-x = v; e        # Let binding (without 'let' keyword)
-def f: T = v    # Top-level definition
+x = v           # Let binding
 ```
 
 ## Functions
@@ -129,11 +126,11 @@ Pattern matches desugar to native eliminators, which can also be used directly:
 h <> t          # Cons
 ```
 
-### Pairs
+### Tuples
 
 ```python
-(a, b)          # Pair
-(a, b, c)       # Nested pairs: (a, (b, c))
+(a, b)          # Tuple
+(a, b, c)       # Nested tuples: (a, (b, c))
 ```
 
 ### Equality
@@ -151,14 +148,17 @@ x :: T          # Type hint
 ## Datatype Declarations
 
 ```python
-type Vec<A: Set>(len: Nat) -> Set:
+# data Vec (A : Set) : Nat → Set where
+#   nil  : Vec A zero
+#   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
+type Vec<A: Set>(N: Nat) -> Set:
   case @Nil:
-    eLen: Nat{len == 0}
+    e: Nat{N == 0}
   case @Cons:
-    tLen: Nat
-    head: A
-    tail: Vec(A, tLen)
-    eLen: Nat{len == 1+tLen}
+    n: Nat
+    h: A
+    t: Vec(A,n)
+    e: Nat{N == 1+n}
 ```
 
 This desugars to a function that returns a dependent pair:

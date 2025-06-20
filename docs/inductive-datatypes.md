@@ -6,34 +6,34 @@ type. For example, in Agda, a Vector can be defined as:
 
 ```agda
 data Vec (A : Set) : Nat → Set where
-  Nil  : Vec A zero
-  Cons : ∀ {n} → A → Vec A n → Vec A (suc n)
+  nil  : Vec A zero
+  cons : ∀ {n} → A → Vec A n → Vec A (suc n)
 ```
 
 In Bend2, the same type is *encoded* as:
 
 ```python
-def Vec(A: Set, len: Nat) -> Set:
+def Vec(A: Set, N: Nat) -> Set:
   any ctr: @{@Nil,@Cons}.
   match ctr:
     case @Nil: # Nil
-      any eLen : Nat{len == 0}.
+      any e : Nat{N == 0}.
       Unit
     case @Cons: # Cons
-      any tLen : Nat.
-      any head : A.
-      any tail : Vec(A,tLen).
-      any eLen : Nat{len == 1+tLen}.
+      any n : Nat.
+      any h : A.
+      any t : Vec(A,n).
+      any e : Nat{N == 1+n}.
       Unit
 ```
 
 Let's parse this, line by line.
 
 ```python
-def Vec(A: Set, len: Nat) -> Set
+def Vec(A: Set, N: Nat) -> Set
 ```
 
-This declares a Vec as a function from a type `A`, and a length `len : Nat`, to
+This declares a Vec as a function from a type `A`, and a length `N : Nat`, to
 a type. This is the same type as the Agda counterpart, except here it is a user
 defined function, rather than a built-in top-level declaration.
 
@@ -63,39 +63,39 @@ This will give us two cases.
 
 ```python
     case @Nil:
-      any eLen: Nat{len == 0}.
+      any e: Nat{N == 0}.
       Unit
 ```
 
 This means that, the first element is `@Nil`, the second is a Sigma, with:
 
-- `eLen`: asserts that the length of the empty list is 0
+- `e`: asserts that the length of the empty list is 0
 - Unit: just a placeholder, by convention
 
 So, to construct an empty list `xs`, we write:
 
 `(@Nil,e,())`
 
-Which includes the constructor name (Nil), a proof, `e`, that `len(xs) == 0`
+Which includes the constructor name (Nil), a proof, `e`, that `N(xs) == 0`
 (useful in proofs), and `()`, which is just the unit element (for convention).
 
 **The `@Cons` case is:**
 
 ```python
     case @Cons:
-      any tLen: Nat.
-      any head: A.
-      any tail: Vec(A,tLen).
-      any eLen: Nat{len == 1+tLen}.
+      any n: Nat.
+      any h: A.
+      any t: Vec(A,n).
+      any e: Nat{N == 1+n}.
       Unit
 ```
 
 Here, we have 4 Sigmas, one for each field:
 
-- `tLen`: the length of the tail
-- `head`: the head element
-- `tail`: all elements except the head
-- `eLen`: asserts the new length is 1 + the length of the tail
+- `n`: the length of the tail
+- `h`: the head element
+- `t`: all elements except the head
+- `e`: asserts the new length is 1 + the length of the tail
 - Unit: just a placeholder, by convention
 
 So, to extend a list `xs` with an element `x`, we write:
@@ -103,7 +103,7 @@ So, to extend a list `xs` with an element `x`, we write:
 `(@Cons, n, x, xs, e, ())`
 
 Which includes the constructor name (Cons), the length of the tail `n`, the head
-element `x`, the tail `xs`, a proof that `len(x:xs) == 1+len(xs)`, and the unit
+element `x`, the tail `xs`, a proof that `N(x:xs) == 1+N(xs)`, and the unit
 element (for convention).
 
 ## Proving Induction
@@ -115,12 +115,12 @@ We start by writing the type of induction on vectors:
 ```python
 def VecInd
   ( A: Set
-  , P: all n:Nat xs:Vec(A,n). Set
+  , P: all N:Nat xs:Vec(A,N). Set
   , N: P(0,(@Nil,{==},()))
-  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,{==},()))
-  , n: Nat
-  , x: Vec(A,n)
-  ) -> P(n,x):
+  , C: all n:Nat h:A t:Vec(A,n) . P(n,t) -> P(1+n,(@Cons,n,h,t,{==},()))
+  , N: Nat
+  , x: Vec(A,N)
+  ) -> P(N,x):
   ()
 ```
 
@@ -128,15 +128,15 @@ This gives us the following goal:
 
 ```
 Mismatch:
-- Goal: (P n x)
+- Goal: (P N x)
 - Type: Unit
 Context:
 - A : Set
-- P : ∀n:Nat.∀xs:(@Vec A n).Set
+- P : ∀N:Nat.∀xs:(@Vec A N).Set
 - N : (P 0 (@Nil,{==},()))
-- C : ∀s:Nat.∀x:A.∀xs:(@Vec A s).(P s xs)→(P ↑s (@Cons,s,x,xs,{==},()))
-- n : Nat
-- x : Σctr:{@Nil,@Cons}.(λ{@Nil:ΣeLen:Nat{n==0}.Unit;@Cons:ΣtLen:Nat.Σhead:A.Σtail:(Vec A tLen).ΣeLen:Nat{n==↑tLen}.Unit} ctr)
+- C : ∀n:Nat.∀h:A.∀t:(@Vec A n).(P n t)→(P 1+n (@Cons,n,h,t,{==},()))
+- N : Nat
+- x : Σctr:{@Nil,@Cons}.(λ{@Nil:Σe:Nat{N==0}.Unit;@Cons:Σn:Nat.Σh:A.Σt:(Vec A n).Σe:Nat{N==1+n}.Unit} ctr)
 ```
 
 We then proceed by case analysis on the vector `x`:
@@ -154,12 +154,12 @@ This gives us the goal for the `Nil` case:
 
 ```
 Mismatch:
-- Goal: (P n (@Nil,fields))
+- Goal: (P N (@Nil,fields))
 - Type: Unit
 Context:
 - A : Set
 ...
-- fields : (λctr.(λ{@Nil:ΣeLen:Nat{n==0}.Unit;@Cons:ΣtLen:Nat.Σhead:A.Σtail:(Vec A tLen).ΣeLen:Nat{n==↑tLen}.Unit} ctr) ctr)
+- fields : (λctr.(λ{@Nil:Σe:Nat{N==0}.Unit;@Cons:Σn:Nat.Σh:A.Σt:(Vec A n).Σe:Nat{N==1+n}.Unit} ctr) ctr)
 ```
 
 Note that, here, `fields` is not specialized w.r.t. value of `ctr`. Unlike
@@ -169,12 +169,12 @@ a `with` statement:
 ```python
 def VecInd
   ( A: Set
-  , P: all n:Nat xs:Vec(A,n). Set
+  , P: all N:Nat xs:Vec(A,N). Set
   , N: P(0,(@Nil,{==},()))
-  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,{==},()))
-  , n: Nat
-  , x: Vec(A,n)
-  ) -> P(n,x):
+  , C: all n:Nat h:A t:Vec(A,n) . P(n,t) -> P(1+n,(@Cons,n,h,t,{==},()))
+  , N: Nat
+  , x: Vec(A,N)
+  ) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -189,20 +189,20 @@ This updates the `Nil` goal to:
 
 ```
 Mismatch:
-- Goal: (P n (@Nil,fields))
+- Goal: (P N (@Nil,fields))
 - Type: Unit
 Context:
 - A : Set
 ...
-- fields : ΣeLen:Nat{n==0}.Unit
+- fields : Σe:Nat{N==0}.Unit
 ```
 
 Note that, now, `fields` includes the fields of the `Nil` constructor, which is
-just a proof that the vector length, `n`, is `0`. We can extract it:
+just a proof that the vector length, `N`, is `0`. We can extract it:
 
 ```python
 def VecInd
-  (...) -> P(n,x):
+  (...) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -218,22 +218,22 @@ This updates the `Nil` goal to:
 
 ```
 Mismatch:
-- Goal: (P n (@Nil,e,()))
+- Goal: (P N (@Nil,e,()))
 - Type: Unit
 Context:
 - A : Set
 ...
-- fields : ΣeLen:Nat{n==0}.Unit
-- e : Nat{n==0}
+- fields : Σe:Nat{N==0}.Unit
+- e : Nat{N==0}
 ```
 
-Now, note that the goal is `(P n (@Nil,e,()))`, but, in the context, we have a
-proof, `e` that `n == 0`. This allows us to pattern-match on this proof with
+Now, note that the goal is `(P N (@Nil,e,()))`, but, in the context, we have a
+proof, `e` that `N == 0`. This allows us to pattern-match on this proof with
 either `match e: case {==}:`, or directly, with `{==} = e`:
 
 ```python
 def VecInd
-  (...) -> P(n,x):
+  (...) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -257,8 +257,8 @@ Context:
 ...
 - N : (P 0 (@Nil,{==},()))
 ...
-- fields : ΣeLen:Nat{n==0}.Unit
-- e : Nat{n==0}
+- fields : Σe:Nat{N==0}.Unit
+- e : Nat{N==0}
 ```
 
 Note that the type of `N` is exactly the type of our goal, allowing us to
@@ -266,7 +266,7 @@ prove this case:
 
 ```python
 def VecInd
-  (...) -> P(n,x):
+  (...) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -283,19 +283,19 @@ This leaves us with the `@Cons` case:
 
 ```
 Mismatch:
-- Goal: (P n (@Cons,fields))
+- Goal: (P N (@Cons,fields))
 - Type: Unit
 Context:
 - A : Set
 ...
-- fields : ΣtLen:Nat.Σhead:A.Σtail:(Vec A tLen).ΣeLen:Nat{n==↑tLen}.Unit
+- fields : Σn:Nat.Σh:A.Σt:(Vec A n).Σe:Nat{N==1+n}.Unit
 ```
 
 Once again, we can extract the fields:
 
 ```python
 def VecInd
-  (...) -> P(n,x):
+  (...) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -305,22 +305,22 @@ def VecInd
           {==} = e
           N
         case @Cons:
-          (l, x, xs, e, ()) = fields
+          (n, h, t, e, ()) = fields
           ()
 ```
 
 Giving us the goal:
 
 ```
-- Goal: (P n (@Cons,l,x,xs,e,()))
+- Goal: (P N (@Cons,n,h,t,e,()))
 - Type: Unit
 Context:
 - A : Set
 ...
-- l : Nat
-- x : A
-- xs : Vec(A,l)
-- e : Nat{n==↑l}
+- n : Nat
+- h : A
+- t : Vec(A,n)
+- e : Nat{N==1+n}
 Expression:
 - ()
 Location: (line 156, column 11)
@@ -331,7 +331,7 @@ Which, once again, we can specialize by pattern-matching on `e`:
 
 ```python
 def VecInd
-  (...) -> P(n,x):
+  (...) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -341,7 +341,7 @@ def VecInd
           {==} = e
           N
         case @Cons:
-          (l, x, xs, e, ()) = fields
+          (n, h, t, e, ()) = fields
           {==} = e
           ()
 ```
@@ -350,22 +350,22 @@ Giving us the goal:
 
 ```
 Mismatch:
-- Goal: (P ↑l (@Cons,l,x,xs,{==},()))
+- Goal: (P 1+n (@Cons,n,h,t,{==},()))
 - Type: Unit
 Context:
 - A : Set
 ...
-- l : Nat
-- x : A
-- xs : Vec(A,l)
-- e : Nat{n==↑l}
+- n : Nat
+- h : A
+- t : Vec(A,n)
+- e : Nat{N==1+n}
 ```
 
-By induction on `xs`, we can construct `ind : (P l xs)`:
+By induction on `t`, we can construct `ind : (P n t)`:
 
 ```python
 def VecInd
-  (...) -> P(n,x):
+  (...) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -375,9 +375,9 @@ def VecInd
           {==} = e
           N
         case @Cons:
-          (l, x, xs, e, ()) = fields
+          (n, h, t, e, ()) = fields
           {==} = e
-          ind = VecInd(A,P,N,C,l,xs)
+          ind = VecInd(A,P,N,C,n,t)
           ()
 ```
 
@@ -385,21 +385,21 @@ Giving us the goal:
 
 ```
 Mismatch:
-- Goal: (P ↑l (@Cons,l,x,xs,{==},()))
+- Goal: (P 1+n (@Cons,n,h,t,{==},()))
 - Type: Unit
 Context:
 - A : Set
-- C : ∀s: Nat.
-      ∀x: A.
-      ∀xs: (@Vec A s).
-      (P s xs) →
-      (P ↑s (@Cons,s,x,xs,{==},()))
+- C : ∀n: Nat.
+      ∀h: A.
+      ∀t: (@Vec A n).
+      (P n t) →
+      (P 1+n (@Cons,n,h,t,{==},()))
 ...
-- l : Nat
-- x : A
-- xs : Vec(A,xs)
-- e : Nat{n==↑l}
-- ind : (P l xs)
+- n : Nat
+- h : A
+- t : Vec(A,t)
+- e : Nat{N==1+n}
+- ind : (P n t)
 ```
 
 Now, we have everything we need to call `C`, which returns exactly the demanded
@@ -408,12 +408,12 @@ goal, completing the proof. We can write it compactly, as:
 ```python
 def VecInd
   ( A: Set
-  , P: all n:Nat xs:Vec(A,n). Set
+  , P: all N:Nat xs:Vec(A,N). Set
   , N: P(0,(@Nil,{==},()))
-  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,{==},()))
-  , n: Nat
-  , x: Vec(A,n)
-  ) -> P(n,x):
+  , C: all n:Nat h:A t:Vec(A,n) . P(n,t) -> P(1+n,(@Cons,n,h,t,{==},()))
+  , N: Nat
+  , x: Vec(A,N)
+  ) -> P(N,x):
   match x:
     case (ctr, fields):
       match ctr:
@@ -422,8 +422,8 @@ def VecInd
           ({==}, ()) = fields
           N
         case @Cons:
-          (l, x, xs, {==}, ()) = fields
-          C(l,x,xs,VecInd(A,P,N,C,l,xs))
+          (n, h, t, {==}, ()) = fields
+          C(n,h,t,VecInd(A,P,N,C,n,t))
 ```
 
 ## A Syntax Sugar
@@ -436,14 +436,14 @@ construct and eliminate them.
 The Vector type can be declared as:
 
 ```python
-type Vec<A: Set>(len: A):
+type Vec<A: Set>(N: Nat):
   case @Nil:
-    eLen: len == 0
+    e: N == 0
   case @Cons:
-    tLen: Nat
-    head: A
-    tail: Vec(A, tLen)
-    eLen: len == 1+tLen
+    n: Nat
+    h: A
+    t: Vec(A, n)
+    e: N == 1+n
 ```
 
 This will desugar to the same `def Vec ...` declaration we wrote before.
@@ -550,7 +550,7 @@ empty : List(Nat) = @Nil{}
 myList : List(Nat) = (@Cons, 2, 42, (@Cons, 1, 7, (@Nil, {==}, ()), {==}, ()), {==}, ())
 
 # We can write:
-myList : List(Nat) = @Cons{head: 42, tail: @Cons{head: 7, tail: @Nil{}}}
+myList : List(Nat) = @Cons{42, @Cons{7, @Nil{}}}
 ```
 
 ### Pattern Matching Syntax
@@ -567,14 +567,14 @@ match vec:
         ({==}, ()) = fields
         ...
       case @Cons:
-        (l, x, xs, {==}, ()) = fields
+        (n, h, t, {==}, ()) = fields
         ...
 
 # We can write:
 match vec:
   case @Nil{}:
     ...
-  case @Cons{tLen: l, head: x, tail: xs, eLen: {==}}:
+  case @Cons{n, h, t, {==}}:
     ...
 ```
 
