@@ -86,18 +86,24 @@ autoImportRef basePath visited (book@(Book defs), newRefs) refName = do
     then return (book, newRefs)
     else do
       let filePath = basePath </> (refName ++ ".bend")
+      let altFilePath = basePath </> refName </> "_.bend"
       fileExists <- doesFileExist filePath
-      if fileExists && not (filePath `S.member` visited)
+      altFileExists <- doesFileExist altFilePath
+      -- Try the direct file first, then the alternative path
+      let (actualPath, pathExists) = if fileExists then (filePath, True) 
+                                      else if altFileExists then (altFilePath, True)
+                                      else (filePath, False)
+      if pathExists && not (actualPath `S.member` visited)
         then do
-          content <- readFile filePath
-          case doParseBook filePath content of
+          content <- readFile actualPath
+          case doParseBook actualPath content of
             Left err -> do
-              putStrLn $ "Warning: Failed to parse " ++ filePath ++ ": " ++ err
+              putStrLn $ "Warning: Failed to parse " ++ actualPath ++ ": " ++ err
               return (book, newRefs)
             Right importedBook -> do
               -- Recursively auto-import the imported book
-              let visited' = S.insert filePath visited
-              importedBook' <- autoImportRefs (takeDirectory filePath) importedBook 
+              let visited' = S.insert actualPath visited
+              importedBook' <- autoImportRefs (takeDirectory actualPath) importedBook 
                                              (collectUnboundRefs importedBook) visited'
               -- Merge the imported book into the current book
               let mergedBook = mergeBooks book importedBook'
