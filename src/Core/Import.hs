@@ -1,10 +1,14 @@
+{-./../../app/main.hs-}
+{-./Type.hs-}
+
 module Core.Import where
 
 import Control.Monad (foldM)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, getCurrentDirectory)
 import System.FilePath (takeDirectory, (</>))
+import System.Exit (exitFailure)
 
 import Core.Type
 import Core.Parse.Book (doParseBook)
@@ -12,9 +16,14 @@ import Core.Bind (bindBook)
 
 -- Auto-import unbound references in a Book
 autoImport :: FilePath -> Book -> IO Book
-autoImport basePath book = do
+autoImport _ book = do
   let unboundRefs = collectUnboundRefs book
-  autoImportRefs basePath book unboundRefs S.empty
+  result <- autoImportRefs book unboundRefs S.empty
+  case result of
+    Left err -> do
+      putStrLn $ "Error: " ++ err
+      exitFailure
+    Right book' -> return book'
 
 -- Collect all unbound references from a Book
 collectUnboundRefs :: Book -> S.Set Name
@@ -70,23 +79,27 @@ collectRefs term = case term of
   Pat s m c   -> S.unions $ map collectRefs s ++ map (collectRefs . snd) m ++ concatMap (\ (p, b) -> collectRefs b : map collectRefs p) c
 
 -- Auto-import references with cycle detection
-autoImportRefs :: FilePath -> Book -> S.Set Name -> S.Set FilePath -> IO Book
-autoImportRefs _ book refs _ | S.null refs = return book
-autoImportRefs basePath book refs visited = do
-  (book', newRefs) <- foldM (autoImportRef basePath visited) (book, S.empty) (S.toList refs)
-  if S.null newRefs
-    then return book'
-    else autoImportRefs basePath book' newRefs visited
+autoImportRefs :: Book -> S.Set Name -> S.Set FilePath -> IO (Either String Book)
+autoImportRefs book refs _ | S.null refs = return (Right book)
+autoImportRefs book refs visited = do
+  result <- foldM (autoImportRef visited) (Right (book, S.empty)) (S.toList refs)
+  case result of
+    Left err -> return (Left err)
+    Right (book', newRefs) ->
+      if S.null newRefs
+        then return (Right book')
+        else autoImportRefs book' newRefs visited
 
 -- Auto-import a single reference
-autoImportRef :: FilePath -> S.Set FilePath -> (Book, S.Set Name) -> Name -> IO (Book, S.Set Name)
-autoImportRef basePath visited (book@(Book defs), newRefs) refName = do
+autoImportRef :: S.Set FilePath -> Either String (Book, S.Set Name) -> Name -> IO (Either String (Book, S.Set Name))
+autoImportRef _ (Left err) _ = return (Left err)
+autoImportRef visited (Right (book@(Book defs), newRefs)) refName = do
   -- Check if the reference already exists in the book
   if M.member refName defs
-    then return (book, newRefs)
+    then return (Right (book, newRefs))
     else do
-      let filePath = basePath </> (refName ++ ".bend")
-      let altFilePath = basePath </> refName </> "_.bend"
+      let filePath = refName ++ ".bend"
+      let altFilePath = refName </> "_.bend"
       fileExists <- doesFileExist filePath
       altFileExists <- doesFileExist altFilePath
       -- Try the direct file first, then the alternative path
@@ -97,20 +110,22 @@ autoImportRef basePath visited (book@(Book defs), newRefs) refName = do
         then do
           content <- readFile actualPath
           case doParseBook actualPath content of
-            Left err -> do
-              putStrLn $ "Warning: Failed to parse " ++ actualPath ++ ": " ++ err
-              return (book, newRefs)
+            Left err -> return (Left $ "Failed to parse " ++ actualPath ++ ": " ++ err)
             Right importedBook -> do
               -- Recursively auto-import the imported book
               let visited' = S.insert actualPath visited
-              importedBook' <- autoImportRefs (takeDirectory actualPath) importedBook 
-                                             (collectUnboundRefs importedBook) visited'
-              -- Merge the imported book into the current book
-              let mergedBook = mergeBooks book importedBook'
-              let additionalRefs = collectUnboundRefs importedBook'
-              return (mergedBook, S.union newRefs additionalRefs)
+              importResult <- autoImportRefs importedBook 
+                                           (collectUnboundRefs importedBook) visited'
+              case importResult of
+                Left err -> return (Left err)
+                Right importedBook' -> do
+                  -- Merge the imported book into the current book
+                  let mergedBook = mergeBooks book importedBook'
+                  let additionalRefs = collectUnboundRefs importedBook'
+                  return (Right (mergedBook, S.union newRefs additionalRefs))
         else
-          return (book, newRefs)
+          return (Left $ "Definition '" ++ refName ++ "' not found. Expected file at: " ++ filePath ++ 
+                        " or " ++ altFilePath)
 
 -- Merge two books, preferring definitions from the first book
 mergeBooks :: Book -> Book -> Book
