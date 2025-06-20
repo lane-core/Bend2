@@ -21,6 +21,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 import Core.Bind
 import Core.Flatten
+import Core.Move
 import Core.Type
 import Core.Parse (Parser, ParserState(..), skip, lexeme, symbol, parens, angles, 
                   braces, brackets, name, reserved, parseSemi, isNameInit, 
@@ -113,9 +114,14 @@ parseTupApp = do
 
 -- atomic terms
 
--- | Syntax: x, foo, bar_123
+-- | Syntax: x, foo, bar_123, Type<A,B>
 parseVar :: Parser Term
-parseVar = label "variable" $ (\x -> Var x 0) <$> name
+parseVar = label "variable" $ do
+  v <- name
+  -- Try to parse angle bracket type arguments
+  typeArgs <- option [] $ try $ angles $ sepEndBy parseTerm (symbol ",")
+  let base = Var v 0
+  return $ foldl App base typeArgs
 
 -- | Syntax: Set
 parseSet :: Parser Term
@@ -753,7 +759,7 @@ doParseTerm :: FilePath -> String -> Either String Term
 doParseTerm file input =
   case evalState (runParserT p file input) (ParserState True False input) of
     Left err  -> Left (formatError input err)
-    Right res -> Right (bind (flatten res))
+    Right res -> Right (bind (move (flatten res)))
   where
     p = do
       skip

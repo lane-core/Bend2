@@ -16,6 +16,7 @@ import qualified Data.Map.Strict as M
 import qualified Text.Megaparsec.Char.Lexer as L
 
 import Core.Type
+import Core.Move
 import Core.Parse (Parser, ParserState(..), skip, lexeme, symbol, parens, angles, 
                   braces, brackets, name, reserved, parseSemi, isNameInit, 
                   isNameChar, withSpan, located, formatError)
@@ -51,7 +52,7 @@ parseDefSimple defName = do
   return (defName, (False, term, typ))
 
 -- | Syntax: def name(x: Type1, y: Type2) -> ReturnType: body
---          def name<A, B>(x: Type1, y: Type2) -> ReturnType: body
+--           def name<A, B>(x: Type1, y: Type2) -> ReturnType: body
 parseDefFunction :: Name -> Parser (Name, Defn)
 parseDefFunction f = label "function definition" $ do
   -- Parse optional generic type parameters <A, B, ...>
@@ -147,7 +148,7 @@ doParseBook :: FilePath -> String -> Either String Book
 doParseBook file input =
   case evalState (runParserT p file input) (ParserState True False input) of
     Left err  -> Left (formatError input err)
-    Right res -> Right (bindBook (flattenBook res))
+    Right res -> Right (bindBook (moveBook (flattenBook res)))
   where
     p = do
       skip
@@ -161,4 +162,5 @@ doReadBook :: String -> Book
 doReadBook input =
   case doParseBook "<input>" input of
     Left err  -> error err
+    Right res -> res
     Right res -> res

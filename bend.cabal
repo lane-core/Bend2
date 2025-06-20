@@ -20,16 +20,17 @@ common warnings
 
 library
     import:           warnings
-    exposed-modules:  Core.Import,
-                      Core.Type,
+    exposed-modules:  Core.Type,
                       Core.Bind,
                       Core.Check,
                       Core.Equal,
                       Core.Flatten,
+                      Core.Import,
+                      Core.Move,
                       Core.Normal,
                       Core.Parse,
-                      Core.Parse.Term,
                       Core.Parse.Book,
+                      Core.Parse.Term,
                       Core.Parse.WithSpan,
                       Core.Rewrite,
                       Core.WHNF
