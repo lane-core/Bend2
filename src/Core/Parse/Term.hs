@@ -1,4 +1,6 @@
-{-./Type.hs-}
+{-./../../../ORACLE-}
+
+{-./../Type.hs-}
 
 module Core.Parse.Term 
   ( parseTerm
@@ -88,11 +90,18 @@ parseTermPostfix t = do
   st <- get
   guard (tight st)
   mb <- optional $ choice
-    [ parseCall t
+    [ parseTypeApp t
+    , parseCall t
     , parseEql  t
     , parseLst  t ]
   maybe (pure t) parseTermPostfix mb
   <|> pure t
+
+-- | Syntax: f<Arg1, Arg2, …>
+parseTypeApp :: Term -> Parser Term
+parseTypeApp f = label "type application" $ try $ do
+  args <- angles $ sepEndBy1 parseTerm (symbol ",")
+  return (foldl App f args)
 
 -- | Helper: parses infix operators (->  &  ::  +  =)
 parseTermInfix :: Term -> Parser Term
@@ -111,6 +120,28 @@ parseTupApp :: Parser Term
 parseTupApp = do
   _ <- try $ symbol "("
   choice [ parseTup , parseApp ]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 -- atomic terms
 
