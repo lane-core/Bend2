@@ -23,7 +23,7 @@ library
     exposed-modules:  Core.Type,
                       Core.Bind,
                       Core.Check,
-                      Core.Cli,
+                      Core.CLI,
                       Core.Equal,
                       Core.Flatten,
                       Core.Import,
