@@ -4,15 +4,19 @@
 
 module Core.Rewrite where
 
+import Debug.Trace
+
 import Core.Type
 import Core.WHNF
 import Core.Equal
 
--- Rewrites occurrences of 'old' with 'neo' in 'val'
 rewrite :: Int -> Book -> Term -> Term -> Term -> Term
 rewrite d book old neo val
   | equal d book old val = neo
-  | otherwise            = rewriteGo d book old neo val
+  | otherwise            = case whnf 2 book val of
+    -- TODO: pass through all constructors
+    Suc x -> Suc $ rewriteGo d book old neo x
+    _     -> rewriteGo d book old neo val
 
 -- Recursively rewrites occurrences of 'old' with 'neo' in 'val'
 rewriteGo :: Int -> Book -> Term -> Term -> Term -> Term

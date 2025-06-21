@@ -5,8 +5,6 @@
 
 module Core.Check where
 
-import Debug.Trace
-
 import qualified Data.Map as M
 
 import Core.Equal
@@ -153,8 +151,8 @@ infer d span book ctx term =
       Fail $ CantInfer span (ctx term)
     Frz _ -> do
       Fail $ CantInfer span (ctx term)
-    Loc newSpan t ->
-      infer d newSpan book ctx t
+    Loc l t ->
+      infer d l book ctx t
     Era -> do
       Fail $ CantInfer span (ctx term)
     Sup l a b -> do
@@ -167,7 +165,7 @@ infer d span book ctx term =
 -- Check if a term has the expected type
 check :: Int -> Span -> Book -> Context -> Term -> Term -> Result ()
 check d span book ctx term goal =
-  -- trace ("- check: " ++ show (term) ++ " :: " ++ show (goal)) $
+  -- trace ("- check: " ++ show (normal 1 d book term) ++ " :: " ++ show (normal 1 d book goal)) $
   case (term, force book goal) of
     (Let v f, _) -> do
       case v of
@@ -251,7 +249,11 @@ check d span book ctx term goal =
         else Fail $ TermMismatch span (ctx term) (normal 1 d book a) (normal 1 d book b)
     (Rwt f, All a b) -> do
       case force book a of
-        Eql t x y -> check d span book ctx f (rewrite d book x y (App b Rfl))
+        Eql t x y -> do
+          let old = App b Rfl
+          let neo = rewrite d book x y old
+          check d span book ctx f neo
+          -- trace ("rwt " ++ show x ++ " → " ++ show y ++ "\n- " ++ show old ++ "\n- " ++ show neo) $ check d span book ctx f neo
         _ -> Fail $ TypeMismatch span (ctx term) (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0)) (normal 1 d book a)
     (Fix k f, _) -> do
       check d span book (extend d book ctx k goal (Var k d)) (f (Ann (Fix k f) goal)) goal

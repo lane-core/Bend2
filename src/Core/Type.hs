@@ -180,7 +180,10 @@ instance Show Term where
   show (Lam k f)      = "λ" ++ k ++ ". " ++ show (f (Var k 0))
   show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
     (fn, args) = collectApps app []
-    fnStr      = (show fn)
+    fnStr      = case strip fn of
+      Var k _ -> k
+      Ref k   -> k
+      fn      -> "(" ++ show fn ++ ")"
   show (Eql t a b)    = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)          = "{==}"
   show (Rwt f)        = "λ{ {==}:" ++ show f ++ " }"

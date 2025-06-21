@@ -83,7 +83,7 @@ whnfApp lv book undo f x =
     app _           x = undo
 
 whnfAppLam :: Int -> Book -> Body -> Term -> Term
-whnfAppLam lv book f x = whnf lv book (f (whnf lv book x))
+whnfAppLam lv book f x = whnf lv book (f x)
 
 whnfAppFix :: Int -> Book -> Term -> String -> Body -> Term -> Term
 whnfAppFix 0  book undo k f x = App (Fix k f) x
