@@ -68,6 +68,10 @@ cmp lv d book a b =
     (a            , Loc _ tb     ) -> eql lv d book a tb
     (Era          , Era          ) -> True
     (Sup la aa ba , Sup lb ab bb ) -> la == lb && eql lv d book aa ab && eql lv d book ba bb
+    (Num ta       , Num tb       ) -> ta == tb
+    (Val va       , Val vb       ) -> va == vb
+    (Op2 oa aa ba , Op2 ob ab bb ) -> oa == ob && eql lv d book aa ab && eql lv d book ba bb
+    (Op1 oa aa    , Op1 ob ab    ) -> oa == ob && eql lv d book aa ab
     (Met _  _  _  , Met _  _  _  ) -> error "not-supported"
     (Pat _  _  _  , Pat _  _  _  ) -> error "not-supported"
     (_            , _            ) -> False

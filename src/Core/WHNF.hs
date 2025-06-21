@@ -9,6 +9,7 @@ import Core.Type
 import System.IO.Unsafe
 import Data.IORef
 import Data.Bits
+import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 
 whnf :: Int -> Book -> Term -> Term
 whnf lv book term = do
@@ -174,11 +175,12 @@ whnfOp2 lv book op a b =
       GRT -> if x > y then Bt1 else Bt0
       LEQ -> if x <= y then Bt1 else Bt0
       GEQ -> if x >= y then Bt1 else Bt0
-      AND -> Val (I64_V (x .&. y))
-      OR  -> Val (I64_V (x .|. y))
-      XOR -> Val (I64_V (x `xor` y))
-      SHL -> Val (I64_V (x `shiftL` fromIntegral y))
-      SHR -> Val (I64_V (x `shiftR` fromIntegral y))
+      -- Bitwise ops: convert I64 to U64 representation
+      AND -> Val (U64_V (fromIntegral x .&. fromIntegral y))
+      OR  -> Val (U64_V (fromIntegral x .|. fromIntegral y))
+      XOR -> Val (U64_V (fromIntegral x `xor` fromIntegral y))
+      SHL -> Val (U64_V (fromIntegral x `shiftL` fromIntegral y))
+      SHR -> Val (U64_V (fromIntegral x `shiftR` fromIntegral y))
     (Val (F64_V x), Val (F64_V y)) -> case op of
       ADD -> Val (F64_V (x + y))
       SUB -> Val (F64_V (x - y))
@@ -191,7 +193,12 @@ whnfOp2 lv book op a b =
       GRT -> if x > y then Bt1 else Bt0
       LEQ -> if x <= y then Bt1 else Bt0
       GEQ -> if x >= y then Bt1 else Bt0
-      _   -> Op2 op (Val (F64_V x)) (Val (F64_V y)) -- bitwise not defined for floats
+      -- Bitwise ops: convert F64 to U64 bit representation
+      AND -> Val (U64_V (castDoubleToWord64 x .&. castDoubleToWord64 y))
+      OR  -> Val (U64_V (castDoubleToWord64 x .|. castDoubleToWord64 y))
+      XOR -> Val (U64_V (castDoubleToWord64 x `xor` castDoubleToWord64 y))
+      SHL -> Val (U64_V (castDoubleToWord64 x `shiftL` fromIntegral (castDoubleToWord64 y)))
+      SHR -> Val (U64_V (castDoubleToWord64 x `shiftR` fromIntegral (castDoubleToWord64 y)))
     (a', b') -> Op2 op a' b'
 
 whnfOp1 :: Int -> Book -> NOp1 -> Term -> Term
@@ -201,9 +208,9 @@ whnfOp1 lv book op a =
       NOT -> Val (U64_V (complement x))
       NEG -> Op1 op (Val (U64_V x)) -- negation not defined for unsigned
     Val (I64_V x) -> case op of
-      NOT -> Val (I64_V (complement x))
+      NOT -> Val (U64_V (complement (fromIntegral x))) -- convert to U64 for bitwise
       NEG -> Val (I64_V (-x))
     Val (F64_V x) -> case op of
-      NOT -> Op1 op (Val (F64_V x)) -- bitwise not defined for floats
+      NOT -> Val (U64_V (complement (castDoubleToWord64 x))) -- convert to U64 for bitwise
       NEG -> Val (F64_V (-x))
     a' -> Op1 op a'

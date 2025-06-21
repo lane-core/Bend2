@@ -381,7 +381,8 @@ inferOp2Type d span book ctx op a b ta tb = do
     
     integerOp ta tb = case (force book ta, force book tb) of
       (Num U64_T, Num U64_T) -> Done (Num U64_T)
-      (Num I64_T, Num I64_T) -> Done (Num I64_T)
+      (Num I64_T, Num I64_T) -> Done (Num U64_T)  -- Bitwise on I64 returns U64
+      (Num F64_T, Num F64_T) -> Done (Num U64_T)  -- Bitwise on F64 returns U64
       _ -> Fail $ TypeMismatch span (ctx (Op2 op a b)) ta tb
 
 -- Infer the result type of a unary numeric operation
@@ -389,7 +390,8 @@ inferOp1Type :: Int -> Span -> Book -> Context -> NOp1 -> Term -> Term -> Result
 inferOp1Type d span book ctx op a ta = case op of
   NOT -> case force book ta of
     Num U64_T -> Done (Num U64_T)
-    Num I64_T -> Done (Num I64_T)
+    Num I64_T -> Done (Num U64_T)  -- Bitwise NOT on I64 returns U64
+    Num F64_T -> Done (Num U64_T)  -- Bitwise NOT on F64 returns U64
     _ -> Fail $ CantInfer span (ctx (Op1 op a))
   NEG -> case force book ta of
     Num I64_T -> Done (Num I64_T)

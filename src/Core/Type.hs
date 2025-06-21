@@ -283,7 +283,10 @@ instance Show Error where
     show span
 
 showContext :: Term -> String
-showContext ctx = init (unlines (map snd (reverse (dedup S.empty (reverse (go ctx [])))))) where
+showContext ctx = 
+  let lines = map snd (reverse (dedup S.empty (reverse (go ctx []))))
+  in if null lines then "" else init (unlines lines)
+  where
 
   go :: Term -> [(Name, String)] -> [(Name, String)]
   go (Let v (Lam k f)) acc = case v of

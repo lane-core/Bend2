@@ -60,9 +60,8 @@ parseTermIni = choice
   , parseNat
   , parseZer
   , parseNumUnary    -- Parse unary numeric operations
-  , parseNumLit      -- Parse new numeric literals MUST come before nat literals
-  -- Note: parseNatLit is commented out to allow numeric literals to work
-  -- , parseNatLit   
+  , parseNatLit      -- Parse natural number literals (123n) - must come before parseNumLit
+  , parseNumLit      -- Parse new numeric literals (123, +123, 123.0)
   , parseLstLit
   , parseNil
   , parseRfl
@@ -109,8 +108,8 @@ parseTermInfix t = choice
   , parseFun t
   , parseAnd t
   , parseChk t
-  , parseNumOp t     -- Parse numeric binary operations
-  -- , parseAdd t    -- Disabled since parseNumOp handles + now
+  , parseAdd t       -- Parse + (handles both Nat and numeric)
+  , parseNumOp t     -- Parse other numeric binary operations
   , parseAss t
   , return t ]
 
@@ -474,9 +473,12 @@ parseNat = label "natural number type (Nat)" $ try $ do
   notFollowedBy (satisfy isNameChar)
   return Nat
 
--- | Syntax: 0
+-- | Syntax: 0 (only when not followed by more digits)
 parseZer :: Parser Term
-parseZer = label "zero (0)" $ symbol "0" >> return Zer
+parseZer = label "zero (0)" $ try $ do
+  _ <- symbol "0"
+  notFollowedBy digitChar
+  return Zer
 
 -- | Syntax: ↑term
 parseSuc :: Parser Term
@@ -485,11 +487,15 @@ parseSuc = label "successor (↑n)" $ do
   n <- parseTerm
   return (Suc n)
 
--- | Syntax: 1, 2, 3, 42, 123
+-- | Syntax: 1n, 2n, 3n, 42n, 123n
 parseNatLit :: Parser Term
-parseNatLit = label "natural number literal" $ lexeme $ do
-  (n :: Integer) <- L.decimal
-  let build 0 = Zer
+parseNatLit = label "natural number literal" $ try $ do
+  -- Parse digits manually to avoid L.decimal consuming too much
+  digits <- some digitChar
+  _ <- char 'n'
+  skip  -- consume whitespace after 'n'
+  let n = read digits :: Integer
+      build 0 = Zer
       build k = Suc (build (k - 1))
   return (build n)
 
@@ -531,6 +537,8 @@ parseSignedLit = do
 parseUnsignedLit :: Parser Term
 parseUnsignedLit = lexeme $ do
   n <- L.decimal
+  -- Make sure we don't have 'n' suffix (that would be a Nat literal)
+  notFollowedBy (char 'n')
   return $ Val (U64_V n)
 
 -- | Parse numeric type names: U64, I64, F64
@@ -713,7 +721,7 @@ parseNumOp lhs = label "numeric operation" $ do
     , try $ symbol ">>" >> return SHR
     , try $ symbol "<"  >> return LST
     , try $ symbol ">"  >> return GRT
-    , try $ symbol "+"  >> return ADD
+    -- Note: + is handled specially by parseAdd for Nat syntax
     , try $ symbol "-"  >> return SUB
     , try $ symbol "*"  >> return MUL
     , try $ symbol "/"  >> return DIV
@@ -725,14 +733,32 @@ parseNumOp lhs = label "numeric operation" $ do
   rhs <- parseTerm
   return $ Op2 op lhs rhs
 
--- | Syntax: 1 + n
+-- | Syntax: 3n + x (Nat successor) or x + y (numeric addition)
 parseAdd :: Term -> Parser Term
 parseAdd t = label "addition" $ do
   _ <- try $ symbol "+"
   b <- parseTerm
   case strip t of
-    (Suc Zer) -> return (Suc b)
-    _         -> fail "Addition is only supported for (1 + n) which expands to successor"
+    -- If LHS is a Nat literal, interpret as successor(s)
+    n | isNatLit n -> return (applySuccessors (countSuccessors n) b)
+    -- Otherwise, it's numeric addition
+    _              -> return (Op2 ADD t b)
+  where
+    -- Check if term is a natural number (chain of Suc ending in Zer)
+    isNatLit Zer       = True
+    isNatLit (Suc n)   = isNatLit n
+    isNatLit (Loc _ t) = isNatLit t
+    isNatLit _         = False
+    
+    -- Count number of successors
+    countSuccessors Zer       = 0
+    countSuccessors (Suc n)   = 1 + countSuccessors n
+    countSuccessors (Loc _ t) = countSuccessors t
+    countSuccessors _         = 0
+    
+    -- Apply n successors to a term
+    applySuccessors 0 t = t
+    applySuccessors n t = Suc (applySuccessors (n-1) t)
 
 -- | Syntax: var = value; body | pattern = value; body
 -- Interprets as let if t is a variable, otherwise as pattern match
