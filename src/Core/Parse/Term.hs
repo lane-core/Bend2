@@ -71,7 +71,8 @@ parseTermArg t = do
   st <- get
   guard (tight st)
   mb <- optional $ choice
-    [ parseCal t   -- f(...)
+    [ parsePol t   -- f<...>
+    , parseCal t   -- f(...)
     , parseEql t   -- f{x == y}
     , parseLst t ] -- f[]
   maybe (pure t) parseTermArg mb
@@ -591,17 +592,21 @@ parseApp = label "application" $ do
   _ <- symbol ")"
   return (foldl App f xs)
 
--- | Syntax: function(arg1, arg2, arg3) | function<A, B>(arg1, arg2)
+-- | Syntax: function<arg1, arg2, arg3>
+parsePol :: Term -> Parser Term
+parsePol f = label "polymorphic application" $ try $ do
+  _    <- symbol "<"
+  args <- sepEndBy parseExpr (symbol ",")
+  _    <- symbol ">"
+  return $ foldl App f args
+
+-- | Syntax: function(arg1, arg2, arg3)
 parseCal :: Term -> Parser Term
 parseCal f = label "function application" $ try $ do
-  -- Parse optional type arguments <A, B, ...>
-  typeArgs <- option [] $ try $ angles $ sepEndBy parseTerm (symbol ",")
-  _ <- symbol "("
+  _    <- symbol "("
   args <- sepEndBy parseTerm (symbol ",")
-  _ <- symbol ")"
-  -- Combine type args with regular args
-  let allArgs = typeArgs ++ args
-  return $ foldl App f allArgs
+  _    <- symbol ")"
+  return $ foldl App f args
 
 -- | trailing‐operator parsers
 
