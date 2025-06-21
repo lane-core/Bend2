@@ -8,13 +8,19 @@ import Core.CLI
 
 -- | Show usage information
 showUsage :: IO ()
-showUsage = putStrLn "Usage: bend <file.bend>"
+showUsage = do
+  putStrLn "Usage: bend <file.bend> [options]"
+  putStrLn ""
+  putStrLn "Options:"
+  putStrLn "  --to-javascript    Compile to JavaScript"
 
 -- | Main entry point
 main :: IO ()
 main = do
   args <- getArgs
   case args of
+    [file, "--to-javascript"] | ".bend"    `isSuffixOf` file -> processFileToJS file
+    [file, "--to-javascript"] | ".bend.py" `isSuffixOf` file -> processFileToJS file
     [file] | ".bend"    `isSuffixOf` file -> processFile file
     [file] | ".bend.py" `isSuffixOf` file -> processFile file
     otherwise                             -> showUsage

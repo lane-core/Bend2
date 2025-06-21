@@ -11,6 +11,7 @@ import Core.Check
 import Core.Normal
 import Core.Type
 import Core.Parse.Book (doParseBook)
+import qualified Target.JavaScript as JS
 
 -- | Parse a Bend file into a Book
 parseFile :: FilePath -> IO Book
@@ -72,5 +73,14 @@ processFile file = do
   book <- parseFile file
   checkDefinitions book
   runMain book
+
+-- | Process a Bend file and compile to JavaScript
+processFileToJS :: FilePath -> IO ()
+processFileToJS file = do
+  book <- parseFile file
+  checkDefinitions book
+  let boundBook = bindBook book
+  let jsCode = JS.compile boundBook
+  putStrLn jsCode
 
 

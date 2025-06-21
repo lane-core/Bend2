@@ -170,4 +170,3 @@ doReadBook input =
   case doParseBook "<input>" input of
     Left err  -> error err
     Right res -> res
-    Right res -> res
