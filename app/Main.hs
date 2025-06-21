@@ -15,7 +15,7 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [file] | ".bend" `isSuffixOf` file -> processFile file
-    _ -> showUsage
-  where
-    isSuffixOf suffix str = reverse suffix == take (length suffix) (reverse str)
+    [file] | ".bend"    `isSuffixOf` file -> processFile file
+    [file] | ".bend.py" `isSuffixOf` file -> processFile file
+    otherwise                             -> showUsage
+  where isSuffixOf suffix str = reverse suffix == take (length suffix) (reverse str)
