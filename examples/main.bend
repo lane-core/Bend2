@@ -14,9 +14,9 @@ def not(x: Bool) -> Bool:
 # Proof: double negation is identity
 def double_neg_theo(x: Bool) -> Bool{not(not(x)) == x}:
   if x:
-    {==}
+    finally
   else:
-    {==}
+    finally
 
 # Double of a Nat
 # - mul2(3) = 6
@@ -52,13 +52,13 @@ def cong
   , e: A{a == b}
   ) -> B{f(a) == f(b)}:
   rewrite e
-  {==}
+  finally
 
 # Proof: n*2/2 = n (old method)
 def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
   match n:
     case 0:
-      {==}
+      finally
     case 1 + p:
       ind = div2_mul2_theo(p)
       prf = cong(Nat, Nat, div2(mul2(p)), p, λx. 1 + x, ind)
@@ -76,7 +76,7 @@ def equal(a: Nat, b: Nat) -> Bool:
 def div2_mul2_theo_2(n: Nat) -> Nat{(div2 (mul2 n)) == n}:
   match n:
     case 0:
-      {==}
+      finally
     case 1 + p:
       1 + div2_mul2_theo_2(p)
 
@@ -111,9 +111,9 @@ def is_even_b(n: Nat) -> Bool:
 def is_even_ab_theo(n: Nat) -> Bool{(is_even_a n) == (is_even_b n)}:
   match n:
     case 0:
-      {==}
+      finally
     case 1 + 0:
-      {==}
+      finally
     case 1 + 1 + p:
       rewrite double_neg_theo(is_even_b(p))
       is_even_ab_theo(p)
@@ -146,13 +146,15 @@ type Vec<A: Set>(N: Nat) -> Set:
 def VecInd
   ( A: Set
   , P: all n:Nat xs:Vec(A,n). Set
-  , N: P(0,(@Nil,{==},()))
-  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,{==},()))
+  , N: P(0,(@Nil,finally,()))
+  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,finally,()))
   , n: Nat
   , x: Vec(A,n)
   ) -> P(n,x):
   match x:
-    case @Nil{{==}}:
+    case @Nil{e}:
+      rewrite e
       N
-    case @Cons{n,h,t,{==}}:
+    case @Cons{n,h,t,e}:
+      rewrite e
       C(n,h,t,VecInd(A,P,N,C,n,t))

@@ -136,7 +136,7 @@ h <> t          # Cons
 ### Equality
 
 ```python
-{==}            # Reflexivity proof
+finally         # Reflexivity proof
 ```
 
 ## Type Annotations
@@ -292,24 +292,24 @@ def mirror<A>(t: Tree(A)) -> Tree(A):
 ```python
 # Identity function is identity
 def id_is_id<A>(x: A) -> A{id(x) == x}:
-  {==}
+  finally
 
 # Symmetry of equality
 def sym<A>(a: A, b: A, e: A{a == b}) -> A{b == a}:
-  {==} = e
-  {==}
+  rewrite e
+  finally
 
 # Transitivity of equality
 def trans<A>(a: A, b: A, c: A, e1: A{a == b}, e2: A{b == c}) -> A{a == c}:
-  {==} = e1
-  {==} = e2
-  {==}
+  rewrite e1
+  rewrite e2
+  finally
 
 # List concatenation is associative
 def append_assoc<A>(xs: A[], ys: A[], zs: A[]) -> A[]{append(append(xs, ys), zs) == append(xs, append(ys, zs))}:
   match xs:
     case []:
-      {==}
+      finally
     case h <> t:
       # Goal transforms to: A[]{h <> append(append(t, ys), zs) == h <> append(t, append(ys, zs))}
       1 <> append_assoc(t, ys, zs)

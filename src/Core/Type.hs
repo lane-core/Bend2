@@ -234,7 +234,8 @@ showContext ctx = init (unlines (map snd (reverse (dedup S.empty (reverse (go ct
   go (Let v (Lam k f)) acc = case v of
     (Chk _ ty) -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k ++ " : " ++ show ty)])
     ty         -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k)])
-  go term acc = acc ++ [("", "\x1b[1mExpression:\x1b[0m\n- " ++ show term)]
+  go term acc = acc
+  -- go term acc = acc ++ [("", "\x1b[1mExpression:\x1b[0m\n- " ++ show term)]
 
   dedup :: S.Set Name -> [(Name,String)] -> [(Name,String)]
   dedup _    []                             = []

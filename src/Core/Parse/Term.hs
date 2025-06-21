@@ -496,15 +496,24 @@ parseLstLit = label "list literal" $ do
   _ <- symbol "]"
   return $ foldr Con Nil terms
 
--- | Syntax: {==}
+-- | Syntax: {==} | finally
 parseRfl :: Parser Term
-parseRfl = label "reflexivity ({==})" $ do
-  _ <- try $ do
-    _ <- symbol "{"
-    _ <- symbol "=="
-    return ()
-  _ <- symbol "}"
-  return Rfl
+parseRfl = label "reflexivity ({==} or finally)" $ choice
+  [ parseBraces
+  , parseFinally
+  ]
+  where
+    parseBraces = do
+      _ <- try $ do
+        _ <- symbol "{"
+        _ <- symbol "=="
+        return ()
+      _ <- symbol "}"
+      return Rfl
+    
+    parseFinally = do
+      _ <- symbol "finally"
+      return Rfl
 
 -- | Syntax: λ{ {==}: term; }
 parseRwt :: Parser Term
