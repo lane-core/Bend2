@@ -63,5 +63,9 @@ rewriteGo d book old neo val = case val of
   Loc l t   -> Loc l (rewrite d book old neo t)
   Era       -> Era
   Sup l a b -> Sup l (rewrite d book old neo a) (rewrite d book old neo b)
+  Num t     -> Num t
+  Val v     -> Val v
+  Op2 o a b -> Op2 o (rewrite d book old neo a) (rewrite d book old neo b)
+  Op1 o a   -> Op1 o (rewrite d book old neo a)
   Met _ _ _ -> error "not-supported"
   Pat _ _ _ -> error "not-supported"

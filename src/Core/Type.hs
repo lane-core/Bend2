@@ -29,8 +29,8 @@ data NVal
 
 data NOp2
   = ADD | SUB | MUL | DIV | MOD
-  | EQ  | NE  
-  | LT  | GT  | LE  | GE
+  | EQL | NEQ  
+  | LST | GRT | LEQ | GEQ
   | AND | OR  | XOR
   | SHL | SHR
   deriving (Show, Eq)
@@ -224,6 +224,30 @@ instance Show Term where
   show (Era)          = "*"
   show (Sup l a b)    = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
   show (Met _ _ _)    = "?"
+  show (Num U64_T)       = "U64"
+  show (Num I64_T)       = "I64"
+  show (Num F64_T)       = "F64"
+  show (Val (U64_V n))   = show n
+  show (Val (I64_V n))   = if n >= 0 then "+" ++ show n else show n
+  show (Val (F64_V n))   = show n
+  show (Op2 ADD a b)     = "(" ++ show a ++ " + " ++ show b ++ ")"
+  show (Op2 SUB a b)     = "(" ++ show a ++ " - " ++ show b ++ ")"
+  show (Op2 MUL a b)     = "(" ++ show a ++ " * " ++ show b ++ ")"
+  show (Op2 DIV a b)     = "(" ++ show a ++ " / " ++ show b ++ ")"
+  show (Op2 MOD a b)     = "(" ++ show a ++ " % " ++ show b ++ ")"
+  show (Op2 EQL a b)     = "(" ++ show a ++ " == " ++ show b ++ ")"
+  show (Op2 NEQ a b)     = "(" ++ show a ++ " != " ++ show b ++ ")"
+  show (Op2 LST a b)     = "(" ++ show a ++ " < " ++ show b ++ ")"
+  show (Op2 GRT a b)     = "(" ++ show a ++ " > " ++ show b ++ ")"
+  show (Op2 LEQ a b)     = "(" ++ show a ++ " <= " ++ show b ++ ")"
+  show (Op2 GEQ a b)     = "(" ++ show a ++ " >= " ++ show b ++ ")"
+  show (Op2 AND a b)     = "(" ++ show a ++ " & " ++ show b ++ ")"
+  show (Op2 OR a b)      = "(" ++ show a ++ " | " ++ show b ++ ")"
+  show (Op2 XOR a b)     = "(" ++ show a ++ " ^ " ++ show b ++ ")"
+  show (Op2 SHL a b)     = "(" ++ show a ++ " << " ++ show b ++ ")"
+  show (Op2 SHR a b)     = "(" ++ show a ++ " >> " ++ show b ++ ")"
+  show (Op1 NOT a)       = "(!" ++ show a ++ ")"
+  show (Op1 NEG a)       = "(-" ++ show a ++ ")"
   show (Pat t m c)      = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ "}" where
     showMoves = if null m then "" else " with " ++ intercalate " with " (map showMove m) where
       showMove (name, term) = name ++ "=" ++ show term

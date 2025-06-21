@@ -76,6 +76,10 @@ collectRefs term = case term of
   Loc _ t     -> collectRefs t
   Era         -> S.empty
   Sup _ a b   -> S.union (collectRefs a) (collectRefs b)
+  Num _       -> S.empty
+  Val _       -> S.empty
+  Op2 _ a b   -> S.union (collectRefs a) (collectRefs b)
+  Op1 _ a     -> collectRefs a
   Pat s m c   -> S.unions $ map collectRefs s ++ map (collectRefs . snd) m ++ concatMap (\ (p, b) -> collectRefs b : map collectRefs p) c
 
 -- Auto-import references with cycle detection

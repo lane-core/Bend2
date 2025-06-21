@@ -54,5 +54,9 @@ normal lv d book term =
     Loc l t   -> Loc l (normal lv d book t)
     Era       -> Era
     Sup l a b -> Sup l (normal lv d book a) (normal lv d book b)
+    Num t     -> Num t
+    Val v     -> Val v
+    Op2 o a b -> Op2 o (normal lv d book a) (normal lv d book b)
+    Op1 o a   -> Op1 o (normal lv d book a)
     Met _ _ _ -> error "not-supported"
     Pat _ _ _ -> error "not-supported"

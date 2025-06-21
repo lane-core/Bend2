@@ -59,7 +59,10 @@ parseTermIni = choice
   , parseOne
   , parseNat
   , parseZer
-  , parseNatLit
+  , parseNumUnary    -- Parse unary numeric operations
+  , parseNumLit      -- Parse new numeric literals MUST come before nat literals
+  -- Note: parseNatLit is commented out to allow numeric literals to work
+  -- , parseNatLit   
   , parseLstLit
   , parseNil
   , parseRfl
@@ -69,6 +72,7 @@ parseTermIni = choice
   , parseCse
   , parseTupApp
   , parseView
+  , parseNumType     -- Parse numeric type names
   , parseVar
   ]
 
@@ -105,7 +109,8 @@ parseTermInfix t = choice
   , parseFun t
   , parseAnd t
   , parseChk t
-  , parseAdd t
+  , parseNumOp t     -- Parse numeric binary operations
+  -- , parseAdd t    -- Disabled since parseNumOp handles + now
   , parseAss t
   , return t ]
 
@@ -488,6 +493,64 @@ parseNatLit = label "natural number literal" $ lexeme $ do
       build k = Suc (build (k - 1))
   return (build n)
 
+-- | Parse numeric literals:
+-- | 123    -> U64 (unsigned)
+-- | +123   -> I64 (signed positive)
+-- | -123   -> I64 (signed negative)  
+-- | 123.0  -> F64 (floating point)
+parseNumLit :: Parser Term
+parseNumLit = label "numeric literal" $ choice
+  [ try parseFloatLit    -- Try float first (because 123.0 starts like 123)
+  , try parseSignedLit   -- Try signed next (because +123 starts with a sign)
+  , parseUnsignedLit     -- Finally unsigned
+  ]
+
+-- | Parse floating point: 123.0, -45.67, +3.14
+parseFloatLit :: Parser Term
+parseFloatLit = do
+  sign <- optional (char '+' <|> char '-')
+  intPart <- L.decimal
+  _ <- char '.'
+  fracPart <- some digitChar
+  skip
+  let signStr = maybe "" (:[]) sign
+      floatStr = signStr ++ show intPart ++ "." ++ fracPart
+      floatVal = read floatStr :: Double
+  return $ Val (F64_V floatVal)
+
+-- | Parse signed integer: +123, -456
+parseSignedLit :: Parser Term
+parseSignedLit = do
+  sign <- char '+' <|> char '-'
+  n <- L.decimal
+  skip
+  let value = if sign == '-' then -n else n
+  return $ Val (I64_V value)
+
+-- | Parse unsigned integer: 123
+parseUnsignedLit :: Parser Term
+parseUnsignedLit = lexeme $ do
+  n <- L.decimal
+  return $ Val (U64_V n)
+
+-- | Parse numeric type names: U64, I64, F64
+parseNumType :: Parser Term
+parseNumType = label "numeric type" $ choice
+  [ try $ symbol "U64" >> return (Num U64_T)
+  , try $ symbol "I64" >> return (Num I64_T)
+  , try $ symbol "F64" >> return (Num F64_T)
+  ]
+
+-- | Parse numeric unary operations: !x, -x
+parseNumUnary :: Parser Term
+parseNumUnary = label "numeric unary operation" $ do
+  op <- choice
+    [ try $ symbol "!" >> return NOT
+    , try $ symbol "-" >> return NEG
+    ]
+  arg <- parseTerm
+  return $ Op1 op arg
+
 -- | Syntax: [term1, term2, term3]
 parseLstLit :: Parser Term
 parseLstLit = label "list literal" $ do
@@ -637,6 +700,30 @@ parseEql t = label "equality type" $ do
   b <- parseTerm
   _ <- symbol "}"
   return (Eql t a b)
+
+-- | Parse numeric binary operations
+parseNumOp :: Term -> Parser Term
+parseNumOp lhs = label "numeric operation" $ do
+  op <- choice
+    [ try $ symbol "==" >> return EQL
+    , try $ symbol "!=" >> return NEQ
+    , try $ symbol "<=" >> return LEQ
+    , try $ symbol ">=" >> return GEQ
+    , try $ symbol "<<" >> return SHL
+    , try $ symbol ">>" >> return SHR
+    , try $ symbol "<"  >> return LST
+    , try $ symbol ">"  >> return GRT
+    , try $ symbol "+"  >> return ADD
+    , try $ symbol "-"  >> return SUB
+    , try $ symbol "*"  >> return MUL
+    , try $ symbol "/"  >> return DIV
+    , try $ symbol "%"  >> return MOD
+    , try $ symbol "|"  >> return OR
+    , try $ symbol "^"  >> return XOR
+    -- Note: & is handled by parseAnd for product types
+    ]
+  rhs <- parseTerm
+  return $ Op2 op lhs rhs
 
 -- | Syntax: 1 + n
 parseAdd :: Term -> Parser Term

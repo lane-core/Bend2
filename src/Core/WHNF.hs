@@ -8,19 +8,22 @@ import Core.Type
 
 import System.IO.Unsafe
 import Data.IORef
+import Data.Bits
 
 whnf :: Int -> Book -> Term -> Term
 whnf lv book term = do
   -- trace ("whnf " ++ show term) $
   case term of
-    Let v f -> whnfLet lv book v f
-    Ref k   -> whnfRef lv book k
-    Fix k f -> whnfFix lv book k f
-    Ann x _ -> whnf lv book x
-    Chk x _ -> whnf lv book x
-    App f x -> whnfApp lv book (App f x) f x
-    Loc _ t -> whnf lv book t
-    _       -> term
+    Let v f  -> whnfLet lv book v f
+    Ref k    -> whnfRef lv book k
+    Fix k f  -> whnfFix lv book k f
+    Ann x _  -> whnf lv book x
+    Chk x _  -> whnf lv book x
+    App f x  -> whnfApp lv book (App f x) f x
+    Loc _ t  -> whnf lv book t
+    Op2 o a b -> whnfOp2 lv book o a b
+    Op1 o a   -> whnfOp1 lv book o a
+    _         -> term
 
 whnfLet :: Int -> Book -> Term -> Term -> Term
 whnfLet lv book v f = whnf lv book (App f v)
@@ -138,3 +141,69 @@ force book t =
     Ind t -> force book t
     Frz t -> force book t
     t     -> t
+
+whnfOp2 :: Int -> Book -> NOp2 -> Term -> Term -> Term
+whnfOp2 lv book op a b =
+  case (whnf lv book a, whnf lv book b) of
+    (Val (U64_V x), Val (U64_V y)) -> case op of
+      ADD -> Val (U64_V (x + y))
+      SUB -> Val (U64_V (x - y))
+      MUL -> Val (U64_V (x * y))
+      DIV -> if y == 0 then Op2 op (Val (U64_V x)) (Val (U64_V y)) else Val (U64_V (x `div` y))
+      MOD -> if y == 0 then Op2 op (Val (U64_V x)) (Val (U64_V y)) else Val (U64_V (x `mod` y))
+      EQL -> if x == y then Bt1 else Bt0
+      NEQ -> if x /= y then Bt1 else Bt0
+      LST -> if x < y then Bt1 else Bt0
+      GRT -> if x > y then Bt1 else Bt0
+      LEQ -> if x <= y then Bt1 else Bt0
+      GEQ -> if x >= y then Bt1 else Bt0
+      AND -> Val (U64_V (x .&. y))
+      OR  -> Val (U64_V (x .|. y))
+      XOR -> Val (U64_V (x `xor` y))
+      SHL -> Val (U64_V (x `shiftL` fromIntegral y))
+      SHR -> Val (U64_V (x `shiftR` fromIntegral y))
+    (Val (I64_V x), Val (I64_V y)) -> case op of
+      ADD -> Val (I64_V (x + y))
+      SUB -> Val (I64_V (x - y))
+      MUL -> Val (I64_V (x * y))
+      DIV -> if y == 0 then Op2 op (Val (I64_V x)) (Val (I64_V y)) else Val (I64_V (x `div` y))
+      MOD -> if y == 0 then Op2 op (Val (I64_V x)) (Val (I64_V y)) else Val (I64_V (x `mod` y))
+      EQL -> if x == y then Bt1 else Bt0
+      NEQ -> if x /= y then Bt1 else Bt0
+      LST -> if x < y then Bt1 else Bt0
+      GRT -> if x > y then Bt1 else Bt0
+      LEQ -> if x <= y then Bt1 else Bt0
+      GEQ -> if x >= y then Bt1 else Bt0
+      AND -> Val (I64_V (x .&. y))
+      OR  -> Val (I64_V (x .|. y))
+      XOR -> Val (I64_V (x `xor` y))
+      SHL -> Val (I64_V (x `shiftL` fromIntegral y))
+      SHR -> Val (I64_V (x `shiftR` fromIntegral y))
+    (Val (F64_V x), Val (F64_V y)) -> case op of
+      ADD -> Val (F64_V (x + y))
+      SUB -> Val (F64_V (x - y))
+      MUL -> Val (F64_V (x * y))
+      DIV -> Val (F64_V (x / y))
+      MOD -> Op2 op (Val (F64_V x)) (Val (F64_V y)) -- modulo not defined for floats
+      EQL -> if x == y then Bt1 else Bt0
+      NEQ -> if x /= y then Bt1 else Bt0
+      LST -> if x < y then Bt1 else Bt0
+      GRT -> if x > y then Bt1 else Bt0
+      LEQ -> if x <= y then Bt1 else Bt0
+      GEQ -> if x >= y then Bt1 else Bt0
+      _   -> Op2 op (Val (F64_V x)) (Val (F64_V y)) -- bitwise not defined for floats
+    (a', b') -> Op2 op a' b'
+
+whnfOp1 :: Int -> Book -> NOp1 -> Term -> Term
+whnfOp1 lv book op a =
+  case whnf lv book a of
+    Val (U64_V x) -> case op of
+      NOT -> Val (U64_V (complement x))
+      NEG -> Op1 op (Val (U64_V x)) -- negation not defined for unsigned
+    Val (I64_V x) -> case op of
+      NOT -> Val (I64_V (complement x))
+      NEG -> Val (I64_V (-x))
+    Val (F64_V x) -> case op of
+      NOT -> Op1 op (Val (F64_V x)) -- bitwise not defined for floats
+      NEG -> Val (F64_V (-x))
+    a' -> Op1 op a'

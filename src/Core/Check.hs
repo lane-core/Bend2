@@ -159,6 +159,21 @@ infer d span book ctx term =
       Fail $ CantInfer span (ctx term)
     Met _ _ _ -> do
       Fail $ CantInfer span (ctx term)
+    Num _ -> do
+      Done Set
+    Val (U64_V _) -> do
+      Done (Num U64_T)
+    Val (I64_V _) -> do
+      Done (Num I64_T)
+    Val (F64_V _) -> do
+      Done (Num F64_T)
+    Op2 op a b -> do
+      ta <- infer d span book ctx a
+      tb <- infer d span book ctx b
+      inferOp2Type d span book ctx op a b ta tb
+    Op1 op a -> do
+      ta <- infer d span book ctx a
+      inferOp1Type d span book ctx op a ta
     Pat _ _ _ -> do
       error "Pat not supported in infer"
 
@@ -284,6 +299,25 @@ check d span book ctx term goal =
 
     (Loc l t, _) -> do
       check d l book ctx t goal
+    (Val (U64_V _), Num U64_T) -> do
+      Done ()
+    (Val (I64_V _), Num I64_T) -> do
+      Done ()
+    (Val (F64_V _), Num F64_T) -> do
+      Done ()
+    (Op2 op a b, _) -> do
+      ta <- infer d span book ctx a
+      tb <- infer d span book ctx b
+      tr <- inferOp2Type d span book ctx op a b ta tb
+      if equal d book tr goal
+        then Done ()
+        else Fail $ TypeMismatch span (ctx term) goal tr
+    (Op1 op a, _) -> do
+      ta <- infer d span book ctx a
+      tr <- inferOp1Type d span book ctx op a ta
+      if equal d book tr goal
+        then Done ()
+        else Fail $ TypeMismatch span (ctx term) goal tr
     (Pat _ _ _, _) -> do
       error "not-supported"
     (_, _) -> do
@@ -312,3 +346,52 @@ isLamApp (strip -> Cse _)   = True
 isLamApp (strip -> Get _)   = True
 isLamApp (strip -> Rwt _)   = True
 isLamApp _                  = False
+
+-- Infer the result type of a binary numeric operation
+inferOp2Type :: Int -> Span -> Book -> Context -> NOp2 -> Term -> Term -> Term -> Term -> Result Term
+inferOp2Type d span book ctx op a b ta tb = do
+  -- For arithmetic ops, both operands must have the same numeric type
+  case op of
+    ADD -> numericOp ta tb
+    SUB -> numericOp ta tb
+    MUL -> numericOp ta tb
+    DIV -> numericOp ta tb
+    MOD -> numericOp ta tb
+    -- Comparison ops return Bool
+    EQL -> comparisonOp ta tb
+    NEQ -> comparisonOp ta tb
+    LST -> comparisonOp ta tb
+    GRT -> comparisonOp ta tb
+    LEQ -> comparisonOp ta tb
+    GEQ -> comparisonOp ta tb
+    -- Bitwise ops require integer types
+    AND -> integerOp ta tb
+    OR  -> integerOp ta tb
+    XOR -> integerOp ta tb
+    SHL -> integerOp ta tb
+    SHR -> integerOp ta tb
+  where
+    numericOp ta tb = case (force book ta, force book tb) of
+      (Num t1, Num t2) | t1 == t2 -> Done (Num t1)
+      _ -> Fail $ TypeMismatch span (ctx (Op2 op a b)) ta tb
+    
+    comparisonOp ta tb = case (force book ta, force book tb) of
+      (Num t1, Num t2) | t1 == t2 -> Done Bit
+      _ -> Fail $ TypeMismatch span (ctx (Op2 op a b)) ta tb
+    
+    integerOp ta tb = case (force book ta, force book tb) of
+      (Num U64_T, Num U64_T) -> Done (Num U64_T)
+      (Num I64_T, Num I64_T) -> Done (Num I64_T)
+      _ -> Fail $ TypeMismatch span (ctx (Op2 op a b)) ta tb
+
+-- Infer the result type of a unary numeric operation
+inferOp1Type :: Int -> Span -> Book -> Context -> NOp1 -> Term -> Term -> Result Term
+inferOp1Type d span book ctx op a ta = case op of
+  NOT -> case force book ta of
+    Num U64_T -> Done (Num U64_T)
+    Num I64_T -> Done (Num I64_T)
+    _ -> Fail $ CantInfer span (ctx (Op1 op a))
+  NEG -> case force book ta of
+    Num I64_T -> Done (Num I64_T)
+    Num F64_T -> Done (Num F64_T)
+    _ -> Fail $ CantInfer span (ctx (Op1 op a))

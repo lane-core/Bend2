@@ -95,6 +95,10 @@ flatten (Ind t)        = Ind (flatten t)
 flatten (Frz t)        = Frz (flatten t)
 flatten Era            = Era
 flatten (Sup l a b)    = Sup l (flatten a) (flatten b)
+flatten (Num t)        = Num t
+flatten (Val v)        = Val v
+flatten (Op2 o a b)    = Op2 o (flatten a) (flatten b)
+flatten (Op1 o a)      = Op1 o (flatten a)
 flatten (Loc s t)      = Loc s (flatten t)
 flatten (Pat s m c)    = wrapLamApplyVals m (flattenPat 0 s m c)
 
@@ -153,13 +157,14 @@ buildEliminator d scrut scruts moves col rules =
         EqlT  -> buildRwt  d moves col rules scruts
         UniT  -> buildUse  d moves col rules scruts
         EnuT  -> buildCse  d moves col rules scruts
+        NumT  -> buildNumCase d moves col rules scruts
         _     -> error "Mixed or unknown pattern types"
       -- Every eliminator is applied to its scrutinee, then to all `with` variables.
       base = App builder scrut
   in applyWithVars moves base
 
 -- Determine constructor type from column
-data CtrType = NatT | LstT | BitT | SigT | EqlT | UniT | EnuT | Unknown
+data CtrType = NatT | LstT | BitT | SigT | EqlT | UniT | EnuT | NumT | Unknown
 
 getCtrType :: [Term] -> CtrType
 getCtrType []    = Unknown
@@ -174,6 +179,7 @@ getCtrType (p:ps) = case p of
   Rfl     -> EqlT
   One     -> UniT
   Sym _   -> EnuT
+  Val _   -> NumT
   Loc _ t -> getCtrType (t:ps)
   Var _ _ -> getCtrType ps
   _       -> Unknown
@@ -243,6 +249,40 @@ buildCse :: Int -> Moves -> [Term] -> [([Term], Term)] -> [Term] -> Term
 buildCse d moves col rules scruts = Cse cases where
   cases = [(s, buildCase d moves (Sym s) col rules scruts) | Sym s <- getSymbols col]
 
+-- Numeric Eliminator
+-- ------------------
+buildNumCase :: Int -> Moves -> [Term] -> [([Term], Term)] -> [Term] -> Term
+buildNumCase d moves col rules scruts = 
+  -- For now, we create a chain of if-then-else checks for each numeric value
+  let numVals = getNumericValues col
+      scrut = head scruts  -- The scrutinee being matched
+  in buildNumCaseChain d moves scrut numVals col rules scruts
+
+-- Build a chain of equality checks for numeric values
+buildNumCaseChain :: Int -> Moves -> Term -> [Term] -> [Term] -> [([Term], Term)] -> [Term] -> Term
+buildNumCaseChain _ _ _ [] _ _ _ = Efq  -- No matches found
+buildNumCaseChain d moves scrut (val:vals) col rules scruts =
+  let eqCheck = Op2 EQL scrut val  -- Check if scrutinee equals this value
+      thenBranch = buildCase d moves val col rules scruts
+      elseBranch = buildNumCaseChain d moves scrut vals col rules scruts
+  in App (Bif elseBranch thenBranch) eqCheck  -- Apply the boolean eliminator to the equality check
+
+-- Get all unique numeric values from a column
+getNumericValues :: [Term] -> [Term]
+getNumericValues = uniqueValues . filter isNumericValue where
+  isNumericValue (Val _)   = True
+  isNumericValue (Loc _ t) = isNumericValue t
+  isNumericValue _         = False
+  
+  uniqueValues []             = []
+  uniqueValues (Loc _ t : xs) = uniqueValues (t : xs)
+  uniqueValues (Val v   : xs) = Val v : uniqueValues (filter (not . eqVal v) xs)
+  uniqueValues (_       : xs) = uniqueValues xs
+  
+  eqVal v1 (Val v2)   = v1 == v2
+  eqVal v1 (Loc _ t)  = eqVal v1 t
+  eqVal _  _          = False
+
 -- Get all unique symbols from a column
 getSymbols :: [Term] -> [Term]
 getSymbols = uniqueSymbols . filter isSymbol where
@@ -291,6 +331,7 @@ matches (Tup _ _) (Tup _ _) = True
 matches Rfl       Rfl       = True
 matches One       One       = True
 matches (Sym s1)  (Sym s2)  = s1 == s2
+matches (Val v1)  (Val v2)  = v1 == v2  -- Numeric values match if equal
 matches (Loc _ a) b         = matches a b
 matches a         (Loc _ b) = matches a b
 matches _         (Var _ 0) = True  -- Variables match anything
@@ -304,6 +345,7 @@ getFields ctr (Suc n)   = [n]
 getFields ctr (Con h t) = [h, t]
 getFields ctr (Tup a b) = [a, b]
 getFields ctr (Sym _)   = []
+getFields ctr (Val _)   = []  -- Numeric values have no fields
 getFields ctr (Var _ 0) = wildcards (ctrArity ctr)
 getFields ctx (Loc _ t) = getFields ctx t
 getFields ctr _         = []
@@ -319,6 +361,7 @@ ctrArity (Tup _ _) = 2
 ctrArity Rfl       = 0
 ctrArity One       = 0
 ctrArity (Sym _)   = 0
+ctrArity (Val _)   = 0  -- Numeric values have no fields
 ctrArity (Loc _ t) = ctrArity t
 ctrArity _         = 0
 
@@ -423,6 +466,10 @@ subst name val term = case term of
   Frz t     -> Frz (subst name val t)
   Era       -> Era
   Sup l a b -> Sup l (subst name val a) (subst name val b)
+  Num t     -> Num t
+  Val v     -> Val v
+  Op2 o a b -> Op2 o (subst name val a) (subst name val b)
+  Op1 o a   -> Op1 o (subst name val a)
   Loc s t   -> Loc s (subst name val t)
   Pat s m c -> Pat (map (subst name val) s) m (map substCase c)
     where substCase (pats, rhs) = (map (subst name val) pats, subst name val rhs)
