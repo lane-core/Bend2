@@ -51,7 +51,7 @@ def cong
   , f: A -> B
   , e: A{a == b}
   ) -> B{f(a) == f(b)}:
-  {==} = e
+  rewrite e
   {==}
 
 # Proof: n*2/2 = n (old method)
@@ -115,7 +115,7 @@ def is_even_ab_theo(n: Nat) -> Bool{(is_even_a n) == (is_even_b n)}:
     case 1 + 0:
       {==}
     case 1 + 1 + p:
-      {==} = double_neg_theo(is_even_b(p))
+      rewrite double_neg_theo(is_even_b(p))
       is_even_ab_theo(p)
 
 # List Map

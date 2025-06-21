@@ -48,6 +48,7 @@ parseTermIni = choice
   , parseBif
   , parseGet
   , parsePat
+  , parseRewrite
   , parseSwi
   , parseMat
   , parseRwt
@@ -523,6 +524,16 @@ parseRwtLambda = label "rewrite eliminator" $ do
   _ <- parseSemi
   _ <- symbol "}"
   return (Rwt f)
+
+-- | Syntax: rewrite expr body
+-- Desugars to: match expr: case {==}: body
+parseRewrite :: Parser Term
+parseRewrite = label "rewrite" $ do
+  srcPos <- getSourcePos
+  _ <- symbol "rewrite"
+  scrut <- parseTerm
+  body <- parseTerm
+  return (Pat [scrut] [] [([Rfl], body)])
 
 -- | Syntax: (function arg1 arg2 arg3)
 parseApp :: Parser Term
