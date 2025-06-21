@@ -91,6 +91,7 @@ autoImportRefs book refs visited = do
         else autoImportRefs book' newRefs visited
 
 -- Auto-import a single reference
+-- FIXME: simplify this ugly code
 autoImportRef :: S.Set FilePath -> Either String (Book, S.Set Name) -> Name -> IO (Either String (Book, S.Set Name))
 autoImportRef _ (Left err) _ = return (Left err)
 autoImportRef visited (Right (book@(Book defs), newRefs)) refName = do
@@ -99,12 +100,18 @@ autoImportRef visited (Right (book@(Book defs), newRefs)) refName = do
     then return (Right (book, newRefs))
     else do
       let filePath = refName ++ ".bend"
+      let pyFilePath = refName ++ ".bend.py"
       let altFilePath = refName </> "_.bend"
+      let altPyFilePath = refName </> "_.bend.py"
       fileExists <- doesFileExist filePath
+      pyFileExists <- doesFileExist pyFilePath
       altFileExists <- doesFileExist altFilePath
-      -- Try the direct file first, then the alternative path
-      let (actualPath, pathExists) = if fileExists then (filePath, True) 
+      altPyFileExists <- doesFileExist altPyFilePath
+      -- Try the direct file first, then the Python file, then the alternative paths
+      let (actualPath, pathExists) = if fileExists then (filePath, True)
+                                      else if pyFileExists then (pyFilePath, True)
                                       else if altFileExists then (altFilePath, True)
+                                      else if altPyFileExists then (altPyFilePath, True)
                                       else (filePath, False)
       if pathExists && not (actualPath `S.member` visited)
         then do
@@ -125,7 +132,7 @@ autoImportRef visited (Right (book@(Book defs), newRefs)) refName = do
                   return (Right (mergedBook, S.union newRefs additionalRefs))
         else
           return (Left $ "Definition '" ++ refName ++ "' not found. Expected file at: " ++ filePath ++ 
-                        " or " ++ altFilePath)
+                        ", " ++ pyFilePath ++ ", " ++ altFilePath ++ " or " ++ altPyFilePath)
 
 -- Merge two books, preferring definitions from the first book
 mergeBooks :: Book -> Book -> Book
