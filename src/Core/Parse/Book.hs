@@ -1,4 +1,4 @@
-{-./Type.hs-}
+{-./../Type.hs-}
 
 module Core.Parse.Book 
   ( parseBook
@@ -22,7 +22,7 @@ import Core.Move
 import Core.Parse (Parser, ParserState(..), skip, lexeme, symbol, parens, angles, 
                   braces, brackets, name, reserved, parseSemi, isNameInit, 
                   isNameChar, withSpan, located, formatError)
-import Core.Parse.Term (parseTerm)
+import Core.Parse.Term (parseTerm, parseExpr)
 import Core.Bind (bindBook)
 import Core.Flatten (flattenBook)
 
@@ -31,13 +31,13 @@ import Core.Flatten (flattenBook)
 -- | Syntax: def name : Type = term | type Name<T>(i) -> Type: cases | name : Type = term
 parseDefinition :: Parser (Name, Defn)
 parseDefinition = do
-  (name, defn) <- choice [ parseDataDec , parseDefKeyword , parseShortDef ]
+  (name, defn) <- choice [ parseType , parseDef ]
   -- return $ (trace (show (name, defn)) (name, defn)) -- uncomment to show all parsed definitions
   return $ (name, defn)
 
 -- | Syntax: def name : Type = term | def name(x: T1, y: T2) -> RetType: body
-parseDefKeyword :: Parser (Name, Defn)
-parseDefKeyword = do
+parseDef :: Parser (Name, Defn)
+parseDef = do
   _ <- symbol "def"
   f <- name
   choice
@@ -48,10 +48,10 @@ parseDefKeyword = do
 parseDefSimple :: Name -> Parser (Name, Defn)
 parseDefSimple defName = do
   _ <- symbol ":"
-  typ <- parseTerm
+  t <- parseExpr
   _ <- symbol "="
-  term <- parseTerm
-  return (defName, (False, term, typ))
+  x <- parseTerm
+  return (defName, (False, x, t))
 
 -- | Syntax: def name(x: Type1, y: Type2) -> ReturnType: body
 --           def name<A, B>(x: Type1, y: Type2) -> ReturnType: body
@@ -62,7 +62,7 @@ parseDefFunction f = label "function definition" $ do
   -- Convert type params to arguments with type Set
   let typeArgs = [(tp, Set) | tp <- typeParams]
   -- Parse regular arguments
-  regularArgs <- parens $ sepEndBy parseArg (symbol ",")
+  regularArgs <- parens $ sepEndBy (parseArg False) (symbol ",")
   -- Combine type params (as Set-typed args) with regular args
   let args = typeArgs ++ regularArgs
   _ <- symbol "->"
@@ -72,22 +72,19 @@ parseDefFunction f = label "function definition" $ do
   let (typ, bod) = foldr nestTypeBod (returnType, body) args
   return (f, (False, bod, typ))
   where
-    parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
+    -- parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
+    -- TODO: refactor parseArg to use a do-block instead. DO IT BELOW:
     nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (\v -> currType)), Lam argName (\v -> currBod))
 
--- | Syntax: name : Type = term (without 'def' keyword)
-parseShortDef :: Parser (Name, Defn)
-parseShortDef = label "short definition" $ try $ do
-  f <- name
-  _ <- symbol ":"
-  -- Temporarily disable parseAss while parsing the type
-  st <- get
-  put st { noAss = True }
-  typ <- parseTerm
-  put st { noAss = False }
-  _ <- symbol "="
-  term <- parseTerm
-  return (f, (False, term, typ))
+-- -- | Syntax: name : Type = term (without 'def' keyword)
+-- parseShortDef :: Parser (Name, Defn)
+-- parseShortDef = label "short definition" $ do
+  -- f <- name
+  -- _ <- symbol ":"
+  -- t <- parseExpr
+  -- _ <- symbol "="
+  -- x <- parseTerm
+  -- return (f, (False, x, t))
 
 -- | Syntax: def1 def2 def3 ...
 parseBook :: Parser Book
@@ -96,16 +93,16 @@ parseBook = do
   return $ Book (M.fromList defs)
 
 -- | Syntax: type Name<T, U>(i: Nat) -> Type: case @Tag1: field1: T1 case @Tag2: field2: T2
-parseDataDec :: Parser (Name, Defn)
-parseDataDec = label "datatype declaration" $ do
+parseType :: Parser (Name, Defn)
+parseType = label "datatype declaration" $ do
   _       <- symbol "type"
   tName   <- name
-  params  <- option [] $ angles (sepEndBy parseArg (symbol ","))
-  indices <- option [] $ parens (sepEndBy parseArg (symbol ","))
+  params  <- option [] $ angles (sepEndBy (parseArg True) (symbol ","))
+  indices <- option [] $ parens (sepEndBy (parseArg False) (symbol ","))
   args    <- return $ params ++ indices
   retTy   <- option Set (symbol "->" *> parseTerm)
   _       <- symbol ":"
-  cases   <- many parseDataCase
+  cases   <- many parseTypeCase
   when (null cases) $ fail "datatype must have at least one constructor case"
   let tags = map fst cases
       mkFields :: [(Name, Term)] -> Term
@@ -120,11 +117,10 @@ parseDataDec = label "datatype declaration" $ do
       (fullTy, fullBody) = foldr nest (retTy, body0) args
       term = fullBody
   return (tName, (True, term, fullTy))
-  where parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
 
 -- | Syntax: case @Tag: field1: Type1 field2: Type2
-parseDataCase :: Parser (String, [(Name, Term)])
-parseDataCase = label "datatype constructor" $ do
+parseTypeCase :: Parser (String, [(Name, Term)])
+parseTypeCase = label "datatype constructor" $ do
   _    <- symbol "case"
   _    <- symbol "@"
   tag  <- some (satisfy isNameChar)
@@ -134,21 +130,30 @@ parseDataCase = label "datatype constructor" $ do
   where
     -- Parse a field declaration  name : Type
     parseField :: Parser (Name, Term)
-    parseField = try $ do
+    parseField = do
       -- Stop if next token is 'case' (start of next constructor) or 'def'/'data'
       notFollowedBy (symbol "case")
-      n <- name
-      _ <- symbol ":"
+      n <- try $ do
+        n <- name
+        _ <- symbol ":"
+        return n
       t <- parseTerm
       -- Optional semicolon or newline is already handled by lexeme
       return (n,t)
+
+parseArg :: Bool -> Parser (Name, Term)
+parseArg expr = do
+  k <- name
+  _ <- symbol ":"
+  t <- if expr then parseExpr else parseTerm
+  return (k, t)
 
 -- | Main entry points
 
 -- | Parse a book from a string, returning an error message on failure
 doParseBook :: FilePath -> String -> Either String Book
 doParseBook file input =
-  case evalState (runParserT p file input) (ParserState True False input) of
+  case evalState (runParserT p file input) (ParserState True input) of
     Left err  -> Left (formatError input err)
     Right res -> Right (bindBook (moveBook (flattenBook res)))
   where

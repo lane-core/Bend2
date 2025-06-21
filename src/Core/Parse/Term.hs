@@ -1,9 +1,8 @@
-{-./../../../ORACLE-}
-
 {-./../Type.hs-}
 
 module Core.Parse.Term 
   ( parseTerm
+  , parseExpr
   , doParseTerm
   , doReadTerm
   ) where
@@ -30,14 +29,7 @@ import Core.Parse (Parser, ParserState(..), skip, lexeme, symbol, parens, angles
                   braces, brackets, name, reserved, parseSemi, isNameInit, 
                   isNameChar, withSpan, located, formatError)
 
--- | Top‐level entry point
-parseTerm :: Parser Term
-parseTerm = located $ do
-  ini <- parseTermIni
-  val <- parseTermEnd ini
-  return val
-
--- | Parse a "core" form (no trailing infix‐style operators)
+-- | Parse a "core" form
 parseTermIni :: Parser Term
 parseTermIni = choice
   [ parseLet
@@ -59,9 +51,9 @@ parseTermIni = choice
   , parseEfq
   , parseOne
   , parseNat
-  , parseNatLit      -- Parse natural number literals (123n) - must come before parseNumLit
-  , parseNumLit      -- Parse new numeric literals (123, +123, 123.0) - must come before parseNumUna
-  , parseNumUna      -- Parse unary numeric operations
+  , parseNatLit
+  , parseNumLit
+  , parseNumUna
   , parseLstLit
   , parseNil
   , parseRfl
@@ -70,54 +62,46 @@ parseTermIni = choice
   , parseCse
   , parseTupApp
   , parseView
-  -- , parseNumTyp     -- Parse numeric type names
   , parseVar
   ]
 
--- | After a core form, parse any trailing operators
-parseTermEnd :: Term -> Parser Term
-parseTermEnd t = do
-  t <- parseTermPostfix t
-  t <- parseTermInfix t
-  return t
-
--- | Parse chained postfix operators recursively
-parseTermPostfix :: Term -> Parser Term
-parseTermPostfix t = do
+-- | Parse a "tight" postfix: f(...) | f[] | f{x == y} ...
+parseTermArg :: Term -> Parser Term
+parseTermArg t = do
   st <- get
   guard (tight st)
   mb <- optional $ choice
-    [ parseTypeApp t
-    , parseCall t
-    , parseEql  t
-    , parseLst  t ]
-  maybe (pure t) parseTermPostfix mb
+    [ parseCal t   -- f(...)
+    , parseEql t   -- f{x == y}
+    , parseLst t ] -- f[]
+  maybe (pure t) parseTermArg mb
   <|> pure t
 
--- | Syntax: f<Arg1, Arg2, …>
-parseTypeApp :: Term -> Parser Term
-parseTypeApp f = label "type application" $ try $ do
-  args <- angles $ sepEndBy1 parseTerm (symbol ",")
-  return (foldl App f args)
-
--- | Helper: parses infix operators (->  &  ::  +  =)
-parseTermInfix :: Term -> Parser Term
-parseTermInfix t = choice
-  [ parseCon t
-  , parseFun t
-  , parseAnd t
-  , parseChk t
-  , parseAdd t       -- Parse + (handles both Nat and numeric)
-  , parseNumOp t     -- Parse other numeric binary operations
-  , parseAss t
+-- | Parse a "loose" postfix: f + x | f <> x | ...
+parseTermOpr :: Term -> Parser Term
+parseTermOpr t = choice
+  [ parseCon t   -- <>
+  , parseFun t   -- ->
+  , parseAnd t   -- &
+  , parseChk t   -- ::
+  , parseAdd t   -- +
+  , parseNumOp t -- <, >, ==, etc.
+  , parseAss t   -- =
   , return t ]
 
--- | Syntax: (term1, term2) | (f arg1 arg2)
--- Disambiguates between tuples and applications
-parseTupApp :: Parser Term
-parseTupApp = do
-  _ <- try $ symbol "("
-  choice [ parseTup , parseApp ]
+-- | Parses a core term and a tight posfix (no operators)
+parseExpr :: Parser Term
+parseExpr = do
+  ini <- parseTermIni
+  val <- parseTermArg ini
+  return $ val
+
+-- | Top‐level entry point
+parseTerm :: Parser Term
+parseTerm = located $ do
+  exp <- parseExpr
+  val <- parseTermOpr exp
+  return val
 
 -- atomic terms
 
@@ -592,6 +576,13 @@ parseRewrite = label "rewrite" $ do
   body <- parseTerm
   return (Pat [scrut] [] [([Rfl], body)])
 
+-- | Syntax: (term1, term2) | (f arg1 arg2)
+-- Disambiguates between tuples and applications
+parseTupApp :: Parser Term
+parseTupApp = do
+  _ <- try $ symbol "("
+  choice [ parseTup , parseApp ]
+
 -- | Syntax: (function arg1 arg2 arg3)
 parseApp :: Parser Term
 parseApp = label "application" $ do
@@ -601,8 +592,8 @@ parseApp = label "application" $ do
   return (foldl App f xs)
 
 -- | Syntax: function(arg1, arg2, arg3) | function<A, B>(arg1, arg2)
-parseCall :: Term -> Parser Term
-parseCall f = label "function application" $ try $ do
+parseCal :: Term -> Parser Term
+parseCal f = label "function application" $ try $ do
   -- Parse optional type arguments <A, B, ...>
   typeArgs <- option [] $ try $ angles $ sepEndBy parseTerm (symbol ",")
   _ <- symbol "("
@@ -611,13 +602,6 @@ parseCall f = label "function application" $ try $ do
   -- Combine type args with regular args
   let allArgs = typeArgs ++ args
   return $ foldl App f allArgs
-
--- | Helper: debugging function to trace parser state
-observe :: String -> Parser ()
-observe traceMsg = do
-  remaining <- getInput
-  let firstLine = takeWhile (/= '\n') remaining
-  trace (traceMsg ++ ":\n    " ++ firstLine) return ()
 
 -- | trailing‐operator parsers
 
@@ -635,16 +619,11 @@ parseTup = label "pair" $ try $ do
     [x]    -> fail "single element tuple"
     xs     -> return $ foldr1 (\x acc -> Tup x acc) xs
 
--- | Syntax: term1, term2
-parseTupUnparen :: Term -> Parser Term
-parseTupUnparen t = label "unparen pair" $ do
-  _ <- try $ symbol ","
-  u <- parseTerm
-  return (Tup t u)
-
 -- | Syntax: head <> tail
 parseCon :: Term -> Parser Term
 parseCon t = label "list cons" $ do
+  s <- get
+  guard (not (tight s))
   _ <- try $ symbol "<>"
   u <- parseTerm
   return (Con t u)
@@ -680,33 +659,35 @@ parseLst t = label "list type" $ do
 parseEql :: Term -> Parser Term
 parseEql t = label "equality type" $ do
   _ <- try $ symbol "{"
-  a <- parseTerm
+  a <- parseExpr
   _ <- symbol "=="
-  b <- parseTerm
+  b <- parseExpr
   _ <- symbol "}"
   return (Eql t a b)
 
 -- | Parse numeric binary operations
 parseNumOp :: Term -> Parser Term
 parseNumOp lhs = label "numeric operation" $ do
-  op <- choice
-    [ try $ symbol "===" >> return EQL
-    , try $ symbol "!==" >> return NEQ
-    , try $ symbol "<=" >> return LEQ
-    , try $ symbol ">=" >> return GEQ
-    , try $ symbol "<<" >> return SHL
-    , try $ symbol ">>" >> return SHR
-    , try $ symbol "<"  >> return LST
-    , try $ symbol ">"  >> return GRT
-    -- Note: + is handled specially by parseAdd for Nat syntax
-    , try $ symbol "-"  >> return SUB
-    , try $ symbol "*"  >> return MUL
-    , try $ symbol "/"  >> return DIV
-    , try $ symbol "%"  >> return MOD
-    , try $ symbol "&&" >> return AND  -- Bitwise AND
-    , try $ symbol "|"  >> return OR
-    , try $ symbol "^"  >> return XOR
-    -- Note: & is handled by parseAnd for product types
+  st <- get
+  op <- choice $ concat
+    [ guard (not (tight st)) >> 
+      [ try $ symbol "<=" >> return LEQ
+      , try $ symbol ">=" >> return GEQ
+      , try $ symbol "<<" >> return SHL
+      , try $ symbol ">>" >> return SHR
+      , try $ symbol "<"  >> return LST
+      , try $ symbol ">"  >> return GRT
+      ]
+    , [ try $ symbol "==" >> return EQL
+      , try $ symbol "!=" >> return NEQ
+      , try $ symbol "-"  >> return SUB
+      , try $ symbol "*"  >> return MUL
+      , try $ symbol "/"  >> return DIV
+      , try $ symbol "%"  >> return MOD
+      , try $ symbol "&&" >> return AND
+      , try $ symbol "||" >> return OR
+      , try $ symbol "^"  >> return XOR
+      ]
     ]
   rhs <- parseTerm
   return $ Op2 op lhs rhs
@@ -722,19 +703,20 @@ parseAdd t = label "addition" $ do
     -- Otherwise, it's numeric addition
     _              -> return (Op2 ADD t b)
   where
-    -- Check if term is a natural number (chain of Suc ending in Zer)
+    isNatLit :: Term -> Bool
     isNatLit Zer       = True
     isNatLit (Suc n)   = isNatLit n
     isNatLit (Loc _ t) = isNatLit t
     isNatLit _         = False
     
     -- Count number of successors
+    countSuccessors :: Term -> Int
     countSuccessors Zer       = 0
     countSuccessors (Suc n)   = 1 + countSuccessors n
     countSuccessors (Loc _ t) = countSuccessors t
     countSuccessors _         = 0
     
-    -- Apply n successors to a term
+    applySuccessors :: Int -> Term -> Term
     applySuccessors 0 t = t
     applySuccessors n t = Suc (applySuccessors (n-1) t)
 
@@ -742,19 +724,15 @@ parseAdd t = label "addition" $ do
 -- Interprets as let if t is a variable, otherwise as pattern match
 parseAss :: Term -> Parser Term
 parseAss t = label "location binding" $ do
-  st <- get
-  if noAss st
-    then fail "location binding disabled"
-    else do
-      _ <- try $ do
-        _ <- symbol "="
-        notFollowedBy (char '=')
-      v <- parseTerm
-      _ <- parseSemi
-      b <- parseTerm
-      case t of
-        Var x _ -> return $ Let v (Lam x (\_ -> b))
-        _       -> return $ Pat [v] [] [([t], b)]
+  _ <- try $ do
+    _ <- symbol "="
+    notFollowedBy (char '=')
+  v <- parseTerm
+  _ <- parseSemi
+  b <- parseTerm
+  case t of
+    Var x _ -> return $ Let v (Lam x (\_ -> b))
+    _       -> return $ Pat [v] [] [([t], b)]
 
 -- | HOAS‐style binders
 
@@ -877,7 +855,7 @@ parseContext = braces $ sepEndBy parseTerm (symbol ",")
 -- | Parse a term from a string, returning an error message on failure
 doParseTerm :: FilePath -> String -> Either String Term
 doParseTerm file input =
-  case evalState (runParserT p file input) (ParserState True False input) of
+  case evalState (runParserT p file input) (ParserState True input) of
     Left err  -> Left (formatError input err)
     Right res -> Right (bind (move (flatten res)))
   where

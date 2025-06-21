@@ -51,7 +51,6 @@ import qualified Core.Parse.WithSpan as WithSpan
 -- Parser state
 data ParserState = ParserState
   { tight  :: Bool   -- ^ tracks whether previous token ended with no trailing space
-  , noAss  :: Bool   -- ^ when True, disables the parseAss infix operator
   , source :: String -- ^ original file source, for error reporting
   }
 
