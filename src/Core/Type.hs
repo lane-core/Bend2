@@ -3,9 +3,10 @@ module Core.Type where
 import Data.List (intercalate)
 import Debug.Trace
 import Highlight (highlightError)
+import Data.Int (Int32, Int64)
+import Data.Word (Word32, Word64)
 import qualified Data.Map as M
 import qualified Data.Set as S
-
 
 data Bits = O Bits | I Bits | E deriving Show
 type Name = String
@@ -13,6 +14,30 @@ type Body = Term -> Term
 type Case = ([Term], Term)
 type Move = (String, Term)
 type Type = Term
+
+data NTyp
+  = U64_T
+  | I64_T
+  | F64_T
+  deriving (Show, Eq)
+
+data NVal
+  = U64_V Word64
+  | I64_V Int64
+  | F64_V Double
+  deriving (Show, Eq)
+
+data NOp2
+  = ADD | SUB | MUL | DIV | MOD
+  | EQ  | NE  
+  | LT  | GT  | LE  | GE
+  | AND | OR  | XOR
+  | SHL | SHR
+  deriving (Show, Eq)
+
+data NOp1
+  = NOT | NEG
+  deriving (Show, Eq)
 
 -- Bend's Term Type
 data Term
@@ -63,6 +88,12 @@ data Term
   | Enu [String]        -- {'foo','bar'...}
   | Sym String          -- 'foo'
   | Cse [(String,Term)] -- λ{'foo':f;'bar':b;...}
+
+  -- U32 (new constructors)
+  | Num NTyp            -- U64 | I64 | F64
+  | Val NVal            -- 123 | +123 | +123.0
+  | Op2 NOp2 Term Term  -- x + y
+  | Op1 NOp1 Term       -- !x
 
   -- Pair
   | Sig Type Type -- ΣA.B
