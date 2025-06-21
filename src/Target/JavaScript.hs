@@ -13,6 +13,9 @@ import Debug.Trace
 import qualified Control.Monad.State as ST
 import qualified Data.IntMap as IM
 import qualified Data.Map as M
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Language.JavaScript.Parser as JS
+import qualified Language.JavaScript.Pretty.Printer as PP
 
 -- Compilable Term (only runtime-relevant constructs)
 data CT
@@ -49,15 +52,20 @@ data CT
 
 type CTBook = M.Map String CT
 
+-- Convert CT back to Term for substitution
+ctToTerm :: CT -> Term
+ctToTerm (CVar k i) = Var k i
+ctToTerm _ = error "ctToTerm: only variables can be converted back"
+
 -- Convert Term to CT (erase types, keep runtime values)
 termToCT :: Book -> Term -> Int -> CT
 termToCT book term dep = case term of
   Var k i    -> CVar k i
   Ref k      -> CRef k
   Sub t      -> termToCT book t dep
-  Fix k f    -> CFix k (\x -> termToCT book (f (Var k dep)) (dep+1))
+  Fix k f    -> CFix k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
   Let v f    -> case f of
-     Lam k g -> CLet (termToCT book v dep) (\x -> termToCT book (g (Var k dep)) (dep+1))
+     Lam k g -> CLet (termToCT book v dep) (\x -> termToCT book (g (ctToTerm x)) (dep+1))
      _       -> termToCT book (App f v) dep
   -- Type-level constructs are erased
   Set        -> CEra
@@ -90,7 +98,7 @@ termToCT book term dep = case term of
   Tup a b    -> CTup (termToCT book a dep) (termToCT book b dep)
   Val v      -> CVal v
   -- Functions and eliminators
-  Lam k f    -> CLam k (\x -> termToCT book (f (Var k dep)) (dep+1))
+  Lam k f    -> CLam k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
   App f x    -> CApp (termToCT book f dep) (termToCT book x dep)
   Use f      -> CUse (termToCT book f dep)
   Bif f t    -> CBif (termToCT book f dep) (termToCT book t dep)
@@ -231,6 +239,7 @@ compileConstructor var (CTup a b) dep = do
   bStmt <- ctToJS' False bName b dep
   setStmt <- set var $ "[" ++ aName ++ ", " ++ bName ++ "]"
   return $ concat [aStmt, bStmt, setStmt]
+compileConstructor _ _ _ = error "compileConstructor: not a constructor"
 
 -- Compile numeric value
 compileNumeric :: String -> NVal -> JSM String
@@ -272,7 +281,7 @@ compileLambda var lam dep = do
   where
     collectLambdas :: CT -> Int -> ([String], CT, Int)
     collectLambdas (CLam n b) d =
-      let uid = nameToJS n ++ "$" ++ show d
+      let uid = n
           (names, term, finalDep) = collectLambdas (b (CVar uid d)) (d + 1)
       in (uid : names, term, finalDep)
     collectLambdas term d = ([], term, d)
@@ -288,12 +297,13 @@ compileSwi book fnName fnArgs isTail var z s val dep = do
   zStmt <- ctToJS book fnName fnArgs isTail var z dep
   let zCase = "case \"Zer\": { " ++ zStmt ++ " break; }"
   
-  -- Successor case with inlining
+  -- Successor case with inlining and proper binding
   sCase <- case s of
-    CLam _ f -> do
+    CLam param f -> do
       let predVar = valName ++ ".pred"
-      succStmt <- ctToJS book fnName fnArgs isTail var (f (CVar predVar dep)) dep
-      return $ "case \"Suc\": { " ++ succStmt ++ " break; }"
+      let paramName = param
+      succStmt <- ctToJS book fnName fnArgs isTail var (f (CVar paramName dep)) dep
+      return $ "case \"Suc\": { var " ++ paramName ++ " = " ++ predVar ++ "; " ++ succStmt ++ " break; }"
     _ -> do
       sName <- fresh
       sStmt <- ctToJS' False sName s dep
@@ -313,14 +323,16 @@ compileMat book fnName fnArgs isTail var n c val dep = do
   nStmt <- ctToJS book fnName fnArgs isTail var n dep
   let nCase = "case \"Nil\": { " ++ nStmt ++ " break; }"
   
-  -- Cons case with inlining
+  -- Cons case with inlining and proper binding
   cCase <- case c of
-    CLam _ f1 -> case f1 (CVar "_h" dep) of
-      CLam _ f2 -> do
+    CLam hParam f1 -> case f1 (CVar hParam dep) of
+      CLam tParam f2 -> do
         let headVar = valName ++ ".head"
         let tailVar = valName ++ ".tail"
-        consStmt <- ctToJS book fnName fnArgs isTail var (f2 (CVar tailVar dep)) dep
-        return $ "case \"Con\": { " ++ consStmt ++ " break; }"
+        let hParamName = hParam
+        let tParamName = tParam
+        consStmt <- ctToJS book fnName fnArgs isTail var (f2 (CVar tParamName (dep + 1))) (dep + 2)
+        return $ "case \"Con\": { var " ++ hParamName ++ " = " ++ headVar ++ "; var " ++ tParamName ++ " = " ++ tailVar ++ "; " ++ consStmt ++ " break; }"
       _ -> compileDefaultCons valName
     _ -> compileDefaultCons valName
   
@@ -341,12 +353,14 @@ compileGet book fnName fnArgs isTail var f val dep = do
   valStmt <- ctToJS' False valName val dep
   
   case f of
-    CLam _ f1 -> case f1 (CVar "_a" dep) of
-      CLam _ f2 -> do
+    CLam aParam f1 -> case f1 (CVar aParam dep) of
+      CLam bParam f2 -> do
         let fstVar = valName ++ "[0]"
         let sndVar = valName ++ "[1]"
-        appStmt <- ctToJS book fnName fnArgs isTail var (f2 (CVar sndVar dep)) dep
-        return $ valStmt ++ appStmt
+        let aParamName = aParam
+        let bParamName = bParam
+        appStmt <- ctToJS book fnName fnArgs isTail var (f2 (CVar bParamName (dep + 1))) (dep + 2)
+        return $ valStmt ++ "var " ++ aParamName ++ " = " ++ fstVar ++ "; var " ++ bParamName ++ " = " ++ sndVar ++ "; " ++ appStmt
       _ -> compileDefaultGet valName valStmt
     _ -> compileDefaultGet valName valStmt
   where
@@ -486,7 +500,7 @@ ctToJS book fnName fnArgs isTail var term dep = case term of
       retStmt <- ctToJS book fnName fnArgs isTail var (f (CVar vName dep)) (dep + 1)
       return $ vStmt ++ retStmt
     compileFix var k f dep = do
-      let fixName = nameToJS k ++ "$" ++ show dep
+      let fixName = k
       bodyStmt <- ctToJS book fnName fnArgs isTail var (f (CVar fixName dep)) (dep + 1)
       return $ "var " ++ fixName ++ " = () => { " ++ bodyStmt ++ " }; " ++ bodyStmt
 
@@ -511,4 +525,12 @@ compile (Book defs) =
   let ctDefs = map (\(name, (_, term, _)) -> (name, termToCT (Book defs) term 0)) (M.toList defs)
       ctBook = M.fromList ctDefs
       jsFns = concatMap (generateJS ctBook) ctDefs
-  in prelude ++ jsFns
+      rawJs = prelude ++ jsFns
+  in prettifyJS rawJs
+
+-- Prettify JavaScript using language-javascript
+prettifyJS :: String -> String
+prettifyJS src =
+  case JS.parse src "generated.js" of
+    Right ast -> PP.renderToString ast
+    Left err -> trace ("JS parse error: " ++ show err) src
