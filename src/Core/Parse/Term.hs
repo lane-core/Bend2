@@ -58,20 +58,18 @@ parseTermIni = choice
   , parseEfq
   , parseOne
   , parseNat
-  , parseZer
-  , parseNumUnary    -- Parse unary numeric operations
+  , parseNumUna      -- Parse unary numeric operations
   , parseNatLit      -- Parse natural number literals (123n) - must come before parseNumLit
   , parseNumLit      -- Parse new numeric literals (123, +123, 123.0)
   , parseLstLit
   , parseNil
   , parseRfl
-  , parseSuc
   , parseEnu
   , parseSym
   , parseCse
   , parseTupApp
   , parseView
-  , parseNumType     -- Parse numeric type names
+  -- , parseNumTyp     -- Parse numeric type names
   , parseVar
   ]
 
@@ -120,28 +118,6 @@ parseTupApp = do
   _ <- try $ symbol "("
   choice [ parseTup , parseApp ]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- atomic terms
 
 -- | Syntax: x, foo, bar_123, Type<A,B>, Nat/add
@@ -156,6 +132,9 @@ parseVar = label "variable" $ do
     "False" -> return Bt0
     "True"  -> return Bt1
     "Nat"   -> return Nat
+    "U64"   -> return (Num U64_T)
+    "I64"   -> return (Num I64_T)
+    "F64"   -> return (Num F64_T)
     _       -> return $ Var n 0
 
 -- | Syntax: λ{}
@@ -227,12 +206,12 @@ parseSwiLambda = label "natural number eliminator" $ do
   _ <- try $ do
     _ <- symbol "λ"
     _ <- symbol "{"
-    _ <- symbol "0"
+    _ <- symbol "0n"
     _ <- symbol ":"
     return ()
   z <- parseTerm
   _ <- parseSemi
-  _ <- symbol "+"
+  _ <- symbol "1n+"
   _ <- symbol ":"
   s <- parseTerm
   _ <- parseSemi
@@ -473,20 +452,6 @@ parseNat = label "natural number type (Nat)" $ try $ do
   notFollowedBy (satisfy isNameChar)
   return Nat
 
--- | Syntax: 0 (only when not followed by more digits)
-parseZer :: Parser Term
-parseZer = label "zero (0)" $ try $ do
-  _ <- symbol "0"
-  notFollowedBy digitChar
-  return Zer
-
--- | Syntax: ↑term
-parseSuc :: Parser Term
-parseSuc = label "successor (↑n)" $ do
-  _ <- try $ symbol "↑"
-  n <- parseTerm
-  return (Suc n)
-
 -- | Syntax: 1n, 2n, 3n, 42n, 123n
 parseNatLit :: Parser Term
 parseNatLit = label "natural number literal" $ try $ do
@@ -541,17 +506,17 @@ parseUnsignedLit = lexeme $ do
   notFollowedBy (char 'n')
   return $ Val (U64_V n)
 
--- | Parse numeric type names: U64, I64, F64
-parseNumType :: Parser Term
-parseNumType = label "numeric type" $ choice
-  [ try $ symbol "U64" >> return (Num U64_T)
-  , try $ symbol "I64" >> return (Num I64_T)
-  , try $ symbol "F64" >> return (Num F64_T)
-  ]
+-- -- | Parse numeric type names: U64, I64, F64
+-- parseNumTyp :: Parser Term
+-- parseNumTyp = label "numeric type" $ choice
+  -- [ try $ symbol "U64" >> return (Num U64_T)
+  -- , try $ symbol "I64" >> return (Num I64_T)
+  -- , try $ symbol "F64" >> return (Num F64_T)
+  -- ]
 
 -- | Parse numeric unary operations: !x, -x
-parseNumUnary :: Parser Term
-parseNumUnary = label "numeric unary operation" $ do
+parseNumUna :: Parser Term
+parseNumUna = label "numeric unary operation" $ do
   op <- choice
     [ try $ symbol "!" >> return NOT
     , try $ symbol "-" >> return NEG
@@ -713,8 +678,8 @@ parseEql t = label "equality type" $ do
 parseNumOp :: Term -> Parser Term
 parseNumOp lhs = label "numeric operation" $ do
   op <- choice
-    [ try $ symbol "==" >> return EQL
-    , try $ symbol "!=" >> return NEQ
+    [ try $ symbol "===" >> return EQL
+    , try $ symbol "!==" >> return NEQ
     , try $ symbol "<=" >> return LEQ
     , try $ symbol ">=" >> return GEQ
     , try $ symbol "<<" >> return SHL

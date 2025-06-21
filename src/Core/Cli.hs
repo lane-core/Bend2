@@ -59,12 +59,11 @@ runMain book = do
       let mainCall = Ref "main"
       case infer 0 noSpan boundBook id mainCall of
         Fail e -> do
-          putStrLn $ "Error running main: " ++ show e
+          putStrLn $ show e
           exitFailure
         Done typ -> do
           let result = normal 2 0 boundBook mainCall
           putStrLn ""
-          putStrLn "Running main:"
           putStrLn $ show result
 
 -- | Process a Bend file: parse, check, and run
