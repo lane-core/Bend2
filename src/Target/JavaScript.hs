@@ -163,7 +163,7 @@ getArguments = go 0 where
 getAppChain :: CT -> (CT, [CT])
 getAppChain = go [] where
   go acc (CApp fun arg) = go (arg:acc) fun
-  go acc term = (term, reverse acc)
+  go acc term = (term, acc)
 
 -- Get arity of a function
 arityOf :: CTBook -> String -> Int
