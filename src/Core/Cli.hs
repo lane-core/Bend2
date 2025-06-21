@@ -4,6 +4,9 @@ import Control.Monad (unless)
 import qualified Data.Map as M
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
+import System.Process (readProcessWithExitCode)
+import System.Exit (ExitCode(..))
+import Control.Exception (catch, IOException)
 
 import Core.Import
 import Core.Bind
@@ -74,13 +77,29 @@ processFile file = do
   checkDefinitions book
   runMain book
 
+-- | Try to format JavaScript code using prettier if available
+formatJavaScript :: String -> IO String
+formatJavaScript jsCode = do
+  -- Try npx prettier first
+  tryPrettier "npx" ["prettier", "--parser", "babel"] jsCode
+    `catch` (\(_ :: IOException) -> 
+      -- Try global prettier
+      tryPrettier "prettier" ["--parser", "babel"] jsCode
+        `catch` (\(_ :: IOException) -> return jsCode))
+  where
+    tryPrettier cmd args input = do
+      (exitCode, stdout, stderr) <- readProcessWithExitCode cmd args input
+      case exitCode of
+        ExitSuccess -> return stdout
+        _ -> return input
+
 -- | Process a Bend file and compile to JavaScript
 processFileToJS :: FilePath -> IO ()
 processFileToJS file = do
   book <- parseFile file
-  checkDefinitions book
   let boundBook = bindBook book
   let jsCode = JS.compile boundBook
-  putStrLn jsCode
+  formattedJS <- formatJavaScript jsCode
+  putStrLn formattedJS
 
 

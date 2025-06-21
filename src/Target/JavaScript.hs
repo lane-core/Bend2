@@ -14,8 +14,6 @@ import qualified Control.Monad.State as ST
 import qualified Data.IntMap as IM
 import qualified Data.Map as M
 import qualified Data.ByteString.Lazy.Char8 as BL
-import qualified Language.JavaScript.Parser as JS
-import qualified Language.JavaScript.Pretty.Printer as PP
 
 -- Compilable Term (only runtime-relevant constructs)
 data CT
@@ -525,12 +523,4 @@ compile (Book defs) =
   let ctDefs = map (\(name, (_, term, _)) -> (name, termToCT (Book defs) term 0)) (M.toList defs)
       ctBook = M.fromList ctDefs
       jsFns = concatMap (generateJS ctBook) ctDefs
-      rawJs = prelude ++ jsFns
-  in prettifyJS rawJs
-
--- Prettify JavaScript using language-javascript
-prettifyJS :: String -> String
-prettifyJS src =
-  case JS.parse src "generated.js" of
-    Right ast -> PP.renderToString ast
-    Left err -> trace ("JS parse error: " ++ show err) src
+  in prelude ++ jsFns
