@@ -126,8 +126,8 @@ def map<A,B>(f: A -> B, xs: A[]) -> B[]:
     case x <> xs:
       f(x) <> map<A,B>(f, xs)
 
-## Types Playground
-## ----------------
+## Inductive Datatype
+## ------------------
 
 # Can we encode inductive datatypes?
 
@@ -158,3 +158,9 @@ def VecInd
     case @Cons{n,h,t,e}:
       rewrite e
       C(n,h,t,VecInd(A,P,N,C,n,t))
+
+# More Stuff
+# ----------
+
+def main(x: Char) -> Char[]:
+  "foo bar!!"

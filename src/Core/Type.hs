@@ -5,6 +5,7 @@ import Debug.Trace
 import Highlight (highlightError)
 import Data.Int (Int32, Int64)
 import Data.Word (Word32, Word64)
+import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import qualified Data.Set as S
 
@@ -19,12 +20,14 @@ data NTyp
   = U64_T
   | I64_T
   | F64_T
+  | CHR_T
   deriving (Show, Eq)
 
 data NVal
   = U64_V Word64
   | I64_V Int64
   | F64_V Double
+  | CHR_V Char
   deriving (Show, Eq)
 
 data NOp2
@@ -85,12 +88,12 @@ data Term
   | Mat Term Term -- λ{[]:n;<>:c}
 
   -- Enum
-  | Enu [String]        -- {'foo','bar'...}
-  | Sym String          -- 'foo'
-  | Cse [(String,Term)] -- λ{'foo':f;'bar':b;...}
+  | Enu [String]        -- {@foo,@bar...}
+  | Sym String          -- @foo
+  | Cse [(String,Term)] -- λ{@foo:f;@bar:b;...}
 
   -- U32 (new constructors)
-  | Num NTyp            -- U64 | I64 | F64
+  | Num NTyp            -- CHR | U64 | I64 | F64
   | Val NVal            -- 123 | +123 | +123.0
   | Op2 NOp2 Term Term  -- x + y
   | Op1 NOp1 Term       -- !x
@@ -191,7 +194,7 @@ instance Show Term where
   show (Swi z s)      = "λ{ 0: " ++ show z ++ " ; +: " ++ show s ++ " }"
   show (Lst t)        = show t ++ "[]"
   show (Nil)          = "[]"
-  show (Con h t)      = show h ++ "<>" ++ show t
+  show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
   show (Mat n c)      = "λ{ []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
   show (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
   show (Sym s)        = "@" ++ s
@@ -200,9 +203,7 @@ instance Show Term where
     sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
     sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
     sig a b           = "Σ" ++ show a ++ ". " ++ (show b)
-  show tup@(Tup _ _)  = case prettyCtr tup of
-    Just s -> s
-    _      -> "(" ++ intercalate "," (map show (flattenTup tup)) ++ ")"
+  show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
   show (Get f)        = "λ{ (,):" ++ show f ++ " }"
   show (All a b)      = all a b where
     all a (Lam "_" f) = show a ++ " -> " ++ show (f (Var "_" 0))
@@ -210,50 +211,59 @@ instance Show Term where
     all a b           = "∀" ++ show a ++ ". " ++ (show b)
   show (Lam k f)      = "λ" ++ k ++ ". " ++ show (f (Var k 0))
   show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
-    (fn, args) = collectApps app []
-    fnStr      = case strip fn of
-      Var k _ -> k
-      Ref k   -> k
-      fn      -> "(" ++ show fn ++ ")"
-  show (Eql t a b)    = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
-  show (Rfl)          = "{==}"
-  show (Rwt f)        = "λ{ {==}:" ++ show f ++ " }"
-  show (Ind t)        = "~{" ++ show t ++ "}"
-  show (Frz t)        = "∅" ++ show t
-  show (Loc _ t)      = show t
-  show (Era)          = "*"
-  show (Sup l a b)    = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
-  show (Met _ _ _)    = "?"
-  show (Num U64_T)       = "U64"
-  show (Num I64_T)       = "I64"
-  show (Num F64_T)       = "F64"
-  show (Val (U64_V n))   = show n
-  show (Val (I64_V n))   = if n >= 0 then "+" ++ show n else show n
-  show (Val (F64_V n))   = show n
-  show (Op2 ADD a b)     = "(" ++ show a ++ " + " ++ show b ++ ")"
-  show (Op2 SUB a b)     = "(" ++ show a ++ " - " ++ show b ++ ")"
-  show (Op2 MUL a b)     = "(" ++ show a ++ " * " ++ show b ++ ")"
-  show (Op2 DIV a b)     = "(" ++ show a ++ " / " ++ show b ++ ")"
-  show (Op2 MOD a b)     = "(" ++ show a ++ " % " ++ show b ++ ")"
-  show (Op2 EQL a b)     = "(" ++ show a ++ " == " ++ show b ++ ")"
-  show (Op2 NEQ a b)     = "(" ++ show a ++ " != " ++ show b ++ ")"
-  show (Op2 LST a b)     = "(" ++ show a ++ " < " ++ show b ++ ")"
-  show (Op2 GRT a b)     = "(" ++ show a ++ " > " ++ show b ++ ")"
-  show (Op2 LEQ a b)     = "(" ++ show a ++ " <= " ++ show b ++ ")"
-  show (Op2 GEQ a b)     = "(" ++ show a ++ " >= " ++ show b ++ ")"
-  show (Op2 AND a b)     = "(" ++ show a ++ " && " ++ show b ++ ")"
-  show (Op2 OR a b)      = "(" ++ show a ++ " | " ++ show b ++ ")"
-  show (Op2 XOR a b)     = "(" ++ show a ++ " ^ " ++ show b ++ ")"
-  show (Op2 SHL a b)     = "(" ++ show a ++ " << " ++ show b ++ ")"
-  show (Op2 SHR a b)     = "(" ++ show a ++ " >> " ++ show b ++ ")"
-  show (Op1 NOT a)       = "(!" ++ show a ++ ")"
-  show (Op1 NEG a)       = "(-" ++ show a ++ ")"
-  show (Pat t m c)      = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ "}" where
-    showMoves = if null m then "" else " with " ++ intercalate " with " (map showMove m) where
-      showMove (name, term) = name ++ "=" ++ show term
-    showCases = if null c then "" else " " ++ intercalate " " (map showCase c) where
-      showCase (pats, term) = "case " ++ unwords (map showPat pats) ++ ": " ++ show term
-    showPat pat = "(" ++ show pat ++ ")"
+           (fn, args) = collectApps app []
+           fnStr      = case strip fn of
+              Var k _ -> k
+              Ref k   -> k
+              fn      -> "(" ++ show fn ++ ")"
+  show (Eql t a b)     = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
+  show (Rfl)           = "{==}"
+  show (Rwt f)         = "λ{ {==}:" ++ show f ++ " }"
+  show (Ind t)         = "~{" ++ show t ++ "}"
+  show (Frz t)         = "∅" ++ show t
+  show (Loc _ t)       = show t
+  show (Era)           = "*"
+  show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
+  show (Met _ _ _)     = "?"
+  show (Num U64_T)     = "U64"
+  show (Num I64_T)     = "I64"
+  show (Num F64_T)     = "F64"
+  show (Num CHR_T)     = "Char"
+  show (Val (U64_V n)) = show n
+  show (Val (I64_V n)) = if n >= 0 then "+" ++ show n else show n
+  show (Val (F64_V n)) = show n
+  show (Val (CHR_V c)) = "'" ++ showChar c ++ "'" where
+         showChar '\n' = "\\n"
+         showChar '\t' = "\\t"
+         showChar '\r' = "\\r"
+         showChar '\0' = "\\0"
+         showChar '\\' = "\\\\"
+         showChar '\'' = "\\'"
+         showChar c    = [c]
+  show (Op2 ADD a b)   = "(" ++ show a ++ " + " ++ show b ++ ")"
+  show (Op2 SUB a b)   = "(" ++ show a ++ " - " ++ show b ++ ")"
+  show (Op2 MUL a b)   = "(" ++ show a ++ " * " ++ show b ++ ")"
+  show (Op2 DIV a b)   = "(" ++ show a ++ " / " ++ show b ++ ")"
+  show (Op2 MOD a b)   = "(" ++ show a ++ " % " ++ show b ++ ")"
+  show (Op2 EQL a b)   = "(" ++ show a ++ " == " ++ show b ++ ")"
+  show (Op2 NEQ a b)   = "(" ++ show a ++ " != " ++ show b ++ ")"
+  show (Op2 LST a b)   = "(" ++ show a ++ " < " ++ show b ++ ")"
+  show (Op2 GRT a b)   = "(" ++ show a ++ " > " ++ show b ++ ")"
+  show (Op2 LEQ a b)   = "(" ++ show a ++ " <= " ++ show b ++ ")"
+  show (Op2 GEQ a b)   = "(" ++ show a ++ " >= " ++ show b ++ ")"
+  show (Op2 AND a b)   = "(" ++ show a ++ " && " ++ show b ++ ")"
+  show (Op2 OR a b)    = "(" ++ show a ++ " | " ++ show b ++ ")"
+  show (Op2 XOR a b)   = "(" ++ show a ++ " ^ " ++ show b ++ ")"
+  show (Op2 SHL a b)   = "(" ++ show a ++ " << " ++ show b ++ ")"
+  show (Op2 SHR a b)   = "(" ++ show a ++ " >> " ++ show b ++ ")"
+  show (Op1 NOT a)     = "(!" ++ show a ++ ")"
+  show (Op1 NEG a)     = "(-" ++ show a ++ ")"
+  show (Pat t m c)     = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ "}" where
+             showMoves = if null m then "" else " with " ++ intercalate " with " (map mv m) where
+               mv(k,x) = k ++ "=" ++ show x
+             showCases = if null c then "" else " " ++ intercalate " " (map cs c) where
+               cs(p,x) = "case " ++ unwords (map showPat p) ++ ": " ++ show x
+             showPat p = "(" ++ show p ++ ")"
 
 instance Show Book where
   show (Book defs) = "Book {" ++ intercalate ", " (map defn (M.toList defs)) ++ "}"
@@ -307,7 +317,6 @@ showContext ctx =
 deref :: Book -> Name -> Maybe Defn
 deref (Book defs) name = M.lookup name defs
 
--- Strip Loc wrappers
 strip :: Term -> Term
 strip (Loc _ t) = strip t
 strip t         = t
@@ -345,3 +354,11 @@ prettyCtr (Tup (Sym name) rest) =
     Just One -> Just (show (Sym name) ++ "{" ++ intercalate "," (map show (init (flattenTup rest))) ++ "}")
     _        -> Nothing
 prettyCtr _ = Nothing
+
+prettyStr :: Term -> Maybe String
+prettyStr = go [] where
+  go :: [Char] -> Term -> Maybe String
+  go acc Nil                        = Just ("\"" ++ reverse acc ++ "\"")
+  go acc (Con (Val (CHR_V c)) rest) = go (c:acc) rest
+  go acc (Loc _ t)                  = go acc t
+  go _   _                          = Nothing

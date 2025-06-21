@@ -199,6 +199,24 @@ whnfOp2 lv book op a b =
       XOR -> Val (U64_V (castDoubleToWord64 x `xor` castDoubleToWord64 y))
       SHL -> Val (U64_V (castDoubleToWord64 x `shiftL` fromIntegral (castDoubleToWord64 y)))
       SHR -> Val (U64_V (castDoubleToWord64 x `shiftR` fromIntegral (castDoubleToWord64 y)))
+    (Val (CHR_V x), Val (CHR_V y)) -> case op of
+      ADD -> Val (CHR_V (toEnum (fromEnum x + fromEnum y)))
+      SUB -> Val (CHR_V (toEnum (fromEnum x - fromEnum y)))
+      MUL -> Val (CHR_V (toEnum (fromEnum x * fromEnum y)))
+      DIV -> if fromEnum y == 0 then Op2 op (Val (CHR_V x)) (Val (CHR_V y)) else Val (CHR_V (toEnum (fromEnum x `div` fromEnum y)))
+      MOD -> if fromEnum y == 0 then Op2 op (Val (CHR_V x)) (Val (CHR_V y)) else Val (CHR_V (toEnum (fromEnum x `mod` fromEnum y)))
+      EQL -> if x == y then Bt1 else Bt0
+      NEQ -> if x /= y then Bt1 else Bt0
+      LST -> if x < y then Bt1 else Bt0
+      GRT -> if x > y then Bt1 else Bt0
+      LEQ -> if x <= y then Bt1 else Bt0
+      GEQ -> if x >= y then Bt1 else Bt0
+      -- Bitwise ops: convert CHR to U64 representation
+      AND -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
+      OR  -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
+      XOR -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
+      SHL -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
+      SHR -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
     (a', b') -> Op2 op a' b'
 
 whnfOp1 :: Int -> Book -> NOp1 -> Term -> Term
@@ -213,4 +231,7 @@ whnfOp1 lv book op a =
     Val (F64_V x) -> case op of
       NOT -> Val (U64_V (complement (castDoubleToWord64 x))) -- convert to U64 for bitwise
       NEG -> Val (F64_V (-x))
+    Val (CHR_V x) -> case op of
+      NOT -> Op1 op (Val (CHR_V x)) -- bitwise not defined for chars
+      NEG -> Op1 op (Val (CHR_V x)) -- negation not defined for chars
     a' -> Op1 op a'

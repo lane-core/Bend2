@@ -54,6 +54,8 @@ parseTermIni = choice
   , parseNatLit
   , parseNumLit
   , parseNumUna
+  , parseCharLit
+  , parseStringLit
   , parseLstLit
   , parseNil
   , parseRfl
@@ -121,6 +123,7 @@ parseVar = label "variable" $ do
     "U64"   -> return (Num U64_T)
     "I64"   -> return (Num I64_T)
     "F64"   -> return (Num F64_T)
+    "Char"  -> return (Num CHR_T)
     _       -> return $ Var n 0
 
 -- | Syntax: λ{}
@@ -502,6 +505,71 @@ parseUnsignedLit = lexeme $ do
   -- Make sure we don't have 'n' suffix (that would be a Nat literal)
   notFollowedBy (char 'n')
   return $ Val (U64_V n)
+
+-- | Parse character literal: 'x', '\n', '\t', etc.
+parseCharLit :: Parser Term
+parseCharLit = label "character literal" $ lexeme $ do
+  _ <- char '\''
+  c <- parseChar
+  _ <- char '\''
+  return $ Val (CHR_V c)
+  where
+    parseChar = choice
+      [ parseEscaped
+      , satisfy (\c -> c /= '\'' && c /= '\\')
+      ]
+    
+    parseEscaped = do
+      _ <- char '\\'
+      choice
+        [ char 'n'  >> return '\n'
+        , char 't'  >> return '\t'
+        , char 'r'  >> return '\r'
+        , char '0'  >> return '\0'
+        , char '\\' >> return '\\'
+        , char '\'' >> return '\''
+        , char '"'  >> return '"'
+        , parseUnicodeEscape
+        ]
+    
+    parseUnicodeEscape = do
+      _ <- char 'u'
+      digits <- replicateM 4 (satisfy (\c -> isDigit c || c `elem` "abcdefABCDEF"))
+      let code = read ("0x" ++ digits) :: Int
+      return $ toEnum code
+
+-- | Parse string literal: "hello\nworld"
+-- Desugars to: 'h' <> 'e' <> 'l' <> 'l' <> 'o' <> '\n' <> 'w' <> 'o' <> 'r' <> 'l' <> 'd' <> []
+parseStringLit :: Parser Term
+parseStringLit = label "string literal" $ lexeme $ do
+  _ <- char '"'
+  chars <- many parseStringChar
+  _ <- char '"'
+  return $ foldr (\c acc -> Con (Val (CHR_V c)) acc) Nil chars
+  where
+    parseStringChar = choice
+      [ parseStringEscaped
+      , satisfy (\c -> c /= '"' && c /= '\\')
+      ]
+    
+    parseStringEscaped = do
+      _ <- char '\\'
+      choice
+        [ char 'n'  >> return '\n'
+        , char 't'  >> return '\t'
+        , char 'r'  >> return '\r'
+        , char '0'  >> return '\0'
+        , char '\\' >> return '\\'
+        , char '\'' >> return '\''
+        , char '"'  >> return '"'
+        , parseStringUnicodeEscape
+        ]
+    
+    parseStringUnicodeEscape = do
+      _ <- char 'u'
+      digits <- replicateM 4 (satisfy (\c -> isDigit c || c `elem` "abcdefABCDEF"))
+      let code = read ("0x" ++ digits) :: Int
+      return $ toEnum code
 
 -- -- | Parse numeric type names: U64, I64, F64
 -- parseNumTyp :: Parser Term
