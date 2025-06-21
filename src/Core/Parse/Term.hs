@@ -12,6 +12,7 @@ import Control.Monad (when, replicateM, void, guard)
 import Control.Monad.State.Strict (State, get, put, evalState)
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.Void
+import Data.Word (Word64)
 import Debug.Trace
 import Text.Megaparsec
 import Text.Megaparsec (anySingle, manyTill, lookAhead)
@@ -58,9 +59,9 @@ parseTermIni = choice
   , parseEfq
   , parseOne
   , parseNat
-  , parseNumUna      -- Parse unary numeric operations
   , parseNatLit      -- Parse natural number literals (123n) - must come before parseNumLit
-  , parseNumLit      -- Parse new numeric literals (123, +123, 123.0)
+  , parseNumLit      -- Parse new numeric literals (123, +123, 123.0) - must come before parseNumUna
+  , parseNumUna      -- Parse unary numeric operations
   , parseLstLit
   , parseNil
   , parseRfl
@@ -476,11 +477,11 @@ parseNumLit = label "numeric literal" $ choice
   , parseUnsignedLit     -- Finally unsigned
   ]
 
--- | Parse floating point: 123.0, -45.67, +3.14
+-- | Parse floating point: 123.0, -45.67, +3.14, 0xFF.0, 0b101.0
 parseFloatLit :: Parser Term
 parseFloatLit = do
   sign <- optional (char '+' <|> char '-')
-  intPart <- L.decimal
+  intPart <- parseUnsignedNumber
   _ <- char '.'
   fracPart <- some digitChar
   skip
@@ -489,19 +490,30 @@ parseFloatLit = do
       floatVal = read floatStr :: Double
   return $ Val (F64_V floatVal)
 
--- | Parse signed integer: +123, -456
+-- | Parse signed integer: +123, -456, +0x123, -0xABC, +0b101, -0b110
 parseSignedLit :: Parser Term
 parseSignedLit = do
   sign <- char '+' <|> char '-'
-  n <- L.decimal
+  n <- parseUnsignedNumber
   skip
-  let value = if sign == '-' then -n else n
+  let value = if sign == '-' then -(fromIntegral n) else fromIntegral n
   return $ Val (I64_V value)
 
--- | Parse unsigned integer: 123
+-- | Parse a raw unsigned number (decimal, hex, or binary)
+parseUnsignedNumber :: Parser Word64
+parseUnsignedNumber = choice
+  [ try $ string "0x" >> L.hexadecimal
+  , try $ do
+      _ <- string "0b"
+      digits <- some (char '0' <|> char '1')
+      return $ foldl (\acc d -> acc * 2 + if d == '1' then 1 else 0) 0 digits
+  , L.decimal
+  ]
+
+-- | Parse unsigned integer: 123, 0x123, 0b101
 parseUnsignedLit :: Parser Term
 parseUnsignedLit = lexeme $ do
-  n <- L.decimal
+  n <- parseUnsignedNumber
   -- Make sure we don't have 'n' suffix (that would be a Nat literal)
   notFollowedBy (char 'n')
   return $ Val (U64_V n)
@@ -691,6 +703,7 @@ parseNumOp lhs = label "numeric operation" $ do
     , try $ symbol "*"  >> return MUL
     , try $ symbol "/"  >> return DIV
     , try $ symbol "%"  >> return MOD
+    , try $ symbol "&&" >> return AND  -- Bitwise AND
     , try $ symbol "|"  >> return OR
     , try $ symbol "^"  >> return XOR
     -- Note: & is handled by parseAnd for product types

@@ -241,7 +241,7 @@ instance Show Term where
   show (Op2 GRT a b)     = "(" ++ show a ++ " > " ++ show b ++ ")"
   show (Op2 LEQ a b)     = "(" ++ show a ++ " <= " ++ show b ++ ")"
   show (Op2 GEQ a b)     = "(" ++ show a ++ " >= " ++ show b ++ ")"
-  show (Op2 AND a b)     = "(" ++ show a ++ " & " ++ show b ++ ")"
+  show (Op2 AND a b)     = "(" ++ show a ++ " && " ++ show b ++ ")"
   show (Op2 OR a b)      = "(" ++ show a ++ " | " ++ show b ++ ")"
   show (Op2 XOR a b)     = "(" ++ show a ++ " ^ " ++ show b ++ ")"
   show (Op2 SHL a b)     = "(" ++ show a ++ " << " ++ show b ++ ")"
