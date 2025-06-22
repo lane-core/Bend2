@@ -102,4 +102,3 @@ processFileToJS file = do
   formattedJS <- formatJavaScript jsCode
   putStrLn formattedJS
 
-
