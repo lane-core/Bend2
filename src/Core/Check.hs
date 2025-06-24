@@ -12,6 +12,7 @@ import Core.Normal
 import Core.Rewrite
 import Core.Type
 import Core.WHNF
+import Debug.Trace
 
 -- Context
 -- -------
@@ -206,6 +207,8 @@ check d span book ctx term goal =
       check d span book ctx n Nat
     (Nil, Lst _) -> do
       Done ()
+    (Nil, goal_ty) ->
+      Fail $ TypeMismatch span (ctx term) (Lst (Var "_" 0)) goal_ty
     (Con h t, Lst tT) -> do
       check d span book ctx h tT
       check d span book ctx t (Lst tT)
