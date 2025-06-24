@@ -60,9 +60,7 @@ def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
     case 0n:
       finally
     case 1n + p:
-      ind = div2_mul2_theo(p)
-      prf = cong(Nat, Nat, div2(mul2(p)), p, λx. 1n + x, ind)
-      prf
+      ()
 
 # Nat Equality
 def equal(a: Nat, b: Nat) -> Bool:

@@ -15,13 +15,13 @@ whnf :: Int -> Book -> Term -> Term
 whnf lv book term = do
   -- trace ("whnf " ++ show term) $
   case term of
-    Let v f  -> whnfLet lv book v f
-    Ref k    -> whnfRef lv book k
-    Fix k f  -> whnfFix lv book k f
-    Ann x _  -> whnf lv book x
-    Chk x _  -> whnf lv book x
-    App f x  -> whnfApp lv book (App f x) f x
-    Loc _ t  -> whnf lv book t
+    Let v f   -> whnfLet lv book v f
+    Ref k     -> whnfRef lv book k
+    Fix k f   -> whnfFix lv book k f
+    Ann x _   -> whnf lv book x
+    Chk x _   -> whnf lv book x
+    App f x   -> whnfApp lv book (App f x) f x
+    Loc _ t   -> whnf lv book t
     Op2 o a b -> whnfOp2 lv book o a b
     Op1 o a   -> whnfOp1 lv book o a
     _         -> term
@@ -63,7 +63,7 @@ whnfAppRef lv book undo k x =
     Nothing           -> undo
 
 whnfApp :: Int -> Book -> Term -> Term -> Term -> Term
-whnfApp lv book undo f x =
+whnfApp lv book undo f x = 
   case app (whnf lv book f) x of
     App (Bif _ _) x -> undo
     App (Swi _ _) x -> undo
