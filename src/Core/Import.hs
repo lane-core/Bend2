@@ -63,7 +63,7 @@ collectRefs term = case term of
   Mat n c     -> S.union (collectRefs n) (collectRefs c)
   Enu _       -> S.empty
   Sym _       -> S.empty
-  Cse cases   -> S.unions (map (collectRefs . snd) cases)
+  Cse c d     -> S.union (S.unions (map (collectRefs . snd) c)) (collectRefs d)
   Sig a b     -> S.union (collectRefs a) (collectRefs b)
   Tup a b     -> S.union (collectRefs a) (collectRefs b)
   Get f       -> collectRefs f

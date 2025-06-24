@@ -1,3 +1,6 @@
+{-./../Core/Type.hs-}
+{-./../Core/WHNF.hs-}
+
 {-# LANGUAGE ViewPatterns #-}
 
 module Target.JavaScript where
@@ -37,7 +40,7 @@ data CT
   | CSwi CT CT
   | CBif CT CT
   | CMat CT CT
-  | CCse [(String, CT)]
+  | CCse [(String, CT)] CT
   | CGet CT
   | CUse CT
   -- Numeric
@@ -104,7 +107,7 @@ termToCT book term dep = case term of
   Swi z s    -> CSwi (termToCT book z dep) (termToCT book s dep)
   Mat n c    -> CMat (termToCT book n dep) (termToCT book c dep)
   Get f      -> CGet (termToCT book f dep)
-  Cse c      -> CCse (map (\(s,t) -> (s, termToCT book t dep)) c)
+  Cse c d    -> CCse (map (\(s,t) -> (s, termToCT book t dep)) c) (termToCT book d dep)
   Op2 o a b  -> COp2 o (termToCT book a dep) (termToCT book b dep)
   Op1 o a    -> COp1 o (termToCT book a dep)
   Pri p      -> CPri p
@@ -388,8 +391,8 @@ compileApp book fnName fnArgs isTail var app dep = do
       compileBif book fnName fnArgs isTail var f t (head appArgs) dep
     CMat n c | length appArgs == 1 -> 
       compileMat book fnName fnArgs isTail var n c (head appArgs) dep
-    CCse cases | length appArgs == 1 -> 
-      compileCse book fnName fnArgs isTail var cases (head appArgs) dep
+    CCse c d | length appArgs == 1 -> 
+      compileCse book fnName fnArgs isTail var c d (head appArgs) dep
     CGet f | length appArgs == 1 -> 
       compileGet book fnName fnArgs isTail var f (head appArgs) dep
     CUse f | length appArgs == 1 -> 
@@ -447,14 +450,31 @@ compileBif book fnName fnArgs isTail var f t val dep = do
   tStmt <- ctToJS book fnName fnArgs isTail var t dep
   return $ valStmt ++ "if (" ++ valName ++ ") { " ++ tStmt ++ " } else { " ++ fStmt ++ " }"
 
-compileCse :: CTBook -> String -> [String] -> Bool -> String -> [(String, CT)] -> CT -> Int -> JSM String
-compileCse book fnName fnArgs isTail var cases val dep = do
+-- compileCse :: CTBook -> String -> [String] -> Bool -> String -> [(String, CT)] -> CT -> Int -> JSM String
+-- compileCse book fnName fnArgs isTail var cases val dep = do
+  -- valName <- fresh
+  -- valStmt <- ctToJS' False valName val dep
+  -- casesCode <- forM cases $ \(s, t) -> do
+    -- tStmt <- ctToJS book fnName fnArgs isTail var t dep
+    -- return $ "if (" ++ valName ++ " === \"" ++ s ++ "\") { " ++ tStmt ++ " }"
+  -- let joined = intercalate " else " casesCode
+  -- return $ valStmt ++ joined
+
+compileCse :: CTBook -> String -> [String] -> Bool -> String -> [(String, CT)] -> CT -> CT -> Int -> JSM String
+compileCse book fnName fnArgs isTail var cases d val dep = do
   valName <- fresh
   valStmt <- ctToJS' False valName val dep
   casesCode <- forM cases $ \(s, t) -> do
     tStmt <- ctToJS book fnName fnArgs isTail var t dep
     return $ "if (" ++ valName ++ " === \"" ++ s ++ "\") { " ++ tStmt ++ " }"
-  let joined = intercalate " else " casesCode
+  -- Handle default case - apply d to val
+  dName <- fresh
+  dStmt <- ctToJS' False dName d dep
+  defaultStmt <- ctToJS book fnName fnArgs isTail var (CApp (CVar dName dep) (CVar valName dep)) dep
+  let defaultCase = "{ " ++ dStmt ++ defaultStmt ++ " }"
+  let joined = if null casesCode
+               then defaultCase
+               else intercalate " else " casesCode ++ " else " ++ defaultCase
   return $ valStmt ++ joined
 
 compileUse :: CTBook -> String -> [String] -> Bool -> String -> CT -> CT -> Int -> JSM String
@@ -488,7 +508,7 @@ ctToJS book fnName fnArgs isTail var term dep = case term of
   CSwi _ _    -> set var "(x => null)"
   CBif _ _    -> set var "(x => null)"
   CMat _ _    -> set var "(x => null)"
-  CCse _      -> set var "(x => null)"
+  CCse _ _    -> set var "(x => null)"
   CGet _      -> set var "(x => null)"
   CUse _      -> set var "(x => null)"
   CEra        -> set var "null"

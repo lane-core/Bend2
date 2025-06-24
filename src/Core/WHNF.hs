@@ -69,7 +69,7 @@ whnfApp lv book undo f x =
     App (Bif _ _) x -> undo
     App (Swi _ _) x -> undo
     App (Mat _ _) x -> undo
-    App (Cse _  ) x -> undo
+    App (Cse _ _) x -> undo
     App (Use _  ) x -> undo
     App (Get _  ) x -> undo
     App (Rwt _  ) x -> undo
@@ -83,7 +83,7 @@ whnfApp lv book undo f x =
     app (Bif f t  ) x = whnfAppBif lv book undo f t x
     app (Swi z s  ) x = whnfAppSwi lv book undo z s x
     app (Mat n c  ) x = whnfAppMat lv book undo n c x
-    app (Cse c    ) x = whnfAppCse lv book undo c x
+    app (Cse c e  ) x = whnfAppCse lv book undo c e x
     app (Get f    ) x = whnfAppGet lv book undo f x
     app (Pri p    ) x = whnfAppPri lv book undo p x
     app _           x = undo
@@ -130,13 +130,13 @@ whnfAppGet lv book undo f x =
     Tup a b -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
     _       -> undo
 
-whnfAppCse :: Int -> Book -> Term -> [(String, Term)] -> Term -> Term
-whnfAppCse lv book undo c x =
+whnfAppCse :: Int -> Book -> Term -> [(String,Term)] -> Term -> Term -> Term
+whnfAppCse lv book undo c d x =
   case whnf lv book x of
     Sym s -> case lookup s c of
       Just t  -> whnf lv book t
-      Nothing -> undo
-    _ -> undo
+      Nothing -> whnf lv book (App d (Sym s))
+    _     -> undo
 
 whnfAppPri :: Int -> Book -> Term -> PriF -> Term -> Term
 whnfAppPri lv book undo U64_TO_CHAR x =

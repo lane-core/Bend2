@@ -1,6 +1,5 @@
 {-./Type.hs-}
 {-./WHNF.hs-}
-{-./Equal.hs-}
 
 module Core.Rewrite where
 
@@ -48,7 +47,7 @@ rewriteGo d book old neo val = case val of
   Mat n c   -> Mat (rewrite d book old neo n) (rewrite d book old neo c)
   Enu s     -> Enu s
   Sym s     -> Sym s
-  Cse c     -> Cse (map (\(s, t) -> (s, rewrite d book old neo t)) c)
+  Cse c e   -> Cse (map (\(s,t) -> (s, rewrite d book old neo t)) c) (rewrite d book old neo e)
   Sig a b   -> Sig (rewrite d book old neo a) (rewrite d book old neo b)
   Tup a b   -> Tup (rewrite d book old neo a) (rewrite d book old neo b)
   Get f     -> Get (rewrite d book old neo f)

@@ -92,9 +92,18 @@ data Term
   | Mat Term Term -- λ{[]:n;<>:c}
 
   -- Enum
-  | Enu [String]        -- {@foo,@bar...}
-  | Sym String          -- @foo
-  | Cse [(String,Term)] -- λ{@foo:f;@bar:b;...}
+  | Enu [String]             -- {@foo,@bar...}
+  | Sym String               -- @foo
+  -- | Cse [(String,Term)] -- λ{@foo:f;@bar:b;...}
+
+  -- NOTE: this has been updated to include a default case ('d'). note that:
+  -- `(λ{@A:a;@B:b;c} @K)`
+  -- reduces to:
+  -- `(c @K)`
+  -- i.e., the default case must be a *function* that receives the scrutinee,
+  -- and returns the default case body.
+
+  | Cse [(String,Term)] Term -- λ{@foo:f;@bar:b;...d}
 
   -- Numbers
   | Num NTyp            -- CHR | U64 | I64 | F64
@@ -205,7 +214,8 @@ instance Show Term where
   show (Mat n c)      = "λ{ []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
   show (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
   show (Sym s)        = "@" ++ s
-  show (Cse c)        = "λ{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " }"
+  -- show (Cse c)        = "λ{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " }"
+  show (Cse c e)      = "λ{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
   show (Sig a b)      = sig a b where
     sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
     sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))

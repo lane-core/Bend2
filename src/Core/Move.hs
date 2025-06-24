@@ -29,7 +29,7 @@ move (Chk x t)   = Chk (move x) (move t)
 move (Bif f t)   = Bif (move f) (move t)
 move (Swi z s)   = Swi (move z) (move s)
 move (Mat n c)   = Mat (move n) (move c)
-move (Cse cs)    = Cse [ (tag, move br) | (tag,br) <- cs ]
+move (Cse c d)   = Cse [ (tag, move br) | (tag,br) <- c ] (move d)
 move (Use f)     = Use (move f)
 move (Sig a b)   = Sig (move a) (move b)
 move (All a b)   = All (move a) (move b)
@@ -59,7 +59,7 @@ putLam y t = case t of
   Bif t f -> Bif (putLamAfter 0 y t) (putLamAfter 0 y f)
   Swi z s -> Swi (putLamAfter 0 y z) (putLamAfter 1 y s)
   Mat n c -> Mat (putLamAfter 0 y n) (putLamAfter 2 y c)
-  Cse c   -> Cse [ (tag, putLamAfter 0 y b) | (tag, b) <- c ]
+  Cse c d -> Cse [ (tag, putLamAfter 0 y b) | (tag, b) <- c ] (putLamAfter 0 y d)
   Rwt f   -> Rwt (putLamAfter 0 y f)
   Get f   -> Get (putLamAfter 2 y f)
   t       -> t

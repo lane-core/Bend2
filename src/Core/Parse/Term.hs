@@ -341,7 +341,7 @@ parseSym = label "enum symbol / constructor" $ try $ do
       let tup = foldr Tup One fs       -- Build (f1,(f2,(...,()))
       in  Tup (Sym tag) tup            -- (@Tag,(f1,(f2,(...,()))))
 
--- | Syntax: λ{ @tag1: term1; @tag2: term2; }
+-- | Syntax: λ{ @tag1: term1; @tag2: term2; default }
 parseCse :: Parser Term
 parseCse = label "enum case match" $ do
   _ <- try $ do
@@ -353,8 +353,12 @@ parseCse = label "enum case match" $ do
   _ <- symbol ":"
   t <- parseTerm
   r <- many parseCaseClause
+  d <- option One $ try $ do
+    _ <- parseSemi
+    notFollowedBy (symbol "@")
+    parseTerm
   _ <- symbol "}"
-  return (Cse ((f, t) : r))
+  return (Cse ((f, t) : r) d)
 
 -- | Syntax: @tag: term
 -- Helper for parsing enum case clauses

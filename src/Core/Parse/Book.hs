@@ -33,7 +33,6 @@ import Core.Flatten (flattenBook)
 parseDefinition :: Parser (Name, Defn)
 parseDefinition = do
   (name, defn) <- choice [ parseType , parseDef ]
-  -- return $ (trace (show (name, defn)) (name, defn)) -- uncomment to show all parsed definitions
   return $ (name, defn)
 
 -- | Syntax: def name : Type = term | def name(x: T1, y: T2) -> RetType: body
@@ -187,8 +186,8 @@ doParseBook file input =
     Left err  -> Left (formatError input err)
     Right res -> 
       let book = bindBook (moveBook (flattenBook res))
-      in Right book
-      -- in Right (trace (show book) book)
+      -- in Right book
+      in Right (trace (show book) book)
   where
     p = do
       skip

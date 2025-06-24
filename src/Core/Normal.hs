@@ -39,7 +39,7 @@ normal lv d book term =
     Mat n c   -> Mat (normal lv d book n) (normal lv d book c)
     Enu s     -> Enu s
     Sym s     -> Sym s
-    Cse c     -> Cse (map (\(s, t) -> (s, normal lv d book t)) c)
+    Cse c e   -> Cse (map (\(s, t) -> (s, normal lv d book t)) c) (normal lv d book e)
     Sig a b   -> Sig (normal lv d book a) (normal lv d book b)
     Tup a b   -> Tup (normal lv d book a) (normal lv d book b)
     Get f     -> Get (normal lv d book f)

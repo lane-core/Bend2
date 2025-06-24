@@ -50,7 +50,7 @@ cmp lv d book a b =
     (Mat na ca    , Mat nb cb    ) -> eql lv d book na nb && eql lv d book ca cb
     (Enu sa       , Enu sb       ) -> sa == sb
     (Sym sa       , Sym sb       ) -> sa == sb
-    (Cse ca       , Cse cb       ) -> length ca == length cb && all (\ ((s1,t1), (s2,t2)) -> s1 == s2 && eql lv d book t1 t2) (zip ca cb)
+    (Cse ca da    , Cse cb db    ) -> length ca == length cb && all (\ ((s1,t1), (s2,t2)) -> s1 == s2 && eql lv d book t1 t2) (zip ca cb) && eql lv d book da db
     (Sig aa ba    , Sig ab bb    ) -> eql lv d book aa ab && eql lv d book ba bb
     (Tup aa ba    , Tup ab bb    ) -> eql lv d book aa ab && eql lv d book ba bb
     (Get fa       , Get fb       ) -> eql lv d book fa fb

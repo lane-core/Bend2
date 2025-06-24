@@ -41,7 +41,7 @@ binder lv term ctx vars = case term of
   Mat n c   -> Mat (binder lv n ctx vars) (binder lv c ctx vars)
   Enu s     -> Enu s
   Sym s     -> Sym s
-  Cse c     -> Cse (map (\(s, t) -> (s, binder lv t ctx vars)) c)
+  Cse c e   -> Cse (map (\(s, t) -> (s, binder lv t ctx vars)) c) (binder lv e ctx vars)
   Sig a b   -> Sig (binder lv a ctx vars) (binder lv b ctx vars)
   Tup a b   -> Tup (binder lv a ctx vars) (binder lv b ctx vars)
   Get f     -> Get (binder lv f ctx vars)
