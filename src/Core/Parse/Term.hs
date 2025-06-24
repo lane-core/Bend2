@@ -113,18 +113,19 @@ parseVar :: Parser Term
 parseVar = label "variable" $ do
   n <- name
   case n of
-    "Set"   -> return Set
-    "Empty" -> return Emp
-    "Unit"  -> return Uni
-    "Bool"  -> return Bit
-    "False" -> return Bt0
-    "True"  -> return Bt1
-    "Nat"   -> return Nat
-    "U64"   -> return (Num U64_T)
-    "I64"   -> return (Num I64_T)
-    "F64"   -> return (Num F64_T)
-    "Char"  -> return (Num CHR_T)
-    _       -> return $ Var n 0
+    "Set"         -> return Set
+    "Empty"       -> return Emp
+    "Unit"        -> return Uni
+    "Bool"        -> return Bit
+    "False"       -> return Bt0
+    "True"        -> return Bt1
+    "Nat"         -> return Nat
+    "U64"         -> return (Num U64_T)
+    "I64"         -> return (Num I64_T)
+    "F64"         -> return (Num F64_T)
+    "Char"        -> return (Num CHR_T)
+    "U64_TO_CHAR" -> return (Pri U64_TO_CHAR)
+    _             -> return $ Var n 0
 
 -- | Syntax: λ{}
 parseEfq :: Parser Term

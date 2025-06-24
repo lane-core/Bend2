@@ -99,6 +99,7 @@ flatten (Num t)        = Num t
 flatten (Val v)        = Val v
 flatten (Op2 o a b)    = Op2 o (flatten a) (flatten b)
 flatten (Op1 o a)      = Op1 o (flatten a)
+flatten (Pri p)        = Pri p
 flatten (Loc s t)      = Loc s (flatten t)
 flatten (Pat s m c)    = wrapLamApplyVals m (flattenPat 0 s m c)
 
@@ -470,6 +471,7 @@ subst name val term = case term of
   Val v     -> Val v
   Op2 o a b -> Op2 o (subst name val a) (subst name val b)
   Op1 o a   -> Op1 o (subst name val a)
+  Pri p     -> Pri p
   Loc s t   -> Loc s (subst name val t)
   Pat s m c -> Pat (map (subst name val) s) m (map substCase c)
     where substCase (pats, rhs) = (map (subst name val) pats, subst name val rhs)

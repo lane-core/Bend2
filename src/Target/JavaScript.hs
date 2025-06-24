@@ -47,6 +47,7 @@ data CT
   -- Others
   | CEra
   | CSup Int CT CT
+  | CPri PriF
 
 type CTBook = M.Map String CT
 
@@ -106,6 +107,7 @@ termToCT book term dep = case term of
   Cse c      -> CCse (map (\(s,t) -> (s, termToCT book t dep)) c)
   Op2 o a b  -> COp2 o (termToCT book a dep) (termToCT book b dep)
   Op1 o a    -> COp1 o (termToCT book a dep)
+  Pri p      -> CPri p
   -- Proof-related constructs are erased
   Rfl        -> CEra
   Rwt _      -> CEra
@@ -491,12 +493,18 @@ ctToJS book fnName fnArgs isTail var term dep = case term of
   CUse _      -> set var "(x => null)"
   CEra        -> set var "null"
   CSup _ _ _  -> error "Superpositions not supported in JavaScript backend"
+  CPri p      -> compilePri p
   where
+
+    compilePri p = case p of
+      U64_TO_CHAR -> set var "(x => String.fromCharCode(Number(x)))"
+
     compileLet var v f dep = do
       vName <- fresh
       vStmt <- ctToJS' False vName v dep
       retStmt <- ctToJS book fnName fnArgs isTail var (f (CVar vName dep)) (dep + 1)
       return $ vStmt ++ retStmt
+
     compileFix var k f dep = do
       let fixName = k
       bodyStmt <- ctToJS book fnName fnArgs isTail var (f (CVar fixName dep)) (dep + 1)

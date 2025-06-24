@@ -83,6 +83,7 @@ collectRefs term = case term of
   Val _       -> S.empty
   Op2 _ a b   -> S.union (collectRefs a) (collectRefs b)
   Op1 _ a     -> collectRefs a
+  Pri _       -> S.empty
   Pat s m c   -> S.unions $ map collectRefs s ++ map (collectRefs . snd) m ++ concatMap (\ (p, b) -> collectRefs b : map collectRefs p) c
 
 -- Auto-import references with cycle detection

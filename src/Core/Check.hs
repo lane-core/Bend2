@@ -177,6 +177,8 @@ infer d span book ctx term =
     Op1 op a -> do
       ta <- infer d span book ctx a
       inferOp1Type d span book ctx op a ta
+    Pri U64_TO_CHAR -> do
+      Done (All (Num U64_T) (Lam "x" (\_ -> Num CHR_T)))
     Pat _ _ _ -> do
       error "Pat not supported in infer"
 

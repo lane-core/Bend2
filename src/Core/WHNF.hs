@@ -24,6 +24,7 @@ whnf lv book term = do
     Loc _ t   -> whnf lv book t
     Op2 o a b -> whnfOp2 lv book o a b
     Op1 o a   -> whnfOp1 lv book o a
+    Pri p     -> Pri p
     _         -> term
 
 whnfLet :: Int -> Book -> Term -> Term -> Term
@@ -84,6 +85,7 @@ whnfApp lv book undo f x =
     app (Mat n c  ) x = whnfAppMat lv book undo n c x
     app (Cse c    ) x = whnfAppCse lv book undo c x
     app (Get f    ) x = whnfAppGet lv book undo f x
+    app (Pri p    ) x = whnfAppPri lv book undo p x
     app _           x = undo
 
 whnfAppLam :: Int -> Book -> Body -> Term -> Term
@@ -135,6 +137,12 @@ whnfAppCse lv book undo c x =
       Just t  -> whnf lv book t
       Nothing -> undo
     _ -> undo
+
+whnfAppPri :: Int -> Book -> Term -> PriF -> Term -> Term
+whnfAppPri lv book undo U64_TO_CHAR x =
+  case whnf lv book x of
+    Val (U64_V n) -> Val (CHR_V (toEnum (fromIntegral n)))
+    _             -> undo
 
 force :: Book -> Term -> Term
 force book t =

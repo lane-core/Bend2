@@ -72,6 +72,7 @@ cmp lv d book a b =
     (Val va       , Val vb       ) -> va == vb
     (Op2 oa aa ba , Op2 ob ab bb ) -> oa == ob && eql lv d book aa ab && eql lv d book ba bb
     (Op1 oa aa    , Op1 ob ab    ) -> oa == ob && eql lv d book aa ab
+    (Pri pa       , Pri pb       ) -> pa == pb
     (Met _  _  _  , Met _  _  _  ) -> error "not-supported"
     (Pat _  _  _  , Pat _  _  _  ) -> error "not-supported"
     (_            , _            ) -> False

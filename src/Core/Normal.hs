@@ -58,5 +58,6 @@ normal lv d book term =
     Val v     -> Val v
     Op2 o a b -> Op2 o (normal lv d book a) (normal lv d book b)
     Op1 o a   -> Op1 o (normal lv d book a)
+    Pri p     -> Pri p
     Met _ _ _ -> error "not-supported"
     Pat _ _ _ -> error "not-supported"

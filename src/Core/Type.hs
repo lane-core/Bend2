@@ -42,6 +42,10 @@ data NOp1
   = NOT | NEG
   deriving (Show, Eq)
 
+data PriF
+  = U64_TO_CHAR
+  deriving (Show, Eq)
+
 -- Bend's Term Type
 data Term
   -- Variables
@@ -126,6 +130,9 @@ data Term
 
   -- Errors
   | Loc Span Term -- (NEW CONSTRUCTOR)
+
+  -- Primitive (built-in)
+  | Pri PriF -- FOO
 
   -- Pattern-Match
   -- match x y ... {
@@ -225,6 +232,8 @@ instance Show Term where
   show (Era)           = "*"
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
   show (Met _ _ _)     = "?"
+  show (Pri p)         = pri p where
+    pri U64_TO_CHAR    = "U64_TO_CHAR"
   show (Num U64_T)     = "U64"
   show (Num I64_T)     = "I64"
   show (Num F64_T)     = "F64"
