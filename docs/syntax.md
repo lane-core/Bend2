@@ -232,7 +232,7 @@ Bend will automatically import `Foo/bar` from one of:
 Bend has no inference. That means every polymorphic application must be explicit. Example:
 
 ```python
-List/map<Char,Char>("foo", fn)
+List/map<U64,Nat>([1,2,3], U64/to_nat)
 ```
 
 The explicit `<Char,Char>` specialization is mandatory.
