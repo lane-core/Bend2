@@ -751,7 +751,7 @@ parseNumOp lhs = label "numeric operation" $ do
       , try $ symbol "<"  >> return LST
       , try $ symbol ">"  >> return GRT
       ]
-    , [ try $ symbol "==" >> return EQL
+    , [ try $ symbol "===" >> return EQL
       , try $ symbol "!=" >> return NEQ
       , try $ symbol "-"  >> return SUB
       , try $ symbol "*"  >> return MUL
