@@ -1,14 +1,22 @@
-module Core.CLI where
+module Core.CLI 
+  ( parseFile
+  , checkDefinitions
+  , runMain
+  , processFile
+  , processFileToJS
+  , listDependencies
+  ) where
 
 import Control.Monad (unless)
 import qualified Data.Map as M
+import qualified Data.Set as S
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import Control.Exception (catch, IOException)
 
-import Core.Import
+import Core.Import (autoImport, collectRefs)
 import Core.Bind
 import Core.Check
 import Core.Normal
@@ -101,4 +109,22 @@ processFileToJS file = do
   let jsCode = JS.compile boundBook
   formattedJS <- formatJavaScript jsCode
   putStrLn formattedJS
+
+-- | List all dependencies of a Bend file (including transitive dependencies)
+listDependencies :: FilePath -> IO ()
+listDependencies file = do
+  -- Parse and auto-import the file
+  book <- parseFile file
+  -- Collect all refs from the fully imported book
+  let allRefs = collectAllRefs book
+  -- Print all refs (these are all the dependencies)
+  mapM_ putStrLn (S.toList allRefs)
+
+-- | Collect all refs from a Book
+collectAllRefs :: Book -> S.Set Name
+collectAllRefs (Book defs) = 
+  S.unions $ map collectRefsFromDefn (M.elems defs)
+  where
+    collectRefsFromDefn (_, term, typ) = S.union (collectRefs term) (collectRefs typ)
+
 

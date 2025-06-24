@@ -1,7 +1,10 @@
 {-./../../app/main.hs-}
 {-./Type.hs-}
 
-module Core.Import where
+module Core.Import 
+  ( autoImport
+  , collectRefs
+  ) where
 
 import Control.Monad (foldM)
 import qualified Data.Map.Strict as M
