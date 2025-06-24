@@ -810,17 +810,26 @@ parseAss t = label "location binding" $ do
 
 -- | HOAS‐style binders
 
--- | Syntax: λ x y z. body | lam x y z. body
+-- | Syntax: λ x y z. body | lam x y z. body | λ (x,y) z. body
 parseLam :: Parser Term
 parseLam = label "lambda abstraction" $ do
   _ <- try $ do
     _ <- choice [symbol "λ", symbol "lambda"]
     notFollowedBy (symbol "{")
     return ()
-  xs <- some name
+  -- Parse terms instead of just names to support patterns
+  pats <- some parseTerm
   _  <- symbol "."
-  f  <- parseTerm
-  return $ foldr (\k acc -> Lam k (\v -> acc)) f xs
+  body  <- parseTerm
+  -- Desugar pattern lambdas
+  return $ foldr desugarLamPat body (zip [0..] pats)
+  where
+    desugarLamPat :: (Int, Term) -> Term -> Term
+    desugarLamPat (_, Var x _) acc = Lam x (\_ -> acc)
+    desugarLamPat (idx, pat) acc = 
+      -- Generate a fresh variable name using index
+      let freshVar = "_" ++ show idx
+      in Lam freshVar (\_ -> Pat [Var freshVar 0] [] [([pat], acc)])
 
 -- | Syntax: μ f. body
 parseFix :: Parser Term
