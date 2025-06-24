@@ -266,8 +266,8 @@ instance Show Term where
              showPat p = "(" ++ show p ++ ")"
 
 instance Show Book where
-  show (Book defs) = "Book {" ++ intercalate ", " (map defn (M.toList defs)) ++ "}"
-    where defn (k,(_,x,t)) = k ++ " : " ++ show x ++ " = " ++ show t
+  show (Book defs) = unlines (map defn (M.toList defs))
+    where defn (k,(_,x,t)) = k ++ " : " ++ show t ++ " = " ++ show x
 
 instance Show Span where
   show span = "\n\x1b[1mLocation:\x1b[0m "

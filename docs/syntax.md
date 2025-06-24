@@ -247,6 +247,13 @@ def Nat/mul(a: Nat, b: Nat) -> Nat:
     case 1n + p:
       Nat/add(b, Nat/mul(p, b))
 
+def List/append<A>(xs: A[], ys: A[]) -> A[]:
+  match xs:
+    case []:
+      ys
+    case x <> xs:
+      x <> List/append<A>(xs, ys)
+
 def List/map<A,B>(xs: A[], f: A -> B) -> B[]:
   match xs:
     case []:
