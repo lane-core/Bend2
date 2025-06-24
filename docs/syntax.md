@@ -62,8 +62,8 @@ x : T = v       # Assignment (typed)
 ## Functions
 
 ```python
-lam x. e        # Lambda abstraction
-lam x y z. e    # Multi-argument lambda
+lambda x. e        # Lambda abstraction
+lambda x y z. e    # Multi-argument lambda
 f(a, b, c)      # Function application
 
 # Function definition sugar:
@@ -227,6 +227,15 @@ Bend will automatically import `Foo/bar` from one of:
 - `./Foo/bar.bend`
 - `./Foo/bar/_.bend`
 
+# Inference
+
+Bend has no inference. That means every polymorphic application must be explicit. Example:
+
+```python
+List/map<Char,Char>("foo", fn)
+```
+
+The explicit `<Char,Char>` specialization is mandatory.
 
 # Examples
 
