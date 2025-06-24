@@ -9,6 +9,7 @@ module Core.Parse.Book
 import Control.Monad (when)
 import Control.Monad.State.Strict (State, get, put, evalState)
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
+import Data.List (intercalate)
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -86,9 +87,38 @@ parseDefFunction f = label "function definition" $ do
   -- x <- parseTerm
   -- return (f, (False, x, t))
 
--- | Syntax: def1 def2 def3 ...
+-- | Parse a module path like Path/To/Lib
+parseModulePath :: Parser String
+parseModulePath = do
+  firstPart <- name
+  restParts <- many (try $ char '/' >> name)
+  skip -- consume whitespace after path
+  return $ intercalate "/" (firstPart : restParts)
+
+-- | Add an import mapping to the parser state
+addImportMapping :: String -> String -> Parser ()
+addImportMapping alias path = do
+  st <- get
+  let aliasKey = alias ++ "/"
+      pathValue = path ++ "/"
+      newImports = M.insert aliasKey pathValue (imports st)
+  put st { imports = newImports }
+
+-- | Syntax: import Path/To/Lib as Lib
+parseImport :: Parser ()
+parseImport = do
+  _ <- symbol "import"
+  path <- parseModulePath
+  _ <- symbol "as"
+  alias <- name
+  addImportMapping alias path
+
+-- | Syntax: import statements followed by definitions
 parseBook :: Parser Book
 parseBook = do
+  -- Parse all import statements first
+  _ <- many (try parseImport)
+  -- Then parse definitions
   defs <- many parseDefinition
   return $ Book (M.fromList defs)
 
@@ -153,7 +183,7 @@ parseArg expr = do
 -- | Parse a book from a string, returning an error message on failure
 doParseBook :: FilePath -> String -> Either String Book
 doParseBook file input =
-  case evalState (runParserT p file input) (ParserState True input) of
+  case evalState (runParserT p file input) (ParserState True input M.empty) of
     Left err  -> Left (formatError input err)
     Right res -> Right (bindBook (moveBook (flattenBook res)))
   where

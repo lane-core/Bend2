@@ -21,6 +21,12 @@ module Core.Parse
   , isNameInit
   , isNameChar
   
+  -- * Name parsing helpers
+  , parseRawName
+  , checkReserved
+  , resolveImports
+  , applyImportMappings
+  
   -- * Location tracking
   , withSpan
   , located
@@ -50,8 +56,9 @@ import qualified Core.Parse.WithSpan as WithSpan
 
 -- Parser state
 data ParserState = ParserState
-  { tight  :: Bool   -- ^ tracks whether previous token ended with no trailing space
-  , source :: String -- ^ original file source, for error reporting
+  { tight  :: Bool                   -- ^ tracks whether previous token ended with no trailing space
+  , source :: String                 -- ^ original file source, for error reporting
+  , imports :: M.Map String String   -- ^ import mappings: "Lib/" => "Path/To/Lib/"
   }
 
 type Parser = ParsecT Void String (Control.Monad.State.Strict.State ParserState)
@@ -94,17 +101,43 @@ isNameInit c = isAsciiLower c || isAsciiUpper c || c == '_'
 isNameChar :: Char -> Bool
 isNameChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c == '/'
 
-name :: Parser Name
-name = lexeme $ do
+reserved :: [Name]
+reserved = ["match","case","else","if","end","all","any","lambda","finally","import","as"]
+
+-- | Parse a raw name without import resolution
+parseRawName :: Parser Name
+parseRawName = do
   h <- satisfy isNameInit <?> "letter or underscore"
   t <- many (satisfy isNameChar <?> "letter, digit, or underscore")
-  let n = h : t
-  if n `elem` reserved
-     then fail ("reserved keyword '" ++ n ++ "'")
-     else return n
+  return (h : t)
 
-reserved :: [Name]
-reserved = ["match","case","else","if","end","all","any","lambda","finally"]
+-- | Check if a name is reserved
+checkReserved :: Name -> Parser ()
+checkReserved n = when (n `elem` reserved) $
+  fail ("reserved keyword '" ++ n ++ "'")
+
+-- | Apply import mappings to a name
+resolveImports :: Name -> Parser Name
+resolveImports n = do
+  st <- get
+  return $ applyImportMappings (imports st) n
+
+-- | Apply all import mappings to a name
+applyImportMappings :: M.Map String String -> Name -> Name
+applyImportMappings mappings n
+  = foldr tryApplyMapping n (M.toList mappings) where
+    tryApplyMapping :: (String, String) -> String -> String
+    tryApplyMapping (prefix, replacement) name =
+      if take (length prefix) name == prefix
+      then replacement ++ drop (length prefix) name
+      else name
+
+-- | Parse a name with import resolution
+name :: Parser Name
+name = lexeme $ do
+  n <- parseRawName
+  checkReserved n
+  resolveImports n
 
 -- Parses an Optional semicolon
 parseSemi :: Parser ()
