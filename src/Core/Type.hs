@@ -92,7 +92,7 @@ data Term
   | Sym String          -- @foo
   | Cse [(String,Term)] -- λ{@foo:f;@bar:b;...}
 
-  -- U32 (new constructors)
+  -- Numbers
   | Num NTyp            -- CHR | U64 | I64 | F64
   | Val NVal            -- 123 | +123 | +123.0
   | Op2 NOp2 Term Term  -- x + y
