@@ -101,10 +101,10 @@ flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
 
 flattenPat :: Int -> Term -> Term
 flattenPat d pat@(Pat (s:ss) ms ((((cut->Var k i):ps),rhs):cs)) =
-  -- trace (">> var: " ++ show pat) $
+  trace (">> var: " ++ show pat) $
   Pat ss ((k,s):ms) (joinVarCol (d+1) k (((Var k i:ps),rhs):cs))
 flattenPat d pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
-  -- trace (">> ctr: " ++ show pat) $
+  trace (">> ctr: " ++ show pat) $
   Pat [s] moves [([ct], picks), ([var d], drops)] where
     (ct,fs) = ctrOf d p
     (ps,ds) = peelCtrCol ct cs
@@ -141,11 +141,26 @@ peelCtrCol :: Term -> [Case] -> ([Case],[Case])
 peelCtrCol (cut->k) ((((cut->p):ps),rhs):cs) = 
   -- trace (">> peel " ++ show k ++ " ~ " ++ show p) $
   case (k,p) of
-    (Zer   , Zer  )   -> ((ps, rhs) : picks , drops)
-    (Zer   , Var k _) -> ((ps, subst k Zer rhs) : picks , ((p:ps),rhs) : drops)
-    (Suc _ , Suc x)   -> (((x:ps), rhs) : picks , drops)
-    (Suc _ , Var k _) -> (((Var k 0:ps), subst k (Suc (Var k 0)) rhs) : picks , ((p:ps),rhs) : drops)
-    x                 -> (picks , ((p:ps),rhs) : drops)
+    (Zer    , Zer    ) -> ((ps, rhs) : picks , drops)
+    (Zer    , Var k _) -> ((ps, subst k Zer rhs) : picks , ((p:ps),rhs) : drops)
+    (Suc _  , Suc x  ) -> (((x:ps), rhs) : picks , drops)
+    (Suc _  , Var k _) -> (((Var k 0:ps), subst k (Suc (Var k 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Bt0    , Bt0    ) -> ((ps, rhs) : picks , drops)
+    (Bt0    , Var k _) -> ((ps, subst k Bt0 rhs) : picks , ((p:ps),rhs) : drops)
+    (Bt1    , Bt1    ) -> ((ps, rhs) : picks , drops)
+    (Bt1    , Var k _) -> ((ps, subst k Bt1 rhs) : picks , ((p:ps),rhs) : drops)
+    (Nil    , Nil    ) -> ((ps, rhs) : picks , drops)
+    (Nil    , Var k _) -> ((ps, subst k Nil rhs) : picks , ((p:ps),rhs) : drops)
+    (Con _ _, Con h t) -> (((h:t:ps), rhs) : picks , drops)
+    (Con _ _, Var k _) -> (((Var (k++"h") 0:Var (k++"t") 0:ps), subst k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (One    , One    ) -> ((ps, rhs) : picks , drops)
+    (One    , Var k _) -> ((ps, subst k One rhs) : picks , ((p:ps),rhs) : drops)
+    (Tup _ _, Tup a b) -> (((a:b:ps), rhs) : picks , drops)
+    (Tup _ _, Var k _) -> (((Var (k++"x") 0:Var (k++"y") 0:ps), subst k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Sym s  , Sym s' )
+             | s == s' -> ((ps, rhs) : picks , drops)
+    (Sym s  , Var k _) -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
+    x                  -> (picks , ((p:ps),rhs) : drops)
   where (picks, drops) = peelCtrCol k cs
 peelCtrCol k cs = (cs,cs)
 
@@ -457,9 +472,16 @@ patOf d p              = fresh d
 
 -- Returns a single-layer constructor, replacing fields by pattern variables
 ctrOf :: Int -> Term -> (Term, [Term])
-ctrOf d Zer     = (Zer , [])
-ctrOf d (Suc p) = (Suc (pat d p), [pat d p])
-ctrOf d x       = (var d , [var d])
+ctrOf d Zer       = (Zer , [])
+ctrOf d (Suc p)   = (Suc (pat d p), [pat d p])
+ctrOf d Bt0       = (Bt0 , [])
+ctrOf d Bt1       = (Bt1 , [])
+ctrOf d Nil       = (Nil , [])
+ctrOf d (Con h t) = (Con (pat d h) (pat d t), [pat d h, pat d t])
+ctrOf d One       = (One , [])
+ctrOf d (Tup a b) = (Tup (pat d a) (pat d b), [pat d a, pat d b])
+ctrOf d (Sym s)   = (Sym s, [])
+ctrOf d x         = (var d , [var d])
 
 -- Applies n arguments to a value
 apps :: Int -> [Term] -> Term -> Term
