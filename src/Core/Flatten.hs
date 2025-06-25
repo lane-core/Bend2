@@ -101,10 +101,10 @@ flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
 
 flattenPat :: Int -> Term -> Term
 flattenPat d pat@(Pat (s:ss) ms ((((cut->Var k i):ps),rhs):cs)) =
-  trace (">> var: " ++ show pat) $
+  -- trace (">> var: " ++ show pat) $
   Pat ss ((k,s):ms) (joinVarCol (d+1) k (((Var k i:ps),rhs):cs))
 flattenPat d pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
-  trace (">> ctr: " ++ show pat) $
+  -- trace (">> ctr: " ++ show pat) $
   Pat [s] moves [([ct], picks), ([var d], drops)] where
     (ct,fs) = ctrOf d p
     (ps,ds) = peelCtrCol ct cs
@@ -256,6 +256,7 @@ unpat d (Op1 o a)       = Op1 o (unpat d a)
 unpat d (Pri p)         = Pri p
 unpat d (Loc s t)       = Loc s (unpat d t)
 unpat d (Pat [s] ms cs) = unpatPat d s ms cs
+unpat d (Pat ss  ms []) = Efq
 unpat d (Pat ss  ms cs) = error "unpat: multiple scrutinees after flattening"
 
 unpatPat :: Int -> Term -> [Move] -> [Case] -> Term
@@ -282,7 +283,7 @@ unpatPat d x ms (([(cut -> Suc p)], s) : ([(cut -> Zer)], z) : _) =
 unpatPat d x ms (([(cut -> Zer)], z) : ([(cut -> Var k i)], v) : _) =
   matcher d ms x $ Swi if_zer if_suc
   where if_zer = unpat d z
-        if_suc = Lam k $ \x -> unpat (d+1) (subst k (Suc x) v)
+        if_suc = Lam k $ \x -> unpat (d+1) (subst k (Suc (Var k 0)) v)
 
 -- match x { 1n+p: s ; k: v }
 -- ------------------------------------
@@ -330,8 +331,7 @@ unpatPat d x ms (([(cut -> Bt1)], t) : ([(cut -> Var k i)], v) : _) =
 unpatPat d x ms (([(cut -> Nil)], n) : ([(cut -> Con h t)], c) : _) =
   matcher d ms x $ Mat if_nil if_con
   where if_nil = unpat d n
-        if_con = Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
-                   unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c))
+        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
 
 -- match x { h<>t: c ; []: n }
 -- ------------------------------
@@ -339,8 +339,7 @@ unpatPat d x ms (([(cut -> Nil)], n) : ([(cut -> Con h t)], c) : _) =
 unpatPat d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
   matcher d ms x $ Mat if_nil if_con
   where if_nil = unpat d n
-        if_con = Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
-                   unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c))
+        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
 
 -- match x { []: n ; k: v }
 -- -----------------------------------------
@@ -348,8 +347,7 @@ unpatPat d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
 unpatPat d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
   matcher d ms x $ Mat if_nil if_con
   where if_nil = unpat d n
-        if_con = Lam "h" $ \h' -> Lam "t" $ \t' ->
-                   unpat (d+2) (subst k (Con h' t') v)
+        if_con = Lam (nam d) $ \_ -> Lam (nam (d+1)) $ \_ -> unpat (d+2) (subst k (Con (var d) (var (d+1))) v)
 
 -- match x { h<>t: c ; k: v }
 -- ---------------------------------------
@@ -357,13 +355,12 @@ unpatPat d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
 unpatPat d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
   matcher d ms x $ Mat if_nil if_con
   where if_nil = unpat d (subst k Nil v)
-        if_con = Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
-                   unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c))
+        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
 
 -- match x { (): u }
 -- -----------------
 -- (λ{ (): u } x)
-unpatPat d x ms (([(cut -> One)], u) : _) =
+unpatPat d x ms cs@(([(cut -> One)], u) : _) =
   matcher d ms x $ Use (unpat d u)
 
 -- match x { (a,b): p }
@@ -371,22 +368,19 @@ unpatPat d x ms (([(cut -> One)], u) : _) =
 -- (λ{ (,): λa. λb. p } x)
 unpatPat d x ms (([(cut -> Tup a b)], p) : _) =
   matcher d ms x $ Get if_tup
-  where if_tup = Lam (patOf d a) $ \a' -> Lam (patOf d b) $ \b' ->
-                   unpat (d+2) (subst (patOf d a) a' (subst (patOf d b) b' p))
+  where if_tup = Lam (patOf d a) $ \_ -> Lam (patOf (d+1) b) $ \_ -> unpat (d+2) p
 
--- match x { @sym: ... ; ... ; k: v }
--- ----------------------------------
--- (λ{ @sym: ... ; ... ; v } x)
-unpatPat d x ms cs@(([(cut -> Sym _)], _) : _) =
-  matcher d ms x $ Cse cses dflt
-  where (symCases, def) = syms cs
-        cses = [(sym, unpat d body) | (sym, body) <- symCases]
-        dflt = maybe Era (unpat d) def
-        syms :: [Case] -> ([(String, Term)], Maybe Term)
-        syms [] = ([], Nothing)
-        syms (([(cut -> Sym s)], body) : cs) = let (rest, def) = syms cs in ((s, body) : rest, def)
-        syms (([(cut -> Var _ _)], body) : cs) = ([], Just body)
-        syms cs = error $ "syms: invalid " ++ show cs
+-- match x { @S1: b1 ; @S2: b2 ; ... ; k: d }
+-- ------------------------------------------
+-- (λ{ @S1:b1 ; @S2:b2 ; ... ; d } x)
+unpatPat d x ms cs@(([(cut -> Sym _)],_):_) =
+  let (cx,dx) = go cs in matcher d ms x $ Cse cx dx
+  where
+    -- go :: [Case] -> ([Case],Term)
+    go []                          = ([], Efq)
+    go (([(cut->Sym s)]  ,rhs):cs) = ((s,unpat d rhs):cx,dx) where (cx,dx) = go cs
+    go (([(cut->Var _ _)],rhs):[]) = ([],unpat d rhs)
+    go (c:_)                       = error $ "unpatPat:invalid-Sym-case:" ++ show c
 
 -- match x { k: body }
 -- -------------------
@@ -405,7 +399,7 @@ unpatPat d s ms cs = error $ "unpatPat - invalid pattern: " ++ show (d, s, ms, c
 
 unpatBook :: Book -> Book
 unpatBook (Book defs) = Book (M.map unpatDefn defs)
-  where unpatDefn (i, x, t) = (i, unpat 0 x, unpat 0 t)
+  where unpatDefn (i, x, t) = trace ("unpat: " ++ show x) (i, unpat 0 x, unpat 0 t)
 
 -- Completes a pattern-match using native λ-matches
 -- Injects moved vars inwards using extra lams/apps
@@ -414,7 +408,7 @@ matcher d ms s (Swi z (Lam p f)) =
   apps d (map snd ms) (App swi s) where
     swi = Swi ifZ ifS
     ifZ = lams d (map fst ms) z
-    ifS = Lam p $ \x -> lams d (map fst ms) (f x)
+    ifS = Lam p $ \x -> lams (d+1) (map fst ms) (f x)
 matcher d ms s (Bif f t) =
   apps d (map snd ms) (App bif s) where
     bif = Bif ifF ifT
@@ -424,7 +418,7 @@ matcher d ms s (Mat n (Lam h (unlam d -> Lam t (unlam d -> c)))) =
   apps d (map snd ms) (App mat s) where
     mat = Mat ifN ifC
     ifN = lams d (map fst ms) n
-    ifC = Lam h $ \_ -> Lam t $ \_ -> lams d (map fst ms) c
+    ifC = Lam h $ \_ -> Lam t $ \_ -> lams (d+1) (map fst ms) c
 matcher d ms s (Mat n c) =
   apps d (map snd ms) (App mat s) where
     mat = Mat ifN ifC
@@ -437,7 +431,7 @@ matcher d ms s (Use u) =
 matcher d ms s (Get (Lam a (unlam d -> Lam b (unlam d -> p)))) =
   apps d (map snd ms) (App get s) where
     get = Get ifP
-    ifP = Lam a $ \_ -> Lam b $ \_ -> lams d (map fst ms) p
+    ifP = Lam a $ \_ -> Lam b $ \_ -> lams (d+2) (map fst ms) p
 matcher d ms s (Get f) =
   apps d (map snd ms) (App get s) where
     get = Get ifP
@@ -454,12 +448,12 @@ matcher d ms s other =
 -- -------
 
 -- Creates a fresh name at given depth
-fresh :: Int -> String
-fresh d = "x" ++ show d
+nam :: Int -> String
+nam d = "x" ++ show d
 
 -- Creates a fresh variable at given depth
 var :: Int -> Term
-var d = Var (fresh d) d
+var d = Var (nam d) d
 
 -- Creates a fresh pattern at given depth
 pat :: Int -> Term -> Term
@@ -468,7 +462,7 @@ pat d f = Var (patOf d f) d
 -- Gets a var name, or creates a fresh one
 patOf :: Int -> Term -> String
 patOf d (cut->Var k i) = k
-patOf d p              = fresh d
+patOf d p              = nam d
 
 -- Returns a single-layer constructor, replacing fields by pattern variables
 ctrOf :: Int -> Term -> (Term, [Term])
@@ -477,9 +471,9 @@ ctrOf d (Suc p)   = (Suc (pat d p), [pat d p])
 ctrOf d Bt0       = (Bt0 , [])
 ctrOf d Bt1       = (Bt1 , [])
 ctrOf d Nil       = (Nil , [])
-ctrOf d (Con h t) = (Con (pat d h) (pat d t), [pat d h, pat d t])
+ctrOf d (Con h t) = (Con (pat d h) (pat (d+1) t), [pat d h, pat (d+1) t])
 ctrOf d One       = (One , [])
-ctrOf d (Tup a b) = (Tup (pat d a) (pat d b), [pat d a, pat d b])
+ctrOf d (Tup a b) = (Tup (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
 ctrOf d (Sym s)   = (Sym s, [])
 ctrOf d x         = (var d , [var d])
 
@@ -495,3 +489,58 @@ unlam d f = f (var d)
 lams :: Int -> [Name] -> Term -> Term
 lams d (k:ks) t = Lam k $ \_ -> lams (d+1) ks t
 lams d []     t = t
+
+-- Subst a var for a value in a term
+subst :: Name -> Term -> Term -> Term
+subst name val term = go name val term where
+  go name val term = case term of
+    Var k _   -> if k == name then val else term
+    Ref k     -> Ref k
+    Sub t     -> Sub (go name val t)
+    Fix k f   -> Fix k (\x -> go name val (f x))
+    Let v f   -> Let (go name val v) (go name val f)
+    Ann x t   -> Ann (go name val x) (go name val t)
+    Chk x t   -> Chk (go name val x) (go name val t)
+    Set       -> Set
+    Emp       -> Emp
+    Efq       -> Efq
+    Uni       -> Uni
+    One       -> One
+    Use f     -> Use (go name val f)
+    Bit       -> Bit
+    Bt0       -> Bt0
+    Bt1       -> Bt1
+    Bif f t   -> Bif (go name val f) (go name val t)
+    Nat       -> Nat
+    Zer       -> Zer
+    Suc n     -> Suc (go name val n)
+    Swi z s   -> Swi (go name val z) (go name val s)
+    Lst t     -> Lst (go name val t)
+    Nil       -> Nil
+    Con h t   -> Con (go name val h) (go name val t)
+    Mat n c   -> Mat (go name val n) (go name val c)
+    Enu s     -> Enu s
+    Sym s     -> Sym s
+    Cse c e   -> Cse [(s, go name val t) | (s, t) <- c] (go name val e)
+    Sig a b   -> Sig (go name val a) (go name val b)
+    Tup a b   -> Tup (go name val a) (go name val b)
+    Get f     -> Get (go name val f)
+    All a b   -> All (go name val a) (go name val b)
+    Lam k f   -> Lam k (\x -> go name val (f x))
+    App f x   -> App (go name val f) (go name val x)
+    Eql t a b -> Eql (go name val t) (go name val a) (go name val b)
+    Rfl       -> Rfl
+    Rwt f     -> Rwt (go name val f)
+    Met i t x -> Met i (go name val t) (map (go name val) x)
+    Ind t     -> Ind (go name val t)
+    Frz t     -> Frz (go name val t)
+    Era       -> Era
+    Sup l a b -> Sup l (go name val a) (go name val b)
+    Num t     -> Num t
+    Val v     -> Val v
+    Op2 o a b -> Op2 o (go name val a) (go name val b)
+    Op1 o a   -> Op1 o (go name val a)
+    Pri p     -> Pri p
+    Loc s t   -> Loc s (go name val t)
+    Pat s m c -> Pat (map (go name val) s) m (map cse c)
+      where cse (pats, rhs) = (map (go name val) pats, go name val rhs)
