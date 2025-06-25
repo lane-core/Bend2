@@ -9,6 +9,8 @@ import Debug.Trace
 
 import Core.Type
 
+-- FIXME: can this whole file be just a few lines on Flatten.hs?
+
 -- Auto-Move variables, linearizing/specializing them.
 -- Currently, only enabled for the second field of pairs:
 -- λ{ (,): λx.λy.(λ{ P0:B0 … Pn:Bn } x) }

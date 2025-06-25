@@ -102,13 +102,14 @@ flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
 flattenPat :: Int -> Term -> Term
 flattenPat d pat@(Pat (s:ss) ms ((((cut->Var k i):ps),rhs):cs)) =
   -- trace (">> var: " ++ show pat) $
-  Pat ss ((k,s):ms) (joinVarCol (d+1) k (((Var k i:ps),rhs):cs))
+  flatten d $ Pat ss ms (joinVarCol (d+1) k (((Var k i:ps),rhs):cs))
 flattenPat d pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
   -- trace (">> ctr: " ++ show pat) $
   Pat [s] moves [([ct], picks), ([var d], drops)] where
     (ct,fs) = ctrOf d p
     (ps,ds) = peelCtrCol ct cs
-    moves   = ms ++ map (\ (s,i) -> (patOf (d+i) s, s)) (zip ss [0..])
+    moves   = ms
+    -- moves   = ms ++ map (\ (s,i) -> (patOf (d+i) s, s)) (zip ss [0..])
     picks   = flatten d' (Pat (fs   ++ ss) ms ps) where d' = d + length fs
     drops   = flatten d' (Pat (var d : ss) ms ds) where d' = d + 1
 flattenPat d pat = pat
@@ -160,6 +161,8 @@ peelCtrCol (cut->k) ((((cut->p):ps),rhs):cs) =
     (Sym s  , Sym s' )
              | s == s' -> ((ps, rhs) : picks , drops)
     (Sym s  , Var k _) -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
+    (Rfl    , Rfl    ) -> ((ps, rhs) : picks , drops)
+    (Rfl    , Var k _) -> ((ps, subst k Rfl rhs) : picks , ((p:ps),rhs) : drops)
     x                  -> (picks , ((p:ps),rhs) : drops)
   where (picks, drops) = peelCtrCol k cs
 peelCtrCol k cs = (cs,cs)
@@ -382,6 +385,13 @@ match d x ms cs@(([(cut -> Sym _)],_):_) =
     go (([(cut->Var _ _)],rhs):[]) = ([],unpat d rhs)
     go (c:_)                       = error $ "match:invalid-Sym-case:" ++ show c
 
+-- match x { {==}: r }
+-- --------------------
+-- (λ{ {==}: r } x)
+match d x ms (([(cut -> Rfl)], r) : _) =
+  wrap d ms x $ Rwt if_rfl
+  where if_rfl = unpat d r
+
 -- match x { k: body }
 -- -------------------
 -- body[k := x]
@@ -437,6 +447,10 @@ wrap d ms s (Cse c e) =
     cse = Cse [(s, lams d (map fst ms) t) | (s, t) <- c] (lams d (map fst ms) e)
 wrap d ms s Efq =
   apps d (map snd ms) (App Efq s)
+wrap d ms s (Rwt r) =
+  apps d (map snd ms) (App rwt s) where
+    rwt = Rwt ifR
+    ifR = lams d (map fst ms) r
 wrap d ms s other =
   error "TODO"
 
@@ -449,7 +463,7 @@ unpatBook (Book defs) = Book (M.map unpatDefn defs)
 
 -- Creates a fresh name at given depth
 nam :: Int -> String
-nam d = "x" ++ show d
+nam d = "_x" ++ show d
 
 -- Creates a fresh variable at given depth
 var :: Int -> Term
@@ -475,6 +489,7 @@ ctrOf d (Con h t) = (Con (pat d h) (pat (d+1) t), [pat d h, pat (d+1) t])
 ctrOf d One       = (One , [])
 ctrOf d (Tup a b) = (Tup (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
 ctrOf d (Sym s)   = (Sym s, [])
+ctrOf d Rfl       = (Rfl , [])
 ctrOf d x         = (var d , [var d])
 
 -- Applies n arguments to a value

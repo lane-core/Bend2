@@ -60,7 +60,9 @@ def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
     case 0n:
       finally
     case 1n + p:
-      ()
+      ind = div2_mul2_theo(p)
+      prf = cong(Nat, Nat, div2(mul2(p)), p, λx. 1n + x, ind)
+      prf
 
 # Nat Equality
 def equal(a: Nat, b: Nat) -> Bool:
@@ -139,13 +141,13 @@ type Vec<A: Set>(N: Nat) -> Set:
     n: Nat
     h: A
     t: Vec(A,n)
-    e: Nat{N == (1+n)}
+    e: Nat{N == (1n+n)}
 
 def VecInd
   ( A: Set
   , P: all n:Nat xs:Vec(A,n). Set
   , N: P(0,(@Nil,finally,()))
-  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1+s,(@Cons,s,x,xs,finally,()))
+  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1n+s,(@Cons,s,x,xs,finally,()))
   , n: Nat
   , x: Vec(A,n)
   ) -> P(n,x):
