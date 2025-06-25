@@ -38,8 +38,15 @@ import Debug.Trace
 
 import Core.Type
 
--- Main Flattener
--- --------------
+-- Flattener
+-- =========
+-- Converts pattern-matches into if-lets, forcing the shape:
+--   match x { with ... ; case @C: ... ; case x: ... }
+-- After this transformation, the match will have exactly:
+-- - 1 scrutinee
+-- - 1 value case
+-- - 1 default case
+-- Outer scrutinees will be moved inside via 'with'.
 
 flatten :: Int -> Term -> Term
 flatten d (Var n i)   = Var n i
@@ -90,85 +97,300 @@ flatten d (Op2 o a b) = Op2 o (flatten d a) (flatten d b)
 flatten d (Op1 o a)   = Op1 o (flatten d a)
 flatten d (Pri p)     = Pri p
 flatten d (Loc s t)   = Loc s (flatten d t)
-flatten d (Pat s m c) = finish $ flat d (Pat s m c)
+flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
+
+flattenPat :: Int -> Term -> Term
+flattenPat d pat@(Pat (s:ss) ms ((((strip->Var k i):ps),rhs):cs)) =
+  trace (">> var: " ++ show pat) $
+  Pat ss ((k,s):ms) (joinVarCol (d+1) k (((Var k i:ps),rhs):cs))
+flattenPat d pat@(Pat (s:ss) ms cs@((((strip->p):_),_):_)) =
+  trace (">> ctr: " ++ show pat) $
+  Pat [s] moves [([ct], picks), ([var d], drops)] where
+    (ct,fs) = ctrOf d p
+    (ps,ds) = peelCtrCol ct cs
+    moves   = ms ++ map (\ (s,i) -> (patOf (d+i) s, s)) (zip ss [0..])
+    picks   = flatten d' (Pat (fs   ++ ss) ms ps) where d' = d + length fs
+    drops   = flatten d' (Pat (var d : ss) ms ds) where d' = d + 1
+flattenPat d pat = pat
+
+-- Converts an all-variable column to a 'with' statement
+-- match x y { case x0 @A: F(x0) ; case x1 @B: F(x1) }
+-- --------------------------------------------------- joinVarCol k
+-- match y { with k=x case @A: F(k) ; case @B: F(k) }
+joinVarCol :: Int -> Name -> [Case] -> [Case]
+joinVarCol d k ((((strip->Var j _):ps),rhs):cs) = (ps, subst j (Var k 0) rhs) : joinVarCol d k cs
+joinVarCol d k ((((strip->ctr    ):ps),rhs):cs) = error "redundant pattern"
+joinVarCol d k cs                               = cs
+
+-- Peels a constructor layer from a column
+-- match x y:
+--   case @Z{}      @A: A
+--   case @S{@Z}    @B: B
+--   case @S{@S{p}} @C: C(p)
+-- ------------------------- peel @Z , peel @S{k}
+-- match x:
+--   with y
+--   case @Z: # ↓ peel @Z
+--     match y:
+--       case @A: A
+--   case @S{k}: # ↓ peel @S{k}
+--     match k y:
+--       case @Z    @B: B
+--       case @S{p} @C: C(p)
+peelCtrCol :: Term -> [Case] -> ([Case],[Case])
+peelCtrCol (strip->k) ((((strip->p):ps),rhs):cs) = 
+  -- trace (">> peel " ++ show k ++ " ~ " ++ show p) $
+  case (k,p) of
+    (Zer   , Zer  )   -> ((ps, rhs) : picks , drops)
+    (Zer   , Var k _) -> ((ps, subst k Zer rhs) : picks , ((p:ps),rhs) : drops)
+    (Suc _ , Suc x)   -> (((x:ps), rhs) : picks , drops)
+    (Suc _ , Var k _) -> (((Var k 0:ps), subst k (Suc (Var k 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    x                 -> (picks , ((p:ps),rhs) : drops)
+  where (picks, drops) = peelCtrCol k cs
+peelCtrCol k cs = (cs,cs)
 
 flattenBook :: Book -> Book
 flattenBook (Book defs) = Book (M.map flattenDefn defs)
   where flattenDefn (i, x, t) = (i, flatten 0 x, flatten 0 t)
 
--- Pattern Match Flattening
--- ------------------------
-
-flat :: Int -> Term -> Term
-flat d pat@(Pat (s:ss) ms ((((strip->Var k i):ps),rhs):cs)) =
-  trace (">> var: " ++ show pat) $
-  Pat ss ((k,s):ms) (abst (d+1) k (((Var k i:ps),rhs):cs))
-flat d pat@(Pat (s:ss) ms cs@((((strip->p):_),_):_)) =
-  trace (">> ctr: " ++ show pat) $
-  Pat [s] moves [([ct], picks), ([var d], drops)] where
-    (ct,fs) = ctrOf d p
-    (ps,ds) = peel ct cs
-    moves   = ms ++ map (\ (s,i) -> (patOf (d+i) s, s)) (zip ss [0..])
-    picks   = flatten d' (Pat (fs   ++ ss) ms ps) where d' = d + length fs
-    drops   = flatten d' (Pat (var d : ss) ms ds) where d' = d + 1
-flat d pat = pat
-
--- Converts an all-variable column to a 'with' statement
--- match x y { case x0 @A: F(x0) ; case x1 @B: F(x1) }
--- --------------------------------------------------- abst k
--- match y { with k=x case @A: F(k) ; case @B: F(k) }
-abst :: Int -> Name -> [Case] -> [Case]
-abst d k ((((strip->Var j _):ps),rhs):cs) = (ps, subst j (Var k 0) rhs) : abst d k cs
-abst d k ((((strip->ctr    ):ps),rhs):cs) = error "redundant-pattern"
-abst d k cs                               = cs
-
--- Peels a constructor layer from a column
--- match x y { case @Z{} @A: A ; case @S{@Z} @B: B ; case @S{@S{p}} @C: C(p) }
--- --------------------------------------------------------------------------- peel @Z , peel @S{k}
--- match x:
---   with y
---   case @Z: match y { case @A: A }
---   case @S{k}: match k y { case @Z @B: B ; case @S{p} @C: C(p) }
-peel :: Term -> [Case] -> ([Case],[Case])
-peel (strip->k) ((((strip->p):ps),rhs):cs) = case (k,p) of
-  (Zer   , Zer  ) -> ((ps    ,rhs) : picks , drops)
-  (Suc _ , Suc x) -> (((x:ps),rhs) : picks , drops)
-  x               -> (picks , ((p:ps),rhs) : drops)
-  where (picks, drops) = peel k cs
-peel k cs = (cs,cs)
-
--- Utils
--- -----
+-- Simplify
+-- ========
+-- Removes redundant matches, adjusts form
 
 -- Substitutes a move list into an expression
-shove :: [Move] -> Term -> Term
-shove ms term = foldr (\ (k,v) x -> subst k v x) term ms 
+shove :: Int -> [Move] -> Term -> Term
+shove d ms term = foldr (\ (k,v) x -> subst k v x) term ms 
 
 -- Converts zero-scrutinee matches to plain expressions
--- match { with x=A . case: F(x,.) }
--- --------------------------------- decay
--- F(A,.)
-decay :: Term -> Term
-decay (Pat [] ms [([],rhs)]) = decay (shove ms rhs)
-decay term                   = term
+-- match { with x=A ... case: F(x,...) ... }
+-- ----------------------------------------- decay
+-- F(A,...)
+decay :: Int -> Term -> Term
+decay d (Pat [] ms (([],rhs):cs)) = decay d (shove d ms rhs)
+decay d term                      = term
 
 -- Merges redundant case-match chains into parent
--- match . { . case x: match x { case A:A ; case B:B . } . }
--- --------------------------------------------------------- merge
--- match . { . case A:A ; case B:B . }
-merge :: Term -> Term
-merge (Pat ss ms cs) = Pat ss ms (cases cs) where 
+-- match ... { ... case x: match x { case A:A ; case B:B ... } ... }
+-- ----------------------------------------------------------------- merge
+-- match ... { ... case A:A ; case B:B ... }
+merge :: Int -> Term -> Term
+merge d (Pat ss ms cs) = Pat ss ms (cases cs) where 
   cases :: [Case] -> [Case]
   cases (([Var x _], (Pat [Var x' _] ms cs')) : cs)
     | x == x' = csA ++ csB
-    where csA = map (\ (p,rhs) -> (p, merge (shove ms rhs))) cs'
+    where csA = map (\ (p, rhs) -> (p, merge d (shove d ms rhs))) cs'
           csB = cases cs
-  cases ((p,rhs):cs) = (p, merge rhs) : cases cs
+  cases ((p,rhs):cs) = (p, merge d rhs) : cases cs
   cases []           = []
-merge term = term
+merge d term = term
 
-finish :: Term -> Term
-finish = merge . decay
+simplify :: Int -> Term -> Term
+simplify d = merge d . decay d
+
+-- UnPat
+-- =====
+-- Converts all Pats to native λ-matches.
+
+unpat :: Int -> Term -> Term
+unpat d (Var n i)       = Var n i
+unpat d (Ref n)         = Ref n
+unpat d (Sub t)         = Sub (unpat d t)
+unpat d (Fix n f)       = Fix n (\x -> unpat (d+1) (f x))
+unpat d (Let v f)       = Let (unpat d v) (unpat d f)
+unpat d Set             = Set
+unpat d (Ann x t)       = Ann (unpat d x) (unpat d t)
+unpat d (Chk x t)       = Chk (unpat d x) (unpat d t)
+unpat d Emp             = Emp
+unpat d Efq             = Efq
+unpat d Uni             = Uni
+unpat d One             = One
+unpat d (Use f)         = Use (unpat d f)
+unpat d Bit             = Bit
+unpat d Bt0             = Bt0
+unpat d Bt1             = Bt1
+unpat d (Bif f t)       = Bif (unpat d f) (unpat d t)
+unpat d Nat             = Nat
+unpat d Zer             = Zer
+unpat d (Suc n)         = Suc (unpat d n)
+unpat d (Swi z s)       = Swi (unpat d z) (unpat d s)
+unpat d (Lst t)         = Lst (unpat d t)
+unpat d Nil             = Nil
+unpat d (Con h t)       = Con (unpat d h) (unpat d t)
+unpat d (Mat n c)       = Mat (unpat d n) (unpat d c)
+unpat d (Enu s)         = Enu s
+unpat d (Sym s)         = Sym s
+unpat d (Cse c e)       = Cse [(s, unpat d t) | (s, t) <- c] (unpat d e)
+unpat d (Sig a b)       = Sig (unpat d a) (unpat d b)
+unpat d (Tup a b)       = Tup (unpat d a) (unpat d b)
+unpat d (Get f)         = Get (unpat d f)
+unpat d (All a b)       = All (unpat d a) (unpat d b)
+unpat d (Lam n f)       = Lam n (\x -> unpat (d+1) (f x))
+unpat d (App f x)       = App (unpat d f) (unpat d x)
+unpat d (Eql t a b)     = Eql (unpat d t) (unpat d a) (unpat d b)
+unpat d Rfl             = Rfl
+unpat d (Rwt f)         = Rwt (unpat d f)
+unpat d (Met i t x)     = Met i (unpat d t) (map (unpat d) x)
+unpat d (Ind t)         = Ind (unpat d t)
+unpat d (Frz t)         = Frz (unpat d t)
+unpat d Era             = Era
+unpat d (Sup l a b)     = Sup l (unpat d a) (unpat d b)
+unpat d (Num t)         = Num t
+unpat d (Val v)         = Val v
+unpat d (Op2 o a b)     = Op2 o (unpat d a) (unpat d b)
+unpat d (Op1 o a)       = Op1 o (unpat d a)
+unpat d (Pri p)         = Pri p
+unpat d (Loc s t)       = Loc s (unpat d t)
+unpat d (Pat [s] ms cs) = unpatPat d s ms cs
+unpat d (Pat ss  ms cs) = error "unpat: multiple scrutinees after flattening"
+
+-- unpatPat :: Int -> Term -> [Move] -> [Case] -> Term
+-- unpatPat d s ms (([Zer],z):([Suc p],st):cs) =
+  -- unmove d ms $ Swi (unpat d z) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
+-- unpatPat d s ms (([Suc p],st):([Zer],z):cs) =
+  -- unmove d ms $ Swi (unpat d z) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
+-- unpatPat d s ms (([Zer],z):([Var k i],v):cs) =
+  -- unmove d ms $ Swi (unpat d z) (Lam k $ \x -> unpat (d+1) (subst k (Suc x) v))
+-- unpatPat d s ms (([Suc p],st):([Var k i],v):cs) =
+  -- unmove d ms $ Swi (unpat d (subst k Zer v)) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
+-- unpatPat d s ms (([Bt0],f):([Bt1],t):cs) =
+  -- unmove d ms $ Bif (unpat d f) (unpat d t)
+-- unpatPat d s ms (([Bt1],t):([Bt0],f):cs) =
+  -- unmove d ms $ Bif (unpat d f) (unpat d t)
+-- unpatPat d s ms (([Bt0],f):([Var k i],v):cs) =
+  -- unmove d ms $ Bif (unpat d f) (unpat d (subst k Bt1 v))
+-- unpatPat d s ms (([Bt1],t):([Var k i],v):cs) =
+  -- unmove d ms $ Bif (unpat d (subst k Bt0 v)) (unpat d t)
+-- unpatPat d s ms (([Nil],n):([Con h t],c):cs) =
+  -- unmove d ms $ Mat (unpat d n) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
+    -- unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
+-- unpatPat d s ms (([Con h t],c):([Nil],n):cs) =
+  -- unmove d ms $ Mat (unpat d n) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
+    -- unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
+-- unpatPat d s ms (([Nil],n):([Var k i],v):cs) =
+  -- unmove d ms $ Mat (unpat d n) (Lam "h" $ \h' -> Lam "t" $ \t' ->
+    -- unpat (d+2) (subst k (Con h' t') v))
+-- unpatPat d s ms (([Con h t],c):([Var k i],v):cs) =
+  -- unmove d ms $ Mat (unpat d (subst k Nil v)) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
+    -- unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
+-- unpatPat d s ms (([One],u):cs) =
+  -- unmove d ms $ Use (unpat d u)
+-- unpatPat d s ms (([Tup a b],p):cs) =
+  -- unmove d ms $ Get (Lam (patOf d a) $ \a' -> Lam (patOf d b) $ \b' ->
+    -- unpat (d+2) (subst (patOf d a) a' (subst (patOf d b) b' p)))
+-- unpatPat d s ms cs@(([Sym _],_):_) =
+  -- let (symCases, def) = syms cs
+      -- cses = [(sym, unpat d body) | (sym,body) <- symCases]
+      -- dflt = maybe Era (unpat d) def
+  -- in unmove d ms $ Cse cses dflt
+  -- where syms :: [Case] -> ([(String,Term)], Maybe Term)
+        -- syms []                    = ([], Nothing)
+        -- syms (([Sym s]  ,body):cs) = let (rest, def) = syms cs in ((s, body) : rest, def)
+        -- syms (([Var _ _],body):cs) = ([], Just body)
+        -- syms cs                    = error $ "syms: invalid " ++ show cs
+-- unpatPat d s ms (([Var k i],body):cs) =
+  -- unpat d (shove d ((k,s):ms) body)
+-- unpatPat d s ms [] =
+  -- unmove d ms Efq
+-- unpatPat d s ms _ = error "unpatPat: invalid pattern"
+
+
+-- PROBLEM: the function above is WRONG - we forgot to apply the lambda-match to the scrutinee!
+-- TASK: fix the function above. write the COMPLETE fixed version below
+
+unpatPat :: Int -> Term -> [Move] -> [Case] -> Term
+unpatPat d s ms (([Zer],z):([Suc p],st):cs) =
+  matcher d ms s $ Swi (unpat d z) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
+unpatPat d s ms (([Suc p],st):([Zer],z):cs) =
+  matcher d ms s $ Swi (unpat d z) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
+unpatPat d s ms (([Zer],z):([Var k i],v):cs) =
+  matcher d ms s $ Swi (unpat d z) (Lam k $ \x -> unpat (d+1) (subst k (Suc x) v))
+unpatPat d s ms (([Suc p],st):([Var k i],v):cs) =
+  matcher d ms s $ Swi (unpat d (subst k Zer v)) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
+unpatPat d s ms (([Bt0],f):([Bt1],t):cs) =
+  matcher d ms s $ Bif (unpat d f) (unpat d t)
+unpatPat d s ms (([Bt1],t):([Bt0],f):cs) =
+  matcher d ms s $ Bif (unpat d f) (unpat d t)
+unpatPat d s ms (([Bt0],f):([Var k i],v):cs) =
+  matcher d ms s $ Bif (unpat d f) (unpat d (subst k Bt1 v))
+unpatPat d s ms (([Bt1],t):([Var k i],v):cs) =
+  matcher d ms s $ Bif (unpat d (subst k Bt0 v)) (unpat d t)
+unpatPat d s ms (([Nil],n):([Con h t],c):cs) =
+  matcher d ms s $ Mat (unpat d n) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
+    unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
+unpatPat d s ms (([Con h t],c):([Nil],n):cs) =
+  matcher d ms s $ Mat (unpat d n) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
+    unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
+unpatPat d s ms (([Nil],n):([Var k i],v):cs) =
+  matcher d ms s $ Mat (unpat d n) (Lam "h" $ \h' -> Lam "t" $ \t' ->
+    unpat (d+2) (subst k (Con h' t') v))
+unpatPat d s ms (([Con h t],c):([Var k i],v):cs) =
+  matcher d ms s $ Mat (unpat d (subst k Nil v)) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
+    unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
+unpatPat d s ms (([One],u):cs) =
+  matcher d ms s $ Use (unpat d u)
+unpatPat d s ms (([Tup a b],p):cs) =
+  matcher d ms s $ Get (Lam (patOf d a) $ \a' -> Lam (patOf d b) $ \b' ->
+    unpat (d+2) (subst (patOf d a) a' (subst (patOf d b) b' p)))
+unpatPat d s ms cs@(([Sym _],_):_) =
+  let (symCases, def) = syms cs
+      cses = [(sym, unpat d body) | (sym,body) <- symCases]
+      dflt = maybe Era (unpat d) def
+  in matcher d ms s $ Cse cses dflt
+  where syms :: [Case] -> ([(String,Term)], Maybe Term)
+        syms []                    = ([], Nothing)
+        syms (([Sym s]  ,body):cs) = let (rest, def) = syms cs in ((s, body) : rest, def)
+        syms (([Var _ _],body):cs) = ([], Just body)
+        syms cs                    = error $ "syms: invalid " ++ show cs
+unpatPat d s ms (([Var k i],body):cs) =
+  unpat d (shove d ((k,s):ms) body)
+unpatPat d s ms [] =
+  matcher d ms s Efq
+unpatPat d s ms _ = error "unpatPat: invalid pattern"
+
+matcher :: Int -> [Move] -> Term -> Term -> Term
+matcher d ms s (Swi z (Lam p f)) =
+  apps d (map snd ms) (App swi s) where
+    swi = Swi ifZ ifS
+    ifZ = lams d (map fst ms) z
+    ifS = Lam p $ \x -> lams d (map fst ms) (f x)
+matcher d ms s (Bif f t) =
+  apps d (map snd ms) (App bif s) where
+    bif = Bif ifF ifT
+    ifF = lams d (map fst ms) f
+    ifT = lams d (map fst ms) t
+matcher d ms s (Mat n (Lam h (unlam d -> Lam t (unlam d -> c)))) =
+  apps d (map snd ms) (App mat s) where
+    mat = Mat ifN ifC
+    ifN = lams d (map fst ms) n
+    ifC = Lam h $ \_ -> Lam t $ \_ -> lams d (map fst ms) c
+matcher d ms s (Mat n c) =
+  apps d (map snd ms) (App mat s) where
+    mat = Mat ifN ifC
+    ifN = lams d (map fst ms) n
+    ifC = lams d (map fst ms) c
+matcher d ms s (Use u) =
+  apps d (map snd ms) (App use s) where
+    use = Use ifU
+    ifU = lams d (map fst ms) u
+matcher d ms s (Get (Lam a (unlam d -> Lam b (unlam d -> p)))) =
+  apps d (map snd ms) (App get s) where
+    get = Get ifP
+    ifP = Lam a $ \_ -> Lam b $ \_ -> lams d (map fst ms) p
+matcher d ms s (Get f) =
+  apps d (map snd ms) (App get s) where
+    get = Get ifP
+    ifP = lams d (map fst ms) f
+matcher d ms s (Cse c e) =
+  apps d (map snd ms) (App cse s) where
+    cse = Cse [(s, lams d (map fst ms) t) | (s, t) <- c] (lams d (map fst ms) e)
+matcher d ms s Efq =
+  apps d (map snd ms) (App Efq s)
+matcher d ms s other =
+  error "TODO"
+
+unpatBook :: Book -> Book
+unpatBook (Book defs) = Book (M.map unpatDefn defs)
+  where unpatDefn (i, x, t) = (i, unpat 0 x, unpat 0 t)
 
 -- Helpers
 -- -------
@@ -196,56 +418,15 @@ ctrOf d Zer     = (Zer , [])
 ctrOf d (Suc p) = (Suc (pat d p), [pat d p])
 ctrOf d x       = (var d , [var d])
 
--- Subst a var for a value in a term
-subst :: Name -> Term -> Term -> Term
-subst name val term = trace ("-- subst " ++ name ++ " → " ++ show val ++ " | " ++ show term) $ case term of
-  Var k _   -> if k == name then trace "OK" val else trace "NO" term
-  Ref k     -> Ref k
-  Sub t     -> Sub (subst name val t)
-  Fix k f   -> Fix k (\x -> subst name val (f x))
-  Let v f   -> Let (subst name val v) (subst name val f)
-  Ann x t   -> Ann (subst name val x) (subst name val t)
-  Chk x t   -> Chk (subst name val x) (subst name val t)
-  Set       -> Set
-  Emp       -> Emp
-  Efq       -> Efq
-  Uni       -> Uni
-  One       -> One
-  Use f     -> Use (subst name val f)
-  Bit       -> Bit
-  Bt0       -> Bt0
-  Bt1       -> Bt1
-  Bif f t   -> Bif (subst name val f) (subst name val t)
-  Nat       -> Nat
-  Zer       -> Zer
-  Suc n     -> Suc (subst name val n)
-  Swi z s   -> Swi (subst name val z) (subst name val s)
-  Lst t     -> Lst (subst name val t)
-  Nil       -> Nil
-  Con h t   -> Con (subst name val h) (subst name val t)
-  Mat n c   -> Mat (subst name val n) (subst name val c)
-  Enu s     -> Enu s
-  Sym s     -> Sym s
-  Cse c e   -> Cse [(s, subst name val t) | (s, t) <- c] (subst name val e)
-  Sig a b   -> Sig (subst name val a) (subst name val b)
-  Tup a b   -> Tup (subst name val a) (subst name val b)
-  Get f     -> Get (subst name val f)
-  All a b   -> All (subst name val a) (subst name val b)
-  Lam k f   -> Lam k (\x -> subst name val (f x))
-  App f x   -> App (subst name val f) (subst name val x)
-  Eql t a b -> Eql (subst name val t) (subst name val a) (subst name val b)
-  Rfl       -> Rfl
-  Rwt f     -> Rwt (subst name val f)
-  Met i t x -> Met i (subst name val t) (map (subst name val) x)
-  Ind t     -> Ind (subst name val t)
-  Frz t     -> Frz (subst name val t)
-  Era       -> Era
-  Sup l a b -> Sup l (subst name val a) (subst name val b)
-  Num t     -> Num t
-  Val v     -> Val v
-  Op2 o a b -> Op2 o (subst name val a) (subst name val b)
-  Op1 o a   -> Op1 o (subst name val a)
-  Pri p     -> Pri p
-  Loc s t   -> Loc s (subst name val t)
-  Pat s m c -> Pat (map (subst name val) s) m (map substCase c)
-    where substCase (pats, rhs) = (map (subst name val) pats, subst name val rhs)
+-- Applies n arguments to a value
+apps :: Int -> [Term] -> Term -> Term
+apps d ms t = foldl (\ t x -> App t x) t ms
+
+-- Extracts a lambda's body
+unlam :: Int -> (Term -> Term) -> Term
+unlam d f = f (var d)
+
+-- Injects lambdas after skipping n lambdas
+lams :: Int -> [Name] -> Term -> Term
+lams d (k:ks) t = Lam k $ \_ -> lams (d+1) ks t
+lams d []     t = t

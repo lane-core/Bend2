@@ -94,22 +94,13 @@ data Term
   -- Enum
   | Enu [String]             -- {@foo,@bar...}
   | Sym String               -- @foo
-  -- | Cse [(String,Term)] -- λ{@foo:f;@bar:b;...}
-
-  -- NOTE: this has been updated to include a default case ('d'). note that:
-  -- `(λ{@A:a;@B:b;c} @K)`
-  -- reduces to:
-  -- `(c @K)`
-  -- i.e., the default case must be a *function* that receives the scrutinee,
-  -- and returns the default case body.
-
   | Cse [(String,Term)] Term -- λ{@foo:f;@bar:b;...d}
 
   -- Numbers
-  | Num NTyp            -- CHR | U64 | I64 | F64
-  | Val NVal            -- 123 | +123 | +123.0
-  | Op2 NOp2 Term Term  -- x + y
-  | Op1 NOp1 Term       -- !x
+  | Num NTyp           -- CHR | U64 | I64 | F64
+  | Val NVal           -- 123 | +123 | +123.0
+  | Op2 NOp2 Term Term -- x + y
+  | Op1 NOp1 Term      -- !x
 
   -- Pair
   | Sig Type Type -- ΣA.B
@@ -138,18 +129,13 @@ data Term
   | Sup Int Term Term -- &L{a,b}
 
   -- Errors
-  | Loc Span Term -- (NEW CONSTRUCTOR)
+  | Loc Span Term
 
-  -- Primitive (built-in)
-  | Pri PriF -- FOO
+  -- Primitive
+  | Pri PriF -- SOME_FUNC
 
   -- Pattern-Match
-  -- match x y ... {
-  --   with a=r with b=s ...
-  --   case (A ...) (B ...): ...
-  --   case (C ...) (D ...): ...
-  -- }
-  | Pat [Term] [Move] [Case]
+  | Pat [Term] [Move] [Case] -- match x ... { with k=v ... ; case @A ...: F ; ... }
 
 -- Book of Definitions
 type Inj  = Bool -- "is injective" flag. improves pretty printing
@@ -195,7 +181,7 @@ instance Show Term where
   show (Set)          = "Set"
   show (Ann x t)      = "<" ++ show x ++ ":" ++ show t ++ ">"
   show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
-  show (Emp)          = "⊥"
+  show (Emp)          = "Empty"
   show (Efq)          = "λ{}"
   show (Uni)          = "Unit"
   show (One)          = "()"
@@ -207,7 +193,7 @@ instance Show Term where
   show (Nat)          = "Nat"
   show (Zer)          = "0n"
   show (Suc n)        = "1n+" ++ show n
-  show (Swi z s)      = "λ{ 0: " ++ show z ++ " ; +: " ++ show s ++ " }"
+  show (Swi z s)      = "λ{ 0n: " ++ show z ++ " ; 1n+: " ++ show s ++ " }"
   show (Lst t)        = show t ++ "[]"
   show (Nil)          = "[]"
   show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
@@ -381,3 +367,57 @@ prettyStr = go [] where
   go acc (Con (Val (CHR_V c)) rest) = go (c:acc) rest
   go acc (Loc _ t)                  = go acc t
   go _   _                          = Nothing
+
+-- Subst a var for a value in a term
+subst :: Name -> Term -> Term -> Term
+subst name val term = case term of
+  Var k _   -> if k == name then val else term
+  Ref k     -> Ref k
+  Sub t     -> Sub (subst name val t)
+  Fix k f   -> Fix k (\x -> subst name val (f x))
+  Let v f   -> Let (subst name val v) (subst name val f)
+  Ann x t   -> Ann (subst name val x) (subst name val t)
+  Chk x t   -> Chk (subst name val x) (subst name val t)
+  Set       -> Set
+  Emp       -> Emp
+  Efq       -> Efq
+  Uni       -> Uni
+  One       -> One
+  Use f     -> Use (subst name val f)
+  Bit       -> Bit
+  Bt0       -> Bt0
+  Bt1       -> Bt1
+  Bif f t   -> Bif (subst name val f) (subst name val t)
+  Nat       -> Nat
+  Zer       -> Zer
+  Suc n     -> Suc (subst name val n)
+  Swi z s   -> Swi (subst name val z) (subst name val s)
+  Lst t     -> Lst (subst name val t)
+  Nil       -> Nil
+  Con h t   -> Con (subst name val h) (subst name val t)
+  Mat n c   -> Mat (subst name val n) (subst name val c)
+  Enu s     -> Enu s
+  Sym s     -> Sym s
+  Cse c e   -> Cse [(s, subst name val t) | (s, t) <- c] (subst name val e)
+  Sig a b   -> Sig (subst name val a) (subst name val b)
+  Tup a b   -> Tup (subst name val a) (subst name val b)
+  Get f     -> Get (subst name val f)
+  All a b   -> All (subst name val a) (subst name val b)
+  Lam k f   -> Lam k (\x -> subst name val (f x))
+  App f x   -> App (subst name val f) (subst name val x)
+  Eql t a b -> Eql (subst name val t) (subst name val a) (subst name val b)
+  Rfl       -> Rfl
+  Rwt f     -> Rwt (subst name val f)
+  Met i t x -> Met i (subst name val t) (map (subst name val) x)
+  Ind t     -> Ind (subst name val t)
+  Frz t     -> Frz (subst name val t)
+  Era       -> Era
+  Sup l a b -> Sup l (subst name val a) (subst name val b)
+  Num t     -> Num t
+  Val v     -> Val v
+  Op2 o a b -> Op2 o (subst name val a) (subst name val b)
+  Op1 o a   -> Op1 o (subst name val a)
+  Pri p     -> Pri p
+  Loc s t   -> Loc s (subst name val t)
+  Pat s m c -> Pat (map (subst name val) s) m (map cse c)
+    where cse (pats, rhs) = (map (subst name val) pats, subst name val rhs)
