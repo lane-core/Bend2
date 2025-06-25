@@ -101,10 +101,10 @@ flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
 
 flattenPat :: Int -> Term -> Term
 flattenPat d pat@(Pat (s:ss) ms ((((strip->Var k i):ps),rhs):cs)) =
-  trace (">> var: " ++ show pat) $
+  -- trace (">> var: " ++ show pat) $
   Pat ss ((k,s):ms) (joinVarCol (d+1) k (((Var k i:ps),rhs):cs))
 flattenPat d pat@(Pat (s:ss) ms cs@((((strip->p):_),_):_)) =
-  trace (">> ctr: " ++ show pat) $
+  -- trace (">> ctr: " ++ show pat) $
   Pat [s] moves [([ct], picks), ([var d], drops)] where
     (ct,fs) = ctrOf d p
     (ps,ds) = peelCtrCol ct cs
@@ -242,60 +242,6 @@ unpat d (Pri p)         = Pri p
 unpat d (Loc s t)       = Loc s (unpat d t)
 unpat d (Pat [s] ms cs) = unpatPat d s ms cs
 unpat d (Pat ss  ms cs) = error "unpat: multiple scrutinees after flattening"
-
--- unpatPat :: Int -> Term -> [Move] -> [Case] -> Term
--- unpatPat d s ms (([Zer],z):([Suc p],st):cs) =
-  -- unmove d ms $ Swi (unpat d z) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
--- unpatPat d s ms (([Suc p],st):([Zer],z):cs) =
-  -- unmove d ms $ Swi (unpat d z) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
--- unpatPat d s ms (([Zer],z):([Var k i],v):cs) =
-  -- unmove d ms $ Swi (unpat d z) (Lam k $ \x -> unpat (d+1) (subst k (Suc x) v))
--- unpatPat d s ms (([Suc p],st):([Var k i],v):cs) =
-  -- unmove d ms $ Swi (unpat d (subst k Zer v)) (Lam (patOf d p) $ \x -> unpat (d+1) (subst (patOf d p) x st))
--- unpatPat d s ms (([Bt0],f):([Bt1],t):cs) =
-  -- unmove d ms $ Bif (unpat d f) (unpat d t)
--- unpatPat d s ms (([Bt1],t):([Bt0],f):cs) =
-  -- unmove d ms $ Bif (unpat d f) (unpat d t)
--- unpatPat d s ms (([Bt0],f):([Var k i],v):cs) =
-  -- unmove d ms $ Bif (unpat d f) (unpat d (subst k Bt1 v))
--- unpatPat d s ms (([Bt1],t):([Var k i],v):cs) =
-  -- unmove d ms $ Bif (unpat d (subst k Bt0 v)) (unpat d t)
--- unpatPat d s ms (([Nil],n):([Con h t],c):cs) =
-  -- unmove d ms $ Mat (unpat d n) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
-    -- unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
--- unpatPat d s ms (([Con h t],c):([Nil],n):cs) =
-  -- unmove d ms $ Mat (unpat d n) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
-    -- unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
--- unpatPat d s ms (([Nil],n):([Var k i],v):cs) =
-  -- unmove d ms $ Mat (unpat d n) (Lam "h" $ \h' -> Lam "t" $ \t' ->
-    -- unpat (d+2) (subst k (Con h' t') v))
--- unpatPat d s ms (([Con h t],c):([Var k i],v):cs) =
-  -- unmove d ms $ Mat (unpat d (subst k Nil v)) (Lam (patOf d h) $ \h' -> Lam (patOf d t) $ \t' ->
-    -- unpat (d+2) (subst (patOf d h) h' (subst (patOf d t) t' c)))
--- unpatPat d s ms (([One],u):cs) =
-  -- unmove d ms $ Use (unpat d u)
--- unpatPat d s ms (([Tup a b],p):cs) =
-  -- unmove d ms $ Get (Lam (patOf d a) $ \a' -> Lam (patOf d b) $ \b' ->
-    -- unpat (d+2) (subst (patOf d a) a' (subst (patOf d b) b' p)))
--- unpatPat d s ms cs@(([Sym _],_):_) =
-  -- let (symCases, def) = syms cs
-      -- cses = [(sym, unpat d body) | (sym,body) <- symCases]
-      -- dflt = maybe Era (unpat d) def
-  -- in unmove d ms $ Cse cses dflt
-  -- where syms :: [Case] -> ([(String,Term)], Maybe Term)
-        -- syms []                    = ([], Nothing)
-        -- syms (([Sym s]  ,body):cs) = let (rest, def) = syms cs in ((s, body) : rest, def)
-        -- syms (([Var _ _],body):cs) = ([], Just body)
-        -- syms cs                    = error $ "syms: invalid " ++ show cs
--- unpatPat d s ms (([Var k i],body):cs) =
-  -- unpat d (shove d ((k,s):ms) body)
--- unpatPat d s ms [] =
-  -- unmove d ms Efq
--- unpatPat d s ms _ = error "unpatPat: invalid pattern"
-
-
--- PROBLEM: the function above is WRONG - we forgot to apply the lambda-match to the scrutinee!
--- TASK: fix the function above. write the COMPLETE fixed version below
 
 unpatPat :: Int -> Term -> [Move] -> [Case] -> Term
 unpatPat d s ms (([Zer],z):([Suc p],st):cs) =

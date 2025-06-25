@@ -613,7 +613,7 @@ infer d span book ctx term =
 -- Check if a term has the expected type
 check :: Int -> Span -> Book -> Context -> Term -> Term -> Result ()
 check d span book ctx term goal =
-  trace ("- check: " ++ show (normal 1 d book term) ++ " :: " ++ show (normal 1 d book goal)) $
+  -- trace ("- check: " ++ show (normal 1 d book term) ++ " :: " ++ show (normal 1 d book goal)) $
   case (term, force book goal) of
     (Let v f, _) -> do
       case v of

@@ -388,7 +388,7 @@ parsePat = label "pattern match" $ do
   when (delim == '{') (void $ symbol "}")
   _ <- optional (symbol ";")
   let pat = (Pat scruts moves clauses)
-  trace (show pat) $ pure pat
+  pure pat
   where
     -- Parse 'with' statements
     parseWith = try $ do
