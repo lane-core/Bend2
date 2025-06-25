@@ -205,8 +205,8 @@ instance Show Term where
   show (Bt1)          = "True"
   show (Bif f t)      = "λ{ False: " ++ show f ++ " ; True: " ++ show t ++ " }"
   show (Nat)          = "Nat"
-  show (Zer)          = "0"
-  show (Suc n)        = "↑" ++ show n
+  show (Zer)          = "0n"
+  show (Suc n)        = "1n+" ++ show n
   show (Swi z s)      = "λ{ 0: " ++ show z ++ " ; +: " ++ show s ++ " }"
   show (Lst t)        = show t ++ "[]"
   show (Nil)          = "[]"
@@ -277,7 +277,7 @@ instance Show Term where
   show (Op2 SHR a b)   = "(" ++ show a ++ " >> " ++ show b ++ ")"
   show (Op1 NOT a)     = "(!" ++ show a ++ ")"
   show (Op1 NEG a)     = "(-" ++ show a ++ ")"
-  show (Pat t m c)     = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ "}" where
+  show (Pat t m c)     = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ " }" where
              showMoves = if null m then "" else " with " ++ intercalate " with " (map mv m) where
                mv(k,x) = k ++ "=" ++ show x
              showCases = if null c then "" else " " ++ intercalate " " (map cs c) where

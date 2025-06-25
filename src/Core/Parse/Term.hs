@@ -21,6 +21,8 @@ import qualified Data.Map.Strict as M
 import qualified Data.Set        as S
 import qualified Text.Megaparsec.Char.Lexer as L
 
+import Debug.Trace
+
 import Core.Bind
 import Core.Flatten
 import Core.Move
@@ -385,7 +387,8 @@ parsePat = label "pattern match" $ do
     _   -> fail "unreachable"
   when (delim == '{') (void $ symbol "}")
   _ <- optional (symbol ";")
-  pure (Pat scruts moves clauses)
+  let pat = (Pat scruts moves clauses)
+  trace (show pat) $ pure pat
   where
     -- Parse 'with' statements
     parseWith = try $ do
@@ -944,7 +947,7 @@ doParseTerm :: FilePath -> String -> Either String Term
 doParseTerm file input =
   case evalState (runParserT p file input) (ParserState True input M.empty) of
     Left err  -> Left (formatError input err)
-    Right res -> Right (bind (move (flatten res)))
+    Right res -> Right (bind (move (flatten 0 res)))
   where
     p = do
       skip

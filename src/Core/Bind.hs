@@ -62,4 +62,4 @@ binder lv term ctx vars = case term of
   Op1 o a   -> Op1 o (binder lv a ctx vars)
   Pri p     -> Pri p
   Met k t c -> Met k (binder lv t ctx vars) (map (\x -> binder lv x ctx vars) c)
-  Pat s m c -> error "not-supported"
+  Pat s m c -> Pat (map (\x -> binder lv x ctx vars) s) (map (\(k, x) -> (k, binder lv x ctx vars)) m) (map (\(p, x) -> (map (\y -> binder lv y ctx vars) p, binder lv x ctx vars)) c)
