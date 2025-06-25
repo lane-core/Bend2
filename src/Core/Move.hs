@@ -47,7 +47,7 @@ move (Pat x m c) = Pat (map move x) [ (n, move m) | (n,m) <- m ] [ (map move ps,
 move t           = t
 
 moveGet :: Term -> Term
-moveGet term@(val -> Lam x (bod x -> Lam y (bod y -> App (val -> f) (val -> Var x' _))))
+moveGet term@(cut -> Lam x (bod x -> Lam y (bod y -> App (cut -> f) (cut -> Var x' _))))
   | x == x'   = Lam x (\_ -> App (putLam y f) (Var x 0))
   | otherwise = term
 moveGet term = term
@@ -76,8 +76,5 @@ moveBook (Book defs) = Book (M.map moveDefn defs)
 -- Utils
 -- -----
 
-val :: Term -> Term
-val = strip
-
 bod :: Name -> (Term -> Term) -> Term
-bod = \ x f -> strip (f (Var x 0))
+bod = \ x f -> cut (f (Var x 0))

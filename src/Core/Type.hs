@@ -175,7 +175,8 @@ instance Monad Result where
 instance Show Term where
   show (Var k i)      = k
   show (Ref k)        = k
-  show (Sub t)        = error "unreachable"
+  -- show (Sub t)        = error "unreachable"
+  show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let v f)      = "!" ++ show v ++ ";" ++ show f
   show (Set)          = "Set"
@@ -215,7 +216,7 @@ instance Show Term where
   show (Lam k f)      = "λ" ++ k ++ ". " ++ show (f (Var k 0))
   show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
            (fn, args) = collectApps app []
-           fnStr      = case strip fn of
+           fnStr      = case cut fn of
               Var k _ -> k
               Ref k   -> k
               fn      -> "(" ++ show fn ++ ")"
@@ -322,9 +323,9 @@ showContext ctx =
 deref :: Book -> Name -> Maybe Defn
 deref (Book defs) name = M.lookup name defs
 
-strip :: Term -> Term
-strip (Loc _ t) = strip t
-strip t         = t
+cut :: Term -> Term
+cut (Loc _ t) = cut t
+cut t         = t
 
 collectArgs :: Term -> ([(String, Term)], Term)
 collectArgs = go [] where

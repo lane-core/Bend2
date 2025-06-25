@@ -778,7 +778,7 @@ parseAdd :: Term -> Parser Term
 parseAdd t = label "addition" $ do
   _ <- try $ symbol "+"
   b <- parseTerm
-  case strip t of
+  case cut t of
     -- If LHS is a Nat literal, interpret as successor(s)
     n | isNatLit n -> return (applySuccessors (countSuccessors n) b)
     -- Otherwise, it's numeric addition
