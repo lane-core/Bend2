@@ -255,194 +255,194 @@ unpat d (Op2 o a b)     = Op2 o (unpat d a) (unpat d b)
 unpat d (Op1 o a)       = Op1 o (unpat d a)
 unpat d (Pri p)         = Pri p
 unpat d (Loc s t)       = Loc s (unpat d t)
-unpat d (Pat [s] ms cs) = unpatPat d s ms cs
+unpat d (Pat [s] ms cs) = match d s ms cs
 unpat d (Pat ss  ms []) = Efq
 unpat d (Pat ss  ms cs) = error "unpat: multiple scrutinees after flattening"
 
-unpatPat :: Int -> Term -> [Move] -> [Case] -> Term
+match :: Int -> Term -> [Move] -> [Case] -> Term
 
 -- match x { 0n: z ; 1n+p: s }
 -- ---------------------------
 -- (λ{ 0n: z ; 1n+: λp. s } x)
-unpatPat d x ms (([(cut -> Zer)], z) : ([(cut -> Suc p)], s) : _) =
-  matcher d ms x $ Swi if_zer if_suc
+match d x ms (([(cut -> Zer)], z) : ([(cut -> Suc p)], s) : _) =
+  wrap d ms x $ Swi if_zer if_suc
   where if_zer = unpat d z
         if_suc = Lam (patOf d p) $ \x -> unpat (d+1) s
 
 -- match x { 1n+p: s ; 0n: z }
 -- ---------------------------
 -- (λ{ 0n: z ; 1n+: λp. s } x)
-unpatPat d x ms (([(cut -> Suc p)], s) : ([(cut -> Zer)], z) : _) =
-  matcher d ms x $ Swi if_zer if_suc
+match d x ms (([(cut -> Suc p)], s) : ([(cut -> Zer)], z) : _) =
+  wrap d ms x $ Swi if_zer if_suc
   where if_zer = unpat d z
         if_suc = Lam (patOf d p) $ \x -> unpat (d+1) s
 
 -- match x { 0n: z ; k: v }
 -- --------------------------------------
 -- (λ{ 0n: z ; 1n+: λk. v[k := 1n+k] } x)
-unpatPat d x ms (([(cut -> Zer)], z) : ([(cut -> Var k i)], v) : _) =
-  matcher d ms x $ Swi if_zer if_suc
+match d x ms (([(cut -> Zer)], z) : ([(cut -> Var k i)], v) : _) =
+  wrap d ms x $ Swi if_zer if_suc
   where if_zer = unpat d z
         if_suc = Lam k $ \x -> unpat (d+1) (subst k (Suc (Var k 0)) v)
 
 -- match x { 1n+p: s ; k: v }
 -- ------------------------------------
 -- (λ{ 0n: v[k := 0n] ; 1n+: λp. s } x)
-unpatPat d x ms (([(cut -> Suc p)], s) : ([(cut -> Var k i)], v) : _) =
-  matcher d ms x $ Swi if_zer if_suc
+match d x ms (([(cut -> Suc p)], s) : ([(cut -> Var k i)], v) : _) =
+  wrap d ms x $ Swi if_zer if_suc
   where if_zer = unpat d (subst k Zer v)
         if_suc = Lam (patOf d p) $ \x -> unpat (d+1) s
 
 -- match x { False: f ; True: t }
 -- ------------------------------
 -- (λ{ False: f ; True: t } x)
-unpatPat d x ms (([(cut -> Bt0)], f) : ([(cut -> Bt1)], t) : _) =
-  matcher d ms x $ Bif if_bt0 if_bt1
+match d x ms (([(cut -> Bt0)], f) : ([(cut -> Bt1)], t) : _) =
+  wrap d ms x $ Bif if_bt0 if_bt1
   where if_bt0 = unpat d f
         if_bt1 = unpat d t
 
 -- match x { True: t ; False: f }
 -- ------------------------------
 -- (λ{ False: f ; True: t } x)
-unpatPat d x ms (([(cut -> Bt1)], t) : ([(cut -> Bt0)], f) : _) =
-  matcher d ms x $ Bif if_bt0 if_bt1
+match d x ms (([(cut -> Bt1)], t) : ([(cut -> Bt0)], f) : _) =
+  wrap d ms x $ Bif if_bt0 if_bt1
   where if_bt0 = unpat d f
         if_bt1 = unpat d t
 
 -- match x { False: f ; k: v }
 -- --------------------------------------
 -- (λ{ False: f ; True: v[k := True] } x)
-unpatPat d x ms (([(cut -> Bt0)], f) : ([(cut -> Var k i)], v) : _) =
-  matcher d ms x $ Bif if_bt0 if_bt1
+match d x ms (([(cut -> Bt0)], f) : ([(cut -> Var k i)], v) : _) =
+  wrap d ms x $ Bif if_bt0 if_bt1
   where if_bt0 = unpat d f
         if_bt1 = unpat d (subst k Bt1 v)
 
 -- match x { True: t ; k: v }
 -- ---------------------------------------
 -- (λ{ False: v[k := False] ; True: t } x)
-unpatPat d x ms (([(cut -> Bt1)], t) : ([(cut -> Var k i)], v) : _) =
-  matcher d ms x $ Bif if_bt0 if_bt1
+match d x ms (([(cut -> Bt1)], t) : ([(cut -> Var k i)], v) : _) =
+  wrap d ms x $ Bif if_bt0 if_bt1
   where if_bt0 = unpat d (subst k Bt0 v)
         if_bt1 = unpat d t
 
 -- match x { []: n ; h<>t: c }
 -- ------------------------------
 -- (λ{ []: n ; <>: λh. λt. c } x)
-unpatPat d x ms (([(cut -> Nil)], n) : ([(cut -> Con h t)], c) : _) =
-  matcher d ms x $ Mat if_nil if_con
+match d x ms (([(cut -> Nil)], n) : ([(cut -> Con h t)], c) : _) =
+  wrap d ms x $ Mat if_nil if_con
   where if_nil = unpat d n
         if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
 
 -- match x { h<>t: c ; []: n }
 -- ------------------------------
 -- (λ{ []: n ; <>: λh. λt. c } x)
-unpatPat d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
-  matcher d ms x $ Mat if_nil if_con
+match d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
+  wrap d ms x $ Mat if_nil if_con
   where if_nil = unpat d n
         if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
 
 -- match x { []: n ; k: v }
 -- -----------------------------------------
 -- (λ{ []: n ; <>: λh. λt. v[k := h<>t] } x)
-unpatPat d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
-  matcher d ms x $ Mat if_nil if_con
+match d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
+  wrap d ms x $ Mat if_nil if_con
   where if_nil = unpat d n
         if_con = Lam (nam d) $ \_ -> Lam (nam (d+1)) $ \_ -> unpat (d+2) (subst k (Con (var d) (var (d+1))) v)
 
 -- match x { h<>t: c ; k: v }
 -- ---------------------------------------
 -- (λ{ []: v[k := []] ; <>: λh. λt. c } x)
-unpatPat d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
-  matcher d ms x $ Mat if_nil if_con
+match d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
+  wrap d ms x $ Mat if_nil if_con
   where if_nil = unpat d (subst k Nil v)
         if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
 
 -- match x { (): u }
 -- -----------------
 -- (λ{ (): u } x)
-unpatPat d x ms cs@(([(cut -> One)], u) : _) =
-  matcher d ms x $ Use (unpat d u)
+match d x ms cs@(([(cut -> One)], u) : _) =
+  wrap d ms x $ Use (unpat d u)
 
 -- match x { (a,b): p }
 -- --------------------
 -- (λ{ (,): λa. λb. p } x)
-unpatPat d x ms (([(cut -> Tup a b)], p) : _) =
-  matcher d ms x $ Get if_tup
+match d x ms (([(cut -> Tup a b)], p) : _) =
+  wrap d ms x $ Get if_tup
   where if_tup = Lam (patOf d a) $ \_ -> Lam (patOf (d+1) b) $ \_ -> unpat (d+2) p
 
 -- match x { @S1: b1 ; @S2: b2 ; ... ; k: d }
 -- ------------------------------------------
 -- (λ{ @S1:b1 ; @S2:b2 ; ... ; d } x)
-unpatPat d x ms cs@(([(cut -> Sym _)],_):_) =
-  let (cx,dx) = go cs in matcher d ms x $ Cse cx dx
+match d x ms cs@(([(cut -> Sym _)],_):_) =
+  let (cx,dx) = go cs in wrap d ms x $ Cse cx dx
   where
     -- go :: [Case] -> ([Case],Term)
     go []                          = ([], Efq)
     go (([(cut->Sym s)]  ,rhs):cs) = ((s,unpat d rhs):cx,dx) where (cx,dx) = go cs
     go (([(cut->Var _ _)],rhs):[]) = ([],unpat d rhs)
-    go (c:_)                       = error $ "unpatPat:invalid-Sym-case:" ++ show c
+    go (c:_)                       = error $ "match:invalid-Sym-case:" ++ show c
 
 -- match x { k: body }
 -- -------------------
 -- body[k := x]
-unpatPat d x ms (([(cut -> Var k i)], body) : _) =
+match d x ms (([(cut -> Var k i)], body) : _) =
   unpat d (shove d ((k, x) : ms) body)
 
 -- match x { }
 -- -----------
 -- (λ{} x)
-unpatPat d x ms [] =
-  matcher d ms x Efq
+match d x ms [] =
+  wrap d ms x Efq
 
 -- Invalid pattern
-unpatPat d s ms cs = error $ "unpatPat - invalid pattern: " ++ show (d, s, ms, cs)
-
-unpatBook :: Book -> Book
-unpatBook (Book defs) = Book (M.map unpatDefn defs)
-  where unpatDefn (i, x, t) = trace ("unpat: " ++ show x) (i, unpat 0 x, unpat 0 t)
+match d s ms cs = error $ "match - invalid pattern: " ++ show (d, s, ms, cs)
 
 -- Completes a pattern-match using native λ-matches
 -- Injects moved vars inwards using extra lams/apps
-matcher :: Int -> [Move] -> Term -> Term -> Term
-matcher d ms s (Swi z (Lam p f)) =
+wrap :: Int -> [Move] -> Term -> Term -> Term
+wrap d ms s (Swi z (Lam p f)) =
   apps d (map snd ms) (App swi s) where
     swi = Swi ifZ ifS
     ifZ = lams d (map fst ms) z
     ifS = Lam p $ \x -> lams (d+1) (map fst ms) (f x)
-matcher d ms s (Bif f t) =
+wrap d ms s (Bif f t) =
   apps d (map snd ms) (App bif s) where
     bif = Bif ifF ifT
     ifF = lams d (map fst ms) f
     ifT = lams d (map fst ms) t
-matcher d ms s (Mat n (Lam h (unlam d -> Lam t (unlam d -> c)))) =
+wrap d ms s (Mat n (Lam h (unlam d -> Lam t (unlam d -> c)))) =
   apps d (map snd ms) (App mat s) where
     mat = Mat ifN ifC
     ifN = lams d (map fst ms) n
     ifC = Lam h $ \_ -> Lam t $ \_ -> lams (d+1) (map fst ms) c
-matcher d ms s (Mat n c) =
+wrap d ms s (Mat n c) =
   apps d (map snd ms) (App mat s) where
     mat = Mat ifN ifC
     ifN = lams d (map fst ms) n
     ifC = lams d (map fst ms) c
-matcher d ms s (Use u) =
+wrap d ms s (Use u) =
   apps d (map snd ms) (App use s) where
     use = Use ifU
     ifU = lams d (map fst ms) u
-matcher d ms s (Get (Lam a (unlam d -> Lam b (unlam d -> p)))) =
+wrap d ms s (Get (Lam a (unlam d -> Lam b (unlam d -> p)))) =
   apps d (map snd ms) (App get s) where
     get = Get ifP
     ifP = Lam a $ \_ -> Lam b $ \_ -> lams (d+2) (map fst ms) p
-matcher d ms s (Get f) =
+wrap d ms s (Get f) =
   apps d (map snd ms) (App get s) where
     get = Get ifP
     ifP = lams d (map fst ms) f
-matcher d ms s (Cse c e) =
+wrap d ms s (Cse c e) =
   apps d (map snd ms) (App cse s) where
     cse = Cse [(s, lams d (map fst ms) t) | (s, t) <- c] (lams d (map fst ms) e)
-matcher d ms s Efq =
+wrap d ms s Efq =
   apps d (map snd ms) (App Efq s)
-matcher d ms s other =
+wrap d ms s other =
   error "TODO"
+
+unpatBook :: Book -> Book
+unpatBook (Book defs) = Book (M.map unpatDefn defs)
+  where unpatDefn (i, x, t) = (i, unpat 0 x, unpat 0 t)
 
 -- Helpers
 -- -------
