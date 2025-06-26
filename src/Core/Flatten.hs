@@ -102,9 +102,9 @@ flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
 flattenPat :: Int -> Term -> Term
 flattenPat d pat@(Pat (s:ss) ms ((((cut->Var k i):ps),rhs):cs)) =
   -- trace (">> var: " ++ show pat) $
-  flatten d $ Pat ss ms (joinVarCol (d+1) k (((Var k i:ps),rhs):cs))
+  flatten d $ Pat ss ms (joinVarCol (d+1) s (((Var k i:ps),rhs):cs))
 flattenPat d pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
-  -- trace (">> ctr: " ++ show pat) $
+  -- trace (">> ctr: " ++ show p ++ " " ++ show pat) $
   Pat [s] moves [([ct], picks), ([var d], drops)] where
     (ct,fs) = ctrOf d p
     (ps,ds) = peelCtrCol ct cs
@@ -118,8 +118,8 @@ flattenPat d pat = pat
 -- match x y { case x0 @A: F(x0) ; case x1 @B: F(x1) }
 -- --------------------------------------------------- joinVarCol k
 -- match y { with k=x case @A: F(k) ; case @B: F(k) }
-joinVarCol :: Int -> Name -> [Case] -> [Case]
-joinVarCol d k ((((cut->Var j _):ps),rhs):cs) = (ps, subst j (Var k 0) rhs) : joinVarCol d k cs
+joinVarCol :: Int -> Term -> [Case] -> [Case]
+joinVarCol d k ((((cut->Var j _):ps),rhs):cs) = (ps, subst j k rhs) : joinVarCol d k cs
 joinVarCol d k ((((cut->ctr    ):ps),rhs):cs) = error "redundant pattern"
 joinVarCol d k cs                             = cs
 
@@ -375,15 +375,19 @@ match d x ms (([(cut -> Tup a b)], p) : _) =
 
 -- match x { @S1: b1 ; @S2: b2 ; ... ; k: d }
 -- ------------------------------------------
--- (λ{ @S1:b1 ; @S2:b2 ; ... ; d } x)
-match d x ms cs@(([(cut -> Sym _)],_):_) =
-  let (cx,dx) = go cs in wrap d ms x $ Cse cx dx
+-- (λ{ @S1:b1 ; @S2:b2 ; ... ; λk. d } x)
+match d x ms cs@(([(cut -> Sym _)], _) : _) =
+  let (cBranches, defBranch) = collect cs
+  in wrap d ms x (Cse cBranches defBranch)
   where
-    -- go :: [Case] -> ([Case],Term)
-    go []                          = ([], Efq)
-    go (([(cut->Sym s)]  ,rhs):cs) = ((s,unpat d rhs):cx,dx) where (cx,dx) = go cs
-    go (([(cut->Var _ _)],rhs):[]) = ([],unpat d rhs)
-    go (c:_)                       = error $ "match:invalid-Sym-case:" ++ show c
+    collect :: [Case] -> ([(String, Term)], Term)
+    collect [] = ([], Efq)
+    collect (([(cut -> Sym s)], rhs) : rest) =
+      let (cs, def) = collect rest
+      in ((s, unpat d rhs) : cs, def)
+    collect (([(cut -> Var k _)], rhs) : _) =
+      ([], Lam k $ \_ -> unpat (d+1) rhs)
+    collect (c:_) = error $ "match:invalid-Sym-case:" ++ show c
 
 -- match x { {==}: r }
 -- --------------------
@@ -455,8 +459,10 @@ wrap d ms s other =
   error "TODO"
 
 unpatBook :: Book -> Book
-unpatBook (Book defs) = Book (M.map unpatDefn defs)
-  where unpatDefn (i, x, t) = (i, unpat 0 x, unpat 0 t)
+unpatBook (Book defs) = Book (M.map unpatDefn defs) where
+  unpatDefn (i, x, t) =
+    -- trace ("unpat: " ++ show x) $
+    (i, unpat 0 x, unpat 0 t)
 
 -- Helpers
 -- -------
