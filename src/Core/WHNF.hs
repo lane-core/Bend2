@@ -136,7 +136,7 @@ whnfAppCse lv book undo c d x =
     Sym s -> case lookup s c of
       Just t  -> whnf lv book t
       Nothing -> whnf lv book (App d (Sym s))
-    _     -> undo
+    x -> whnf lv book (App d x)
 
 whnfAppPri :: Int -> Book -> Term -> PriF -> Term -> Term
 whnfAppPri lv book undo U64_TO_CHAR x =

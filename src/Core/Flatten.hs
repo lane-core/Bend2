@@ -153,11 +153,11 @@ peelCtrCol (cut->k) ((((cut->p):ps),rhs):cs) =
     (Nil    , Nil    ) -> ((ps, rhs) : picks , drops)
     (Nil    , Var k _) -> ((ps, subst k Nil rhs) : picks , ((p:ps),rhs) : drops)
     (Con _ _, Con h t) -> (((h:t:ps), rhs) : picks , drops)
-    (Con _ _, Var k _) -> (((Var (k++"h") 0:Var (k++"t") 0:ps), subst k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Con _ _, Var k _) -> (((Var (k++"t") 0:Var (k++"h") 0:ps), subst k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (One    , One    ) -> ((ps, rhs) : picks , drops)
     (One    , Var k _) -> ((ps, subst k One rhs) : picks , ((p:ps),rhs) : drops)
     (Tup _ _, Tup a b) -> (((a:b:ps), rhs) : picks , drops)
-    (Tup _ _, Var k _) -> (((Var (k++"x") 0:Var (k++"y") 0:ps), subst k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Tup _ _, Var k _) -> (((Var (k++"y") 0:Var (k++"x") 0:ps), subst k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Sym s  , Sym s' )
              | s == s' -> ((ps, rhs) : picks , drops)
     (Sym s  , Var k _) -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
@@ -381,7 +381,7 @@ match d x ms cs@(([(cut -> Sym _)], _) : _) =
   in wrap d ms x (Cse cBranches defBranch)
   where
     collect :: [Case] -> ([(String, Term)], Term)
-    collect [] = ([], Efq)
+    collect [] = ([], Lam "_" $ \_ -> One)
     collect (([(cut -> Sym s)], rhs) : rest) =
       let (cs, def) = collect rest
       in ((s, unpat d rhs) : cs, def)

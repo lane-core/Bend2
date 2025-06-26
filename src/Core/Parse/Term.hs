@@ -1,5 +1,7 @@
 {-./../Type.hs-}
 
+{-# LANGUAGE ViewPatterns #-}
+
 module Core.Parse.Term 
   ( parseTerm
   , parseExpr
@@ -12,7 +14,6 @@ import Control.Monad.State.Strict (State, get, put, evalState)
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.Void
 import Data.Word (Word64)
-import Debug.Trace
 import Text.Megaparsec
 import Text.Megaparsec (anySingle, manyTill, lookAhead)
 import Text.Megaparsec.Char
@@ -832,8 +833,8 @@ parseLam = label "lambda abstraction" $ do
   return $ foldr desugarLamPat body (zip [0..] pats)
   where
     desugarLamPat :: (Int, Term) -> Term -> Term
-    desugarLamPat (_, Var x _) acc = Lam x (\_ -> acc)
-    desugarLamPat (idx, pat) acc = 
+    desugarLamPat (_  , cut -> (Var x _)) acc = Lam x (\_ -> acc)
+    desugarLamPat (idx, pat)              acc = 
       -- Generate a fresh variable name using index
       let freshVar = "_" ++ show idx
       in Lam freshVar (\_ -> Pat [Var freshVar 0] [] [([pat], acc)])
