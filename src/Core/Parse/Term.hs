@@ -355,12 +355,11 @@ parseCse = label "enum case match" $ do
   f <- some (satisfy isNameChar)
   _ <- symbol ":"
   t <- parseTerm
-  _ <- parseSemi
-  r <- many $ try parseCaseClause
+  r <- many parseCaseClause
   d <- option One $ try $ do
+    _ <- parseSemi
     notFollowedBy (symbol "@")
     parseTerm
-  _ <- parseSemi
   _ <- symbol "}"
   return (Cse ((f, t) : r) d)
 
@@ -368,11 +367,11 @@ parseCse = label "enum case match" $ do
 -- Helper for parsing enum case clauses
 parseCaseClause :: Parser (String, Term)
 parseCaseClause = do
+  _ <- parseSemi
   _ <- symbol "@"
   s <- some (satisfy isNameChar)
   _ <- symbol ":"
   t <- parseTerm
-  _ <- parseSemi
   return (s, t)
 
 -- | Syntax: match expr: case pat: body | match expr { case pat: body }

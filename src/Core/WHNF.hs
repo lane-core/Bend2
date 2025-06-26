@@ -132,19 +132,11 @@ whnfAppGet lv book undo f x =
 
 whnfAppCse :: Int -> Book -> Term -> [(String,Term)] -> Term -> Term -> Term
 whnfAppCse lv book undo c d x =
-  case whnf lv book x  of
+  case whnf lv book x of
     Sym s -> case lookup s c of
       Just t  -> whnf lv book t
       Nothing -> whnf lv book (App d (Sym s))
-    Tup (Sym s) rest -> case lookup s c of
-      Just t  -> whnf lv book (applyArgs t rest)
-      Nothing -> whnf lv book (App d (Sym s))
     x -> whnf lv book (App d x)
-    where
-      applyArgs f One = f
-      applyArgs f (Tup a One)  = App f a
-      applyArgs f (Tup a rest) = applyArgs (App f a) rest
-      applyArgs f y = App f y
 
 whnfAppPri :: Int -> Book -> Term -> PriF -> Term -> Term
 whnfAppPri lv book undo U64_TO_CHAR x =
