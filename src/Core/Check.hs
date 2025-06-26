@@ -257,6 +257,16 @@ check d span book ctx term goal =
             then return ()
             else check d span book ctx e (All a b)
           Done ()
+        Sig x@(Enu y) z -> do
+          let s = map fst c
+          let allCasesCovered = length s == length y && all (`elem` y) s
+          -- Check each case
+          mapM_ (\(sym, term) -> check d span book ctx term (App b (Sym sym))) c
+          -- Check default case
+          if allCasesCovered
+            then return ()
+            else check d span book ctx e (All a b)
+          Done ()
         _ -> Fail $ TypeMismatch span (ctx term) (Enu []) a
     (Get f, All a b) -> do
       case force book a of
