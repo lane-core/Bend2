@@ -126,8 +126,8 @@ def map<A,B>(f: A -> B, xs: A[]) -> B[]:
     case x <> xs:
       f(x) <> map<A,B>(f, xs)
 
-## Inductive Datatype
-## ------------------
+# Inductive Datatype
+# ------------------
 
 # Can we encode inductive datatypes?
 
@@ -143,56 +143,55 @@ type Vec<A: Set>(N: Nat) -> Set:
     t: Vec(A,n)
     e: Nat{N == (1n+n)}
 
-#def VecInd
-  #( A: Set
-  #, P: all n:Nat xs:Vec(A,n). Set
-  #, N: P(0,@Nil{finally})
-  #, C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1n+s,@Cons{s,x,xs,finally})
-  #, n: Nat
-  #, x: Vec(A,n)
-  #) -> P(n,x):
-  #match x:
-    #case @Nil{e}:
-      #rewrite e
-      #N
-    #case @Cons{n,h,t,e}:
-      #rewrite e
-      #C(n,h,t,VecInd(A,P,N,C,n,t))
-
 def VecInd
-:(∀A: Set.
-  ∀P: ∀n:Nat. ∀xs: Vec(A,n). Set.
-  ∀N: P(0,@Nil{{==}}).
-  ∀C: (∀s:Nat. ∀x:A. ∀xs:Vec(A,s).  P(s,xs) -> P(1n+s,@Cons{s,x,xs,{==}})).
-  ∀n: Nat.
-  ∀x: Vec(A,n).
-  P(n,x))
-= λA. λP. λN. λC. λn. λx.
-  (λ{
-    (,):λ_x6. λ_x7. (λ{
-      @Nil: λ_x7. (λ{
-        (,):λe. λ_x9. (λ{
-          ():λe. (λ{ {==}:N })(e)
-        })(_x9,e)
-      })(_x7)
-      @Cons: λ_x7. (λ{
-        (,):λn. λ_x10. (λ{
-          (,):λh. λ_x12. λn. (λ{
-            (,):λt. λ_x14. λn. λh. (λ{
-              (,):λe. λ_x16. λn. λh. λt. (λ{
-                ():λn. λh. λt. λe. (λ{
-                  {==}:C(n,h,t,VecInd(A,P,N,C,n,t)) })(e)
-                })(_x16,n,h,t,e)
-              })(_x14,n,h,t)
-            })(_x12,n,h)
-          })(_x10,n)
-        })(_x7)
-        λ_x7. λ_x9. λ{}
-      })(_x6,_x7)
-  })(x)
+  ( A: Set
+  , P: all n:Nat xs:Vec(A,n). Set
+  , N: P(0,@Nil{finally})
+  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1n+s,@Cons{s,x,xs,finally})
+  , n: Nat
+  , x: Vec(A,n)
+  ) -> P(n,x):
+  match x:
+    case @Nil{e}:
+      rewrite e
+      N
+    case @Cons{n,h,t,e}:
+      ()
 
-# More Stuff
-# ----------
+#def VecInd
+#:(∀A: Set.
+  #∀P: ∀n:Nat. ∀xs: Vec(A,n). Set.
+  #∀N: P(0,@Nil{{==}}).
+  #∀C: (∀s:Nat. ∀x:A. ∀xs:Vec(A,s).  P(s,xs) -> P(1n+s,@Cons{s,x,xs,{==}})).
+  #∀n: Nat.
+  #∀x: Vec(A,n).
+  #P(n,x))
+#= λA. λP. λN. λC. λn. λx.
+  #(λ{
+    #(,):λ_x6. λ_x7. (λ{
+      #@Nil: λ_x7. (λ{
+        #(,):λe. λ_x9. (λ{
+          #():λe. (λ{ {==}:N })(e)
+        #})(_x9,e)
+      #})(_x7)
+      #@Cons: λ_x7. (λ{
+        #(,):λn. λ_x10. (λ{
+          #(,):λh. λ_x12. λn. (λ{
+            #(,):λt. λ_x14. λn. λh. (λ{
+              #(,):λe. λ_x16. λn. λh. λt. (λ{
+                #():λn. λh. λt. λe. (λ{
+                  #{==}:C(n,h,t,VecInd(A,P,N,C,n,t)) })(e)
+                #})(_x16,n,h,t,e)
+              #})(_x14,n,h,t)
+            #})(_x12,n,h)
+          #})(_x10,n)
+        #})(_x7)
+        #λ_x7. λ_x9. λ{}
+      #})(_x6,_x7)
+  #})(x)
 
-def main(x: Char) -> Char[]:
-  "foo bar!!"
+## More Stuff
+## ----------
+
+#def main(x: Char) -> Char[]:
+  #"foo bar!!"

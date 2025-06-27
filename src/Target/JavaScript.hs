@@ -561,7 +561,6 @@ module Target.JavaScript where
 
 import Control.Monad (forM)
 import Core.Type
-import Core.WHNF
 import Data.Int (Int64)
 import Data.List (intercalate, isPrefixOf, isSuffixOf, isInfixOf)
 import Data.Maybe (fromJust)

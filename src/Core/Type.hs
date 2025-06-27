@@ -1,12 +1,3 @@
--- PROBLEM:
---   we're currently refactoring this programming language to use expression-based
---   pattern matches like '~ x { True: t ; False : t }', instead of lambda matches
---   like '(λ{ True: t ; False: t } x)'
--- INSTRUCTIONS:
--- - fully rewrite the commented-out code above FILL_HERE to apply this change
--- - do not remove any existing feature or comments from the code you edit
--- - ALWAYS REPLICATE THE SAME STYLE AS THE ORIGINAL FILE, AS CLOSE AS POSSIBLE
-
 module Core.Type where
 
 import Data.List (intercalate)
@@ -161,6 +152,9 @@ data Book = Book (M.Map Name Defn)
 -- Substitution Map
 type Subs = [(Term,Term)]
 
+-- Context (new type)
+data Ctx = Ctx [(Name,Term,Term)]
+
 -- Error Location (NEW TYPE)
 data Span = Span
   { spanBeg :: (Int,Int)
@@ -169,9 +163,9 @@ data Span = Span
   }
 
 data Error
-  = CantInfer Span Term
-  | TypeMismatch Span Term Term Term
-  | TermMismatch Span Term Term Term
+  = CantInfer Span Ctx
+  | TypeMismatch Span Ctx Term Term
+  | TermMismatch Span Ctx Term Term
 
 data Result a
   = Done a
@@ -192,7 +186,7 @@ instance Monad Result where
   Fail e >>= _ = Fail e
 
 instance Show Term where
-  show (Var k i)      = k ++ "^" ++ show i
+  show (Var k i)      = k
   show (Ref k)        = k
   -- show (Sub t)        = error "unreachable"
   show (Sub t)        = show t
@@ -298,43 +292,82 @@ instance Show Span where
     ++ "\x1b[2m(line "++show (fst $ spanBeg span)++ ", column "++show (snd $ spanBeg span)++")\x1b[0m\n"
     ++ highlightError (spanBeg span) (spanEnd span) (spanSrc span)
 
+-- instance Show Error where
+  -- show (CantInfer span ctx) = 
+    -- "\x1b[1mCantInfer:\x1b[0m" ++
+    -- "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
+    -- show span
+  -- show (TypeMismatch span ctx goal typp) = 
+    -- "\x1b[1mMismatch:\x1b[0m" ++
+    -- "\n- Goal: " ++ show goal ++ 
+    -- "\n- Type: " ++ show typp ++
+    -- "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
+    -- show span
+  -- show (TermMismatch span ctx a b) = 
+    -- "\x1b[1mMismatch:\x1b[0m" ++
+    -- "\n- " ++ show a ++ 
+    -- "\n- " ++ show b ++
+    -- "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
+    -- show span
+
+-- TASK: update the code above
+
 instance Show Error where
   show (CantInfer span ctx) = 
     "\x1b[1mCantInfer:\x1b[0m" ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ showContext ctx ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
-  show (TypeMismatch span ctx goal typp) = 
+  show (TypeMismatch span ctx goal typ) = 
     "\x1b[1mMismatch:\x1b[0m" ++
     "\n- Goal: " ++ show goal ++ 
-    "\n- Type: " ++ show typp ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ showContext ctx ++
+    "\n- Type: " ++ show typ ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
   show (TermMismatch span ctx a b) = 
     "\x1b[1mMismatch:\x1b[0m" ++
     "\n- " ++ show a ++ 
     "\n- " ++ show b ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ showContext ctx ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
 
-showContext :: Term -> String
-showContext ctx = 
-  let lines = map snd (reverse (dedup S.empty (reverse (go ctx []))))
-  -- let lines = map snd (reverse ((reverse (go ctx []))))
-  in if null lines then "" else init (unlines lines)
-  where
+-- showContext :: Term -> String
+-- showContext ctx = 
+  -- let lines = map snd (reverse (dedup S.empty (reverse (go ctx []))))
+  -- -- let lines = map snd (reverse ((reverse (go ctx []))))
+  -- in if null lines then "" else init (unlines lines)
+  -- where
 
-  go :: Term -> [(Name, String)] -> [(Name, String)]
-  go (Let v (Lam k f)) acc = case v of
-    (Chk _ ty) -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k ++ " : " ++ show ty)])
-    ty         -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k)])
-  go term acc = acc
-  -- go term acc = acc ++ [("", "\x1b[1mExpression:\x1b[0m\n- " ++ show term)]
+  -- go :: Term -> [(Name, String)] -> [(Name, String)]
+  -- go (Let v (Lam k f)) acc = case v of
+    -- (Chk _ ty) -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k ++ " : " ++ show ty)])
+    -- ty         -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k)])
+  -- go term acc = acc
+  -- -- go term acc = acc ++ [("", "\x1b[1mExpression:\x1b[0m\n- " ++ show term)]
 
-  dedup :: S.Set Name -> [(Name,String)] -> [(Name,String)]
-  dedup _    []                             = []
-  dedup seen ((n,l):xs) | n `S.member` seen = dedup seen xs
-                        | take 1 n == "_"   = dedup seen xs
-                        | otherwise         = (n,l) : dedup (S.insert n seen) xs
+  -- dedup :: S.Set Name -> [(Name,String)] -> [(Name,String)]
+  -- dedup _    []                             = []
+  -- dedup seen ((n,l):xs) | n `S.member` seen = dedup seen xs
+                        -- | take 1 n == "_"   = dedup seen xs
+                        -- | otherwise         = (n,l) : dedup (S.insert n seen) xs
+
+-- TODO: refactor this to use the new type: a context now is just a list of (name,term,type)
+-- implement below the context Show instance
+
+instance Show Ctx where
+  show (Ctx ctx)
+    | null lines = ""
+    | otherwise  = init (unlines lines)
+    where
+      lines = map snd (reverse (clean S.empty (reverse (map showAnn ctx))))
+
+      showAnn :: (Name,Term,Term) -> (Name,String)
+      showAnn (k,_,t) = (k, "- " ++ k ++ " : " ++ show t)
+    
+      clean :: S.Set Name -> [(Name,String)] -> [(Name,String)]
+      clean _    []                             = []
+      clean seen ((n,l):xs) | n `S.member` seen = clean seen xs
+                            | take 1 n == "_"   = clean seen xs
+                            | otherwise         = (n,l) : clean (S.insert n seen) xs
 
 -- Utils
 -- -----

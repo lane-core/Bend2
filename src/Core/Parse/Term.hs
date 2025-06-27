@@ -993,8 +993,8 @@ import Debug.Trace
 
 import Core.Bind
 import Core.Flatten
-import Core.Move
 import Core.Type
+import Core.Move
 import Core.Parse (Parser, ParserState(..), skip, lexeme, symbol, parens, angles, 
                   braces, brackets, name, reserved, parseSemi, isNameInit, 
                   isNameChar, withSpan, located, formatError)
@@ -1863,8 +1863,7 @@ doParseTerm :: FilePath -> String -> Either String Term
 doParseTerm file input =
   case evalState (runParserT p file input) (ParserState True input M.empty) of
     Left err  -> Left (formatError input err)
-    -- Right res -> Right (bind (move (unpat 0 (flatten 0 res))))
-    Right res -> Right (bind ((unpat 0 (flatten 0 res))))
+    Right res -> Right (bind (unpat 0 (flatten 0 res)))
   where
     p = do
       skip

@@ -11,168 +11,182 @@ import Data.IORef
 import Data.Bits
 import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 
--- Main normalizer
-whnf :: Int -> Book -> Term -> Term
-whnf lv book term =
+-- Levels:
+-- - 0: reduce nothing
+-- - 1: reduce applications, eliminators, operators and primitives
+-- - 2: reduce Fixes and non-injective Refs in wnf position
+-- - 3: reduce everything
+
+-- Substitution
+subst :: Int -> Int -> Book -> Subs -> Subs -> Term -> Maybe (Subs, Term)
+subst 0 d book subs rems x
+  = Nothing
+subst lv d book ((k,v):subs) rems x
+  | eql (lv-1) d book [] k x = trace ("sub " ++ show k ++ " → " ++ show v) $ Just (rems ++ subs , v)
+  | otherwise                = subst lv d book subs (rems ++ [(k,v)]) x
+subst lv d book [] rems x = Nothing
+
+-- Reduction
+whnf :: Int -> Int -> Book -> Subs -> Term -> Term
+whnf 0  d book subs term = term
+whnf lv d book subs term =
   -- trace ("whnf " ++ show term) $
-  case term of
-    Let v f     -> whnfLet lv book v f
-    Ref k       -> whnfRef lv book k
-    Fix k f     -> whnfFix lv book k f
-    Ann x _     -> whnf lv book x
-    Chk x _     -> whnf lv book x
-    App f x     -> whnfApp lv book (App f x) f x
-    Loc _ t     -> whnf lv book t
-    Op2 o a b   -> whnfOp2 lv book o a b
-    Op1 o a     -> whnfOp1 lv book o a
-    Pri p       -> Pri p
-    UniM x f    -> whnfUniM lv book term x f
-    BitM x f t  -> whnfBitM lv book term x f t
-    NatM x z s  -> whnfNatM lv book term x z s
-    LstM x n c  -> whnfLstM lv book term x n c
-    EnuM x cs d -> whnfEnuM lv book x cs d
-    SigM x f    -> whnfSigM lv book term x f
-    EqlM x f    -> whnfEqlM lv book term x f
-    _           -> term
+  case subst lv d book subs [] term of
+    Just (s,t) -> whnf lv d book s t
+    Nothing    -> case term of
+      Let v f    -> whnfLet lv d book subs v f
+      Ref k      -> whnfRef lv d book subs k
+      Fix k f    -> whnfFix lv d book subs k f
+      Ann x _    -> whnf lv d book subs x
+      Chk x _    -> whnf lv d book subs x
+      App f x    -> whnfApp lv d book subs (App f x) f x
+      Loc _ t    -> whnf lv d book subs t
+      Op2 o a b  -> whnfOp2 lv d book subs o a b
+      Op1 o a    -> whnfOp1 lv d book subs o a
+      Pri p      -> Pri p
+      UniM x f   -> whnfUniM lv d book subs term x f
+      BitM x f t -> whnfBitM lv d book subs term x f t
+      NatM x z s -> whnfNatM lv d book subs term x z s
+      LstM x n c -> whnfLstM lv d book subs term x n c
+      EnuM x c f -> whnfEnuM lv d book subs term x c f
+      SigM x f   -> whnfSigM lv d book subs term x f
+      EqlM x f   -> whnfEqlM lv d book subs term x f
+      _          -> term
 
 -- Normalizes a let binding
-whnfLet :: Int -> Book -> Term -> Term -> Term
-whnfLet lv book v f = whnf lv book (App f v)
+whnfLet :: Int -> Int -> Book -> Subs -> Term -> Term -> Term
+whnfLet lv d book subs v f = whnf lv d book subs (App f v)
 
 -- Normalizes a reference
-whnfRef :: Int -> Book -> Name -> Term
-whnfRef lv book k =
+whnfRef :: Int -> Int -> Book -> Subs -> Name -> Term
+whnfRef lv d book subs k =
   case lv of
     0 -> Ref k
-    1 -> case deref book k of
-      Just (True , term, _) -> Ref k
-      Just (False, term, _) -> whnf lv book term
-      Nothing               -> Ref k
+    1 -> Ref k
     2 -> case deref book k of
-      Just (_, term, _) -> whnf lv book term
+      Just (True , term, _) -> Ref k
+      Just (False, term, _) -> whnf lv d book subs term
+      Nothing               -> Ref k
+    3 -> case deref book k of
+      Just (_, term, _) -> whnf lv d book subs term
       Nothing           -> Ref k
     _ -> error "unreachable"
 
 -- Normalizes a fixpoint
-whnfFix :: Int -> Book -> String -> Body -> Term
-whnfFix lv book k f =
+whnfFix :: Int -> Int -> Book -> Subs -> String -> Body -> Term
+whnfFix lv d book subs k f =
   case lv of
     0 -> Fix k f
     1 -> Fix k f
-    2 -> whnf lv book (f (Fix k f))
+    2 -> Fix k f
+    3 -> whnf lv d book subs (f (Fix k f))
     _ -> error "unreachable"
 
 -- Normalizes a reference in an application
-whnfAppRef :: Int -> Book -> Term -> Name -> Term -> Term
-whnfAppRef 0  _    undo k x = App (Ref k) x
-whnfAppRef 1  book undo k x =
+whnfAppRef :: Int -> Int -> Book -> Subs -> Term -> Name -> Term -> Term
+whnfAppRef 0  d _    subs undo k x = App (Ref k) x
+whnfAppRef 1  d _    subs undo k x = App (Ref k) x
+whnfAppRef 2  d book subs undo k x =
   case deref book k of
     Just (inj, term, _) | inj       -> App (Ref k) x
-                        | otherwise -> whnfApp 1 book undo term x
+                        | otherwise -> whnfApp 1 d book subs undo term x
     Nothing -> App (Ref k) x
-whnfAppRef lv book undo k x =
+whnfAppRef lv d book subs undo k x =
   case deref book k of
-    Just (_, term, _) -> whnfApp lv book undo term x
+    Just (_, term, _) -> whnfApp lv d book subs undo term x
     Nothing           -> undo
 
 -- Normalizes an application
-whnfApp :: Int -> Book -> Term -> Term -> Term -> Term
-whnfApp lv book undo f x =
-  case whnf lv book f of
-    Lam _ f'  -> whnfAppLam lv book f' x
-    Fix k f'  -> whnfAppFix lv book undo k f' x
-    Ref k     -> whnfAppRef lv book undo k x
-    Pri p     -> whnfAppPri lv book undo p x
+whnfApp :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term
+whnfApp lv d book subs undo f x =
+  case whnf lv d book subs f of
+    Lam _ f'  -> whnfAppLam lv d book subs f' x
+    Fix k f'  -> whnfAppFix lv d book subs undo k f' x
+    Ref k     -> whnfAppRef lv d book subs undo k x
+    Pri p     -> whnfAppPri lv d book subs undo p x
     Sup _ _ _ -> error "Sup interactions unsupported in Haskell"
     _         -> undo
 
 -- Normalizes a lambda application
-whnfAppLam :: Int -> Book -> Body -> Term -> Term
-whnfAppLam lv book f x = whnf lv book (f x)
+whnfAppLam :: Int -> Int -> Book -> Subs -> Body -> Term -> Term
+whnfAppLam lv d book subs f x = whnf lv d book subs (f x)
 
 -- Normalizes a fixpoint application
-whnfAppFix :: Int -> Book -> Term -> String -> Body -> Term -> Term
-whnfAppFix 0  book undo k f x = App (Fix k f) x
-whnfAppFix lv book undo k f x = whnfApp lv book undo (f (Fix k f)) x
+whnfAppFix :: Int -> Int -> Book -> Subs -> Term -> String -> Body -> Term -> Term
+whnfAppFix 0  d book subs undo k f x = App (Fix k f) x
+whnfAppFix 1  d book subs undo k f x = App (Fix k f) x
+whnfAppFix lv d book subs undo k f x = whnfApp lv d book subs undo (f (Fix k f)) x
 
 -- Eliminator normalizers
 -- ----------------------
 
 -- Normalizes a unit match
-whnfUniM :: Int -> Book -> Term -> Term -> Term -> Term
-whnfUniM lv book undo x f =
-  case whnf lv book x of
-    One -> whnf lv book f
+whnfUniM :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term
+whnfUniM lv d book subs undo x f =
+  case whnf lv d book subs x of
+    One -> whnf lv d book subs f
     _   -> undo
 
 -- Normalizes a boolean match
-whnfBitM :: Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfBitM lv book undo x f t =
-  case whnf lv book x of
-    Bt0 -> whnf lv book f
-    Bt1 -> whnf lv book t
+whnfBitM :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term -> Term
+whnfBitM lv d book subs undo x f t =
+  case whnf lv d book subs x of
+    Bt0 -> whnf lv d book subs f
+    Bt1 -> whnf lv d book subs t
     _   -> undo
 
 -- Normalizes a natural number match
-whnfNatM :: Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfNatM lv book undo x z s =
-  case whnf lv book x of
-    Zer   -> whnf lv book z
-    Suc n -> whnf lv book (App s (whnf lv book n))
+whnfNatM :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term -> Term
+whnfNatM lv d book subs undo x z s =
+  case whnf lv d book subs x of
+    Zer   -> whnf lv d book subs z
+    Suc n -> whnf lv d book subs (App s (whnf lv d book subs n))
     _     -> undo
 
 -- Normalizes a list match
-whnfLstM :: Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfLstM lv book undo x n c =
-  case whnf lv book x of
-    Nil     -> whnf lv book n
-    Con h t -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
+whnfLstM :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term -> Term
+whnfLstM lv d book subs undo x n c =
+  case whnf lv d book subs x of
+    Nil     -> whnf lv d book subs n
+    Con h t -> whnf lv d book subs (App (App c (whnf lv d book subs h)) (whnf lv d book subs t))
     _       -> undo
 
 -- Normalizes a pair match
-whnfSigM :: Int -> Book -> Term -> Term -> Term -> Term
-whnfSigM lv book undo x f =
-  case whnf lv book x of
-    Tup a b -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
+whnfSigM :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term
+whnfSigM lv d book subs undo x f =
+  case whnf lv d book subs x of
+    Tup a b -> whnf lv d book subs (App (App f (whnf lv d book subs a)) (whnf lv d book subs b))
     _       -> undo
 
 -- Normalizes an enum match
-whnfEnuM :: Int -> Book -> Term -> [(String,Term)] -> Term -> Term
-whnfEnuM lv book x cs d =
-  case whnf lv book x of
-    Sym s -> case lookup s cs of
-      Just t  -> whnf lv book t
-      Nothing -> whnf lv book (App d (Sym s))
-    x'    -> whnf lv book (App d x')
+whnfEnuM :: Int -> Int -> Book -> Subs -> Term -> Term -> [(String,Term)] -> Term -> Term
+whnfEnuM lv d book subs undo x c f =
+  case whnf lv d book subs x of
+    Sym s -> case lookup s c of
+      Just t  -> whnf lv d book subs t
+      Nothing -> whnf lv d book subs (App f (Sym s))
+    _         -> undo
 
 -- Normalizes an equality match
-whnfEqlM :: Int -> Book -> Term -> Term -> Term -> Term
-whnfEqlM lv book undo x f =
-  case whnf lv book x of
-    Rfl -> whnf lv book f
+whnfEqlM :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term
+whnfEqlM lv d book subs undo x f =
+  case whnf lv d book subs x of
+    Rfl -> whnf lv d book subs f
     _   -> undo
 
 -- Normalizes a primitive application
-whnfAppPri :: Int -> Book -> Term -> PriF -> Term -> Term
-whnfAppPri lv book undo U64_TO_CHAR x =
-  case whnf lv book x of
+whnfAppPri :: Int -> Int -> Book -> Subs -> Term -> PriF -> Term -> Term
+whnfAppPri lv d book subs undo U64_TO_CHAR x =
+  case whnf lv d book subs x of
     Val (U64_V n) -> Val (CHR_V (toEnum (fromIntegral n)))
     _             -> undo
-
--- Forces evaluation
-force :: Book -> Term -> Term
-force book t =
-  case whnf 2 book t of
-    Ind t -> force book t
-    Frz t -> force book t
-    t     -> t
 
 -- Numeric operations
 -- ------------------
 
-whnfOp2 :: Int -> Book -> NOp2 -> Term -> Term -> Term
-whnfOp2 lv book op a b =
-  case (whnf lv book a, whnf lv book b) of
+whnfOp2 :: Int -> Int -> Book -> Subs -> NOp2 -> Term -> Term -> Term
+whnfOp2 lv d book subs op a b =
+  case (whnf lv d book subs a, whnf lv d book subs b) of
     (Val (U64_V x), Val (U64_V y)) -> case op of
       ADD -> Val (U64_V (x + y))
       SUB -> Val (U64_V (x - y))
@@ -246,9 +260,9 @@ whnfOp2 lv book op a b =
       SHR -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
     (a', b') -> Op2 op a' b'
 
-whnfOp1 :: Int -> Book -> NOp1 -> Term -> Term
-whnfOp1 lv book op a =
-  case whnf lv book a of
+whnfOp1 :: Int -> Int -> Book -> Subs -> NOp1 -> Term -> Term
+whnfOp1 lv d book subs op a =
+  case whnf lv d book subs a of
     Val (U64_V x) -> case op of
       NOT -> Val (U64_V (complement x))
       NEG -> Op1 op (Val (U64_V x)) -- negation not defined for unsigned
@@ -262,3 +276,106 @@ whnfOp1 lv book op a =
       NOT -> Op1 op (Val (CHR_V x)) -- bitwise not defined for chars
       NEG -> Op1 op (Val (CHR_V x)) -- negation not defined for chars
     a' -> Op1 op a'
+
+
+
+
+
+
+
+
+
+
+
+
+
+equal :: Int -> Book -> Subs -> Term -> Term -> Bool
+equal d book subs a b = eql 3 d book subs a b
+
+eql :: Int -> Int -> Book -> Subs -> Term -> Term -> Bool
+-- eql 0  d book subs a b = cmp 0 d book subs (whnf 0 book subs a) (whnf 0 book subs b)
+eql 0  d book subs a b = cmp 0 d book subs a b
+eql lv d book subs a b = lower_equal || higher_equal where
+  lower_equal  = eql (lv-1) d book subs a b
+  higher_equal = cmp lv d book subs (whnf lv d book subs a) (whnf lv d book subs b)
+
+cmp :: Int -> Int -> Book -> Subs -> Term -> Term -> Bool
+cmp lv d book subs a b =
+  -- trace ("E" ++ show lv ++ " " ++ show a ++ "\n== " ++ show b) $
+  case (a , b) of
+    -- (Fix ka fa    , Fix kb fb    ) -> eql lv d book (fa (fb (Var ka d))) (fb (fa (Var kb d)))
+    -- (Fix ka fa    , b            ) -> eql lv d book (fa b) b
+    -- (a            , Fix kb fb    ) -> eql lv d book a (fb (Fix kb fb))
+    (Ref ka       , Ref kb       ) -> ka == kb
+    (Ref ka       , b            ) -> case deref book ka of { Just (_, term, _) -> eql lv d book subs term b ; Nothing -> False }
+    (a            , Ref kb       ) -> case deref book kb of { Just (_, term, _) -> eql lv d book subs a term ; Nothing -> False }
+    (Var ka ia    , Var kb ib    ) -> ia == ib
+    (Sub ta       , Sub tb       ) -> eql lv d book subs ta tb
+    (Let va fa    , Let vb fb    ) -> eql lv d book subs va vb && eql lv d book subs fa fb
+    (Set          , Set          ) -> True
+    (Ann xa ta    , Ann xb tb    ) -> eql lv d book subs xa xb && eql lv d book subs ta tb
+    (Chk xa ta    , Chk xb tb    ) -> eql lv d book subs xa xb && eql lv d book subs ta tb
+    (Emp          , Emp          ) -> True
+    (Efq          , Efq          ) -> True
+    (Uni          , Uni          ) -> True
+    (One          , One          ) -> True
+    (UniM xa fa   , UniM xb fb   ) -> eql lv d book subs xa xb && eql lv d book subs fa fb
+    (Bit          , Bit          ) -> True
+    (Bt0          , Bt0          ) -> True
+    (Bt1          , Bt1          ) -> True
+    (BitM xa fa ta, BitM xb fb tb) -> eql lv d book subs xa xb && eql lv d book subs fa fb && eql lv d book subs ta tb
+    (Nat          , Nat          ) -> True
+    (Zer          , Zer          ) -> True
+    (Suc na       , Suc nb       ) -> eql lv d book subs na nb
+    (NatM xa za sa, NatM xb zb sb) -> eql lv d book subs xa xb && eql lv d book subs za zb && eql lv d book subs sa sb
+    (Lst ta       , Lst tb       ) -> eql lv d book subs ta tb
+    (Nil          , Nil          ) -> True
+    (Con ha ta    , Con hb tb    ) -> eql lv d book subs ha hb && eql lv d book subs ta tb
+    (LstM xa na ca, LstM xb nb cb) -> eql lv d book subs xa xb && eql lv d book subs na nb && eql lv d book subs ca cb
+    (Enu sa       , Enu sb       ) -> sa == sb
+    (Sym sa       , Sym sb       ) -> sa == sb
+    (EnuM xa ca da, EnuM xb cb db) -> eql lv d book subs xa xb && length ca == length cb && all (\ ((s1,t1), (s2,t2)) -> s1 == s2 && eql lv d book subs t1 t2) (zip ca cb) && eql lv d book subs da db
+    (Sig aa ba    , Sig ab bb    ) -> eql lv d book subs aa ab && eql lv d book subs ba bb
+    (Tup aa ba    , Tup ab bb    ) -> eql lv d book subs aa ab && eql lv d book subs ba bb
+    (SigM xa fa   , SigM xb fb   ) -> eql lv d book subs xa xb && eql lv d book subs fa fb
+    (All aa ba    , All ab bb    ) -> eql lv d book subs aa ab && eql lv d book subs ba bb
+    (Lam ka fa    , Lam kb fb    ) -> eql lv (d+1) book subs (fa (Var ka d)) (fb (Var kb d))
+    (App fa xa    , App fb xb    ) -> eql lv d book subs fa fb && eql lv d book subs xa xb
+    (Eql ta aa ba , Eql tb ab bb ) -> eql lv d book subs ta tb && eql lv d book subs aa ab && eql lv d book subs ba bb
+    (Rfl          , Rfl          ) -> True
+    (EqlM xa fa   , EqlM xb fb   ) -> eql lv d book subs xa xb && eql lv d book subs fa fb
+    (Ind ta       , b            ) -> eql lv d book subs ta b
+    (a            , Ind tb       ) -> eql lv d book subs a tb
+    (Frz ta       , b            ) -> eql lv d book subs ta b
+    (a            , Frz tb       ) -> eql lv d book subs a tb
+    (Loc _ ta     , b            ) -> eql lv d book subs ta b
+    (a            , Loc _ tb     ) -> eql lv d book subs a tb
+    (Era          , Era          ) -> True
+    (Sup la aa ba , Sup lb ab bb ) -> la == lb && eql lv d book subs aa ab && eql lv d book subs ba bb
+    (Num ta       , Num tb       ) -> ta == tb
+    (Val va       , Val vb       ) -> va == vb
+    (Op2 oa aa ba , Op2 ob ab bb ) -> oa == ob && eql lv d book subs aa ab && eql lv d book subs ba bb
+    (Op1 oa aa    , Op1 ob ab    ) -> oa == ob && eql lv d book subs aa ab
+    (Pri pa       , Pri pb       ) -> pa == pb
+    (Met _  _  _  , Met _  _  _  ) -> error "not-supported"
+    (Pat _  _  _  , Pat _  _  _  ) -> error "not-supported"
+    (_            , _            ) -> False
+
+
+
+
+
+
+
+
+
+
+
+-- Forces evaluation
+force :: Int -> Book -> Subs -> Term -> Term
+force d book subs t =
+  case whnf 3 d book subs t of
+    Ind t -> force d book subs t
+    Frz t -> force d book subs t
+    t     -> t
+
