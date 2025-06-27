@@ -71,34 +71,29 @@ data Term
   -- Unit
   | Uni            -- Unit
   | One            -- ()
-  -- | Use Term -- λ{():f}
   | UniM Term Term -- ~x{():f}
 
   -- Bool
   | Bit                 -- Bool
   | Bt0                 -- False
   | Bt1                 -- True
-  -- | Bif Term Term      -- λ{False:f;True:t}
   | BitM Term Term Term -- ~x{False:t;True:t}
 
   -- Nat
   | Nat                 -- Nat
   | Zer                 -- 0
   | Suc Term            -- ↑n
-  -- | Swi Term Term       -- λ{0n:z;1n+:s}
   | NatM Term Term Term -- ~x{0n:z;1n+:s}
 
   -- List
   | Lst Type            -- T[]
   | Nil                 -- []
   | Con Term Term       -- h<>t
-  -- | Mat Term Term      -- λ{[]:n;<>:c}
   | LstM Term Term Term -- ~x{[]:n;<>:c}
 
   -- Enum
   | Enu [String]                   -- {@foo,@bar...}
   | Sym String                     -- @foo
-  -- | Cse [(String,Term)] Term -- λ{@foo:f;@bar:b;...d}
   | EnuM Term [(String,Term)] Term -- ~x{@foo:f;@bar:b;...d}
 
   -- Numbers
@@ -110,7 +105,6 @@ data Term
   -- Pair
   | Sig Type Type       -- ΣA.B
   | Tup Term Term       -- (a,b)
-  -- | Get Term      -- λ{(,):f}
   | SigM Term Term      -- ~x{(,):f}
 
   -- Function
@@ -121,14 +115,13 @@ data Term
   -- Equality
   | Eql Type Term Term -- T{a==b}
   | Rfl                -- {==}
-  -- | Rwt Term           -- λ{{==}:f}
   | EqlM Term Term     -- ~x{{==}:f}
 
   -- MetaVar
   | Met Int Type [Term] -- ?N:T{x0,x1,...}
   
   -- Hints
-  | Ind Type -- ~T
+  | Ind Type -- ~~T
   | Frz Type -- ∅T
 
   -- Supperpositions
@@ -136,7 +129,8 @@ data Term
   | Sup Int Term Term -- &L{a,b}
 
   -- Errors
-  | Loc Span Term
+  | Loc Span Term -- x
+  | Rwt Term Term Term -- a → b ; x
 
   -- Primitive
   | Pri PriF -- SOME_FUNC
@@ -186,7 +180,7 @@ instance Monad Result where
   Fail e >>= _ = Fail e
 
 instance Show Term where
-  show (Var k i)      = k
+  show (Var k i)      = k -- ++ "^" ++ show i
   show (Ref k)        = k
   -- show (Sub t)        = error "unreachable"
   show (Sub t)        = show t
@@ -199,28 +193,28 @@ instance Show Term where
   show (Efq)          = "λ{}"
   show (Uni)          = "Unit"
   show (One)          = "()"
-  show (UniM x f)     = "~" ++ show x ++ "{ (): " ++ show f ++ " }"
+  show (UniM x f)     = "~ " ++ show x ++ " { (): " ++ show f ++ " }"
   show (Bit)          = "Bool"
   show (Bt0)          = "False"
   show (Bt1)          = "True"
-  show (BitM x f t)   = "~" ++ show x ++ "{ False: " ++ show f ++ " ; True: " ++ show t ++ " }"
+  show (BitM x f t)   = "~ " ++ show x ++ " { False: " ++ show f ++ " ; True: " ++ show t ++ " }"
   show (Nat)          = "Nat"
   show (Zer)          = "0n"
   show (Suc n)        = "1n+" ++ show n
-  show (NatM x z s)   = "~" ++ show x ++ "{ 0n: " ++ show z ++ " ; 1n+: " ++ show s ++ " }"
+  show (NatM x z s)   = "~ " ++ show x ++ " { 0n: " ++ show z ++ " ; 1n+: " ++ show s ++ " }"
   show (Lst t)        = show t ++ "[]"
   show (Nil)          = "[]"
   show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
-  show (LstM x n c)   = "~" ++ show x ++ "{ []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
+  show (LstM x n c)   = "~ " ++ show x ++ " { []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
   show (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
   show (Sym s)        = "@" ++ s
-  show (EnuM x c e)   = "~" ++ show x ++ "{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
+  show (EnuM x c e)   = "~ " ++ show x ++ " { " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
   show (Sig a b)      = sig a b where
     sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
     sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
     sig a b           = "Σ" ++ show a ++ ". " ++ (show b)
   show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
-  show (SigM x f)     = "~" ++ show x ++ "{ (,):" ++ show f ++ " }"
+  show (SigM x f)     = "~ " ++ show x ++ " { (,):" ++ show f ++ " }"
   show (All a b)      = all a b where
     all a (Lam "_" f) = show a ++ " -> " ++ show (f (Var "_" 0))
     all a (Lam k f)   = "∀" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
@@ -234,10 +228,11 @@ instance Show Term where
               fn      -> "(" ++ show fn ++ ")"
   show (Eql t a b)     = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)           = "{==}"
-  show (EqlM x f)      = "~" ++ show x ++ "{ {==}:" ++ show f ++ " }"
-  show (Ind t)         = "~{" ++ show t ++ "}"
+  show (EqlM x f)      = "~ " ++ show x ++ " { {==}:" ++ show f ++ " }"
+  show (Ind t)         = "~~ {" ++ show t ++ "}"
   show (Frz t)         = "∅" ++ show t
   show (Loc _ t)       = show t
+  show (Rwt a b x)     = show a ++ " ⇒ " ++ show b ++ "; " ++ show x
   show (Era)           = "*"
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
   show (Met _ _ _)     = "?"
@@ -292,26 +287,6 @@ instance Show Span where
     ++ "\x1b[2m(line "++show (fst $ spanBeg span)++ ", column "++show (snd $ spanBeg span)++")\x1b[0m\n"
     ++ highlightError (spanBeg span) (spanEnd span) (spanSrc span)
 
--- instance Show Error where
-  -- show (CantInfer span ctx) = 
-    -- "\x1b[1mCantInfer:\x1b[0m" ++
-    -- "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    -- show span
-  -- show (TypeMismatch span ctx goal typp) = 
-    -- "\x1b[1mMismatch:\x1b[0m" ++
-    -- "\n- Goal: " ++ show goal ++ 
-    -- "\n- Type: " ++ show typp ++
-    -- "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    -- show span
-  -- show (TermMismatch span ctx a b) = 
-    -- "\x1b[1mMismatch:\x1b[0m" ++
-    -- "\n- " ++ show a ++ 
-    -- "\n- " ++ show b ++
-    -- "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    -- show span
-
--- TASK: update the code above
-
 instance Show Error where
   show (CantInfer span ctx) = 
     "\x1b[1mCantInfer:\x1b[0m" ++
@@ -329,29 +304,6 @@ instance Show Error where
     "\n- " ++ show b ++
     "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
-
--- showContext :: Term -> String
--- showContext ctx = 
-  -- let lines = map snd (reverse (dedup S.empty (reverse (go ctx []))))
-  -- -- let lines = map snd (reverse ((reverse (go ctx []))))
-  -- in if null lines then "" else init (unlines lines)
-  -- where
-
-  -- go :: Term -> [(Name, String)] -> [(Name, String)]
-  -- go (Let v (Lam k f)) acc = case v of
-    -- (Chk _ ty) -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k ++ " : " ++ show ty)])
-    -- ty         -> go (f (Var k 0)) (acc ++ [(k, "- " ++ k)])
-  -- go term acc = acc
-  -- -- go term acc = acc ++ [("", "\x1b[1mExpression:\x1b[0m\n- " ++ show term)]
-
-  -- dedup :: S.Set Name -> [(Name,String)] -> [(Name,String)]
-  -- dedup _    []                             = []
-  -- dedup seen ((n,l):xs) | n `S.member` seen = dedup seen xs
-                        -- | take 1 n == "_"   = dedup seen xs
-                        -- | otherwise         = (n,l) : dedup (S.insert n seen) xs
-
--- TODO: refactor this to use the new type: a context now is just a list of (name,term,type)
--- implement below the context Show instance
 
 instance Show Ctx where
   show (Ctx ctx)

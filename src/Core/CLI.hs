@@ -16,12 +16,13 @@ import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import Control.Exception (catch, IOException)
 
-import Core.Import (autoImport, collectRefs)
 import Core.Bind
 import Core.Check
-import Core.Normal
-import Core.Type
+import Core.Import (autoImport, collectRefs)
 import Core.Parse.Book (doParseBook)
+import Core.Type
+import Core.WHNF
+
 import qualified Target.JavaScript as JS
 
 -- | Parse a Bend file into a Book
@@ -126,5 +127,3 @@ collectAllRefs (Book defs) =
   S.unions $ map collectRefsFromDefn (M.elems defs)
   where
     collectRefsFromDefn (_, term, typ) = S.union (collectRefs term) (collectRefs typ)
-
-

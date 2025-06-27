@@ -1,5 +1,7 @@
 {-./Type.hs-}
 
+{-# LANGUAGE ViewPatterns #-}
+
 module Core.WHNF where
 
 import Debug.Trace
@@ -11,47 +13,60 @@ import Data.IORef
 import Data.Bits
 import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 
+-- Evaluation
+-- ==========
+
 -- Levels:
 -- - 0: reduce nothing
 -- - 1: reduce applications, eliminators, operators and primitives
 -- - 2: reduce Fixes and non-injective Refs in wnf position
 -- - 3: reduce everything
 
--- Substitution
-subst :: Int -> Int -> Book -> Subs -> Subs -> Term -> Maybe (Subs, Term)
-subst 0 d book subs rems x
-  = Nothing
-subst lv d book ((k,v):subs) rems x
-  | eql (lv-1) d book [] k x = trace ("sub " ++ show k ++ " → " ++ show v) $ Just (rems ++ subs , v)
-  | otherwise                = subst lv d book subs (rems ++ [(k,v)]) x
-subst lv d book [] rems x = Nothing
-
 -- Reduction
 whnf :: Int -> Int -> Book -> Subs -> Term -> Term
 whnf 0  d book subs term = term
-whnf lv d book subs term =
-  -- trace ("whnf " ++ show term) $
-  case subst lv d book subs [] term of
+whnf lv d book subs term = ret where
+  nf = case subst lv d book subs [] term of
     Just (s,t) -> whnf lv d book s t
-    Nothing    -> case term of
-      Let v f    -> whnfLet lv d book subs v f
-      Ref k      -> whnfRef lv d book subs k
-      Fix k f    -> whnfFix lv d book subs k f
-      Ann x _    -> whnf lv d book subs x
-      Chk x _    -> whnf lv d book subs x
-      App f x    -> whnfApp lv d book subs (App f x) f x
-      Loc _ t    -> whnf lv d book subs t
-      Op2 o a b  -> whnfOp2 lv d book subs o a b
-      Op1 o a    -> whnfOp1 lv d book subs o a
-      Pri p      -> Pri p
-      UniM x f   -> whnfUniM lv d book subs term x f
-      BitM x f t -> whnfBitM lv d book subs term x f t
-      NatM x z s -> whnfNatM lv d book subs term x z s
-      LstM x n c -> whnfLstM lv d book subs term x n c
-      EnuM x c f -> whnfEnuM lv d book subs term x c f
-      SigM x f   -> whnfSigM lv d book subs term x f
-      EqlM x f   -> whnfEqlM lv d book subs term x f
-      _          -> term
+    Nothing    -> 
+      case term of
+        Let v f    -> whnfLet lv d book subs v f
+        Ref k      -> whnfRef lv d book subs k
+        Fix k f    -> whnfFix lv d book subs k f
+        Ann x _    -> whnf lv d book subs x
+        Chk x _    -> whnf lv d book subs x
+        App f x    -> whnfApp lv d book subs (App f x) f x
+        Loc _ t    -> whnf lv d book subs t
+        Op2 o a b  -> whnfOp2 lv d book subs o a b
+        Op1 o a    -> whnfOp1 lv d book subs o a
+        Pri p      -> Pri p
+        UniM x f   -> whnfUniM lv d book subs term x f
+        BitM x f t -> whnfBitM lv d book subs term x f t
+        NatM x z s -> whnfNatM lv d book subs term x z s
+        LstM x n c -> whnfLstM lv d book subs term x n c
+        EnuM x c f -> whnfEnuM lv d book subs term x c f
+        SigM x f   -> whnfSigM lv d book subs term x f
+        EqlM x f   -> whnfEqlM lv d book subs term x f
+        _          -> term
+  -- When a term reduces to an ugly stuck form, such as
+  -- `~x{...}`, we will undo this reduction, for pretty
+  -- printing purposes. This is harmless, because such
+  -- stuck form can't further reduce or cause progress.
+  ret = case cut nf of
+    UniM v _   -> undo v term nf
+    BitM v _ _ -> undo v term nf
+    NatM v _ _ -> undo v term nf
+    LstM v _ _ -> undo v term nf
+    EnuM v _ _ -> undo v term nf
+    SigM v _   -> undo v term nf
+    EqlM v _   -> undo v term nf
+    _          -> nf
+    where
+      undo s tm nf = case whnf lv d book subs s of
+        Var _ _ -> tm
+        App _ _ -> tm
+        Ref _   -> tm
+        _       -> nf
 
 -- Normalizes a let binding
 whnfLet :: Int -> Int -> Book -> Subs -> Term -> Term -> Term
@@ -277,35 +292,43 @@ whnfOp1 lv d book subs op a =
       NEG -> Op1 op (Val (CHR_V x)) -- negation not defined for chars
     a' -> Op1 op a'
 
+-- Substitution
+-- ============
 
+subst :: Int -> Int -> Book -> Subs -> Subs -> Term -> Maybe (Subs, Term)
+subst 0 d book subs rems x
+  = Nothing
+subst lv d book ((k,v):subs) rems x
+  | eql (lv-1) d book [] k x = trace ("sub " ++ show (normal lv d book [] k) ++ " → " ++ show (normal lv d book [] v)) $ Just (rems ++ subs , v)
+  -- | eql lv d book [] k x = Just (rems ++ ((k,v):subs) , v)
+  | otherwise            = subst lv d book subs (rems ++ [(k,v)]) x
+subst lv d book [] rems x = Nothing
 
-
-
-
-
-
-
-
-
-
+-- Equality
+-- ========
 
 equal :: Int -> Book -> Subs -> Term -> Term -> Bool
-equal d book subs a b = eql 3 d book subs a b
+equal d book subs a b =
+  trace (""
+    ++ "EQ: " ++ show (normal 3 d book []   a) ++ " == " ++ show (normal 3 d book []   b) ++ "\n"
+    ++ "~>: " ++ show (normal 3 d book subs a) ++ " == " ++ show (normal 3 d book subs b)
+    ++ concatMap (\ (a,b) -> "\n| " ++ show (normal 3 d book [] a) ++ " → " ++ show (normal 3 d book [] b)) subs) $
+  eql 3 d book subs a b
 
 eql :: Int -> Int -> Book -> Subs -> Term -> Term -> Bool
 -- eql 0  d book subs a b = cmp 0 d book subs (whnf 0 book subs a) (whnf 0 book subs b)
 eql 0  d book subs a b = cmp 0 d book subs a b
-eql lv d book subs a b = lower_equal || higher_equal where
-  lower_equal  = eql (lv-1) d book subs a b
-  higher_equal = cmp lv d book subs (whnf lv d book subs a) (whnf lv d book subs b)
+eql lv d book subs a b = lo_equal || hi_equal where
+  lo_equal = eql (lv-1) d book subs a b
+  hi_equal = cmp lv d book subs (whnf lv d book subs a) (whnf lv d book subs b)
 
 cmp :: Int -> Int -> Book -> Subs -> Term -> Term -> Bool
 cmp lv d book subs a b =
   -- trace ("E" ++ show lv ++ " " ++ show a ++ "\n== " ++ show b) $
   case (a , b) of
-    -- (Fix ka fa    , Fix kb fb    ) -> eql lv d book (fa (fb (Var ka d))) (fb (fa (Var kb d)))
-    -- (Fix ka fa    , b            ) -> eql lv d book (fa b) b
-    -- (a            , Fix kb fb    ) -> eql lv d book a (fb (Fix kb fb))
+    (Fix ka fa    , Fix kb fb    ) -> eql lv d book subs (fa (fb (Var ka d))) (fb (fa (Var kb d)))
+    (Fix ka fa    , b            ) -> eql lv d book subs (fa b) b
+    (a            , Fix kb fb    ) -> eql lv d book subs a (fb (Fix kb fb))
     (Ref ka       , Ref kb       ) -> ka == kb
     (Ref ka       , b            ) -> case deref book ka of { Just (_, term, _) -> eql lv d book subs term b ; Nothing -> False }
     (a            , Ref kb       ) -> case deref book kb of { Just (_, term, _) -> eql lv d book subs a term ; Nothing -> False }
@@ -350,6 +373,8 @@ cmp lv d book subs a b =
     (a            , Frz tb       ) -> eql lv d book subs a tb
     (Loc _ ta     , b            ) -> eql lv d book subs ta b
     (a            , Loc _ tb     ) -> eql lv d book subs a tb
+    (Rwt _ _ xa   , _            ) -> eql lv d book subs xa b
+    (_            , Rwt _ _ xb   ) -> eql lv d book subs a xb
     (Era          , Era          ) -> True
     (Sup la aa ba , Sup lb ab bb ) -> la == lb && eql lv d book subs aa ab && eql lv d book subs ba bb
     (Num ta       , Num tb       ) -> ta == tb
@@ -361,15 +386,70 @@ cmp lv d book subs a b =
     (Pat _  _  _  , Pat _  _  _  ) -> error "not-supported"
     (_            , _            ) -> False
 
+-- Normalization
+-- =============
 
+normal :: Int -> Int -> Book -> Subs -> Term -> Term
+normal lv d book subs term =
+  -- trace ("normal: " ++ show lv ++ " " ++ show term) $
+  case whnf lv d book subs term of
+    Var k i    -> Var k i
+    Ref k      -> Ref k
+    Sub t      -> normal lv d book subs t
+    Fix k f    -> Fix k (\x -> normal lv (d+1) book subs (f x))
+    Let v f    -> Let (normal lv d book subs v) (normal lv d book subs f)
+    Set        -> Set
+    Ann x t    -> Ann (normal lv d book subs x) (normal lv d book subs t)
+    Chk x t    -> Chk (normal lv d book subs x) (normal lv d book subs t)
+    Emp        -> Emp
+    Efq        -> Efq
+    Uni        -> Uni
+    One        -> One
+    UniM x f   -> UniM (normal lv d book subs x) (normal lv d book subs f)
+    Bit        -> Bit
+    Bt0        -> Bt0
+    Bt1        -> Bt1
+    BitM x f t -> BitM (normal lv d book subs x) (normal lv d book subs f) (normal lv d book subs t)
+    Nat        -> Nat
+    Zer        -> Zer
+    Suc n      -> Suc (normal lv d book subs n)
+    NatM x z s -> NatM (normal lv d book subs x) (normal lv d book subs z) (normal lv d book subs s)
+    Lst t      -> Lst (normal lv d book subs t)
+    Nil        -> Nil
+    Con h t    -> Con (normal lv d book subs h) (normal lv d book subs t)
+    LstM x n c -> LstM (normal lv d book subs x) (normal lv d book subs n) (normal lv d book subs c)
+    Enu s      -> Enu s
+    Sym s      -> Sym s
+    EnuM x c e -> EnuM (normal lv d book subs x) (map (\(s, t) -> (s, normal lv d book subs t)) c) (normal lv d book subs e)
+    Sig a b    -> Sig (normal lv d book subs a) (normal lv d book subs b)
+    Tup a b    -> Tup (normal lv d book subs a) (normal lv d book subs b)
+    SigM x f   -> SigM (normal lv d book subs x) (normal lv d book subs f)
+    All a b    -> All (normal lv d book subs a) (normal lv d book subs b)
+    Lam k f    -> Lam k (\x -> normal 0 (d+1) book subs (f x)) -- note: uses lv=0 for finite pretty printing
+    App f x    -> App (normal 1  d book subs f) (normal lv d book subs x)
+    Eql t a b  -> Eql (normal lv d book subs t) (normal lv d book subs a) (normal lv d book subs b)
+    Rfl        -> Rfl
+    EqlM x f   -> EqlM (normal lv d book subs x) (normal lv d book subs f)
+    Ind t      -> Ind (normal lv d book subs t)
+    Frz t      -> Frz (normal lv d book subs t)
+    Loc l t    -> Loc l (normal lv d book subs t)
+    Rwt a b x  -> Rwt (normal lv d book subs a) (normal lv d book subs b) (normal lv d book subs x)
+    Era        -> Era
+    Sup l a b  -> Sup l (normal lv d book subs a) (normal lv d book subs b)
+    Num t      -> Num t
+    Val v      -> Val v
+    Op2 o a b  -> Op2 o (normal lv d book subs a) (normal lv d book subs b)
+    Op1 o a    -> Op1 o (normal lv d book subs a)
+    Pri p      -> Pri p
+    Met _ _ _  -> error "not-supported"
+    Pat _ _ _  -> error "not-supported"
 
+normalCtx :: Int -> Int -> Book -> Subs -> Ctx -> Ctx
+normalCtx lv d book subs (Ctx ctx) = Ctx (map normalAnn ctx)
+  where normalAnn (k,v,t) = (k, normal lv d book subs v, normal lv d book subs t)
 
-
-
-
-
-
-
+-- Utils
+-- =====
 
 -- Forces evaluation
 force :: Int -> Book -> Subs -> Term -> Term
@@ -378,4 +458,3 @@ force d book subs t =
     Ind t -> force d book subs t
     Frz t -> force d book subs t
     t     -> t
-

@@ -89,6 +89,7 @@ termToCT book term dep = case term of
   Frz _      -> CEra
   Met _ _ _  -> CEra
   Loc _ t    -> termToCT book t dep
+  Rwt _ _ _  -> error "TODO"
   -- Data values
   One        -> COne
   Zer        -> CZer
@@ -642,6 +643,7 @@ termToCT book term dep = case term of
   Frz _      -> CEra
   Met _ _ _  -> CEra
   Loc _ t    -> termToCT book t dep
+  Rwt _ _ _  -> error "TODO"
   -- Data values
   One        -> COne
   Zer        -> CZer

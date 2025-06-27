@@ -6,18 +6,16 @@ module Core.Check where
 
 import qualified Data.Map as M
 
-import Core.Equal
-import Core.Normal
--- import Core.Rewrite
+import Debug.Trace
+
 import Core.Type
 import Core.WHNF
-import Debug.Trace
 
 -- Context
 -- -------
 
 extend :: Ctx -> Name -> Term -> Term -> Ctx
-extend (Ctx ctx) k t v = Ctx (ctx ++ [(k, v, t)])
+extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 
 -- Type Checker
 -- ------------
@@ -25,7 +23,7 @@ extend (Ctx ctx) k t v = Ctx (ctx ++ [(k, v, t)])
 -- Infer the type of a term
 infer :: Int -> Span -> Book -> Subs -> Ctx -> Term -> Result Term
 infer d span book subs ctx term =
-  trace ("- infer: " ++ show term) $
+  -- trace ("- infer: " ++ show (normal 2 d book subs term)) $
   case term of
     Var k i -> do
       Fail $ CantInfer span (normalCtx 2 d book subs ctx)
@@ -120,7 +118,7 @@ infer d span book subs ctx term =
       case (f,x) of
         -- TODO: can we generalize this to other lam forms?
         (Lam k f, Ann xv xt) -> do
-          infer (d+1) span book subs (extend ctx k xt xv) (f (Ann xv xt))
+          infer (d+1) span book subs (extend ctx k xv xt) (f (Ann xv xt))
         _ -> do
           fT <- infer d span book subs ctx f
           case force d book subs fT of
@@ -141,6 +139,8 @@ infer d span book subs ctx term =
       Fail $ CantInfer span (normalCtx 2 d book subs ctx)
     Loc l t ->
       infer d l book subs ctx t
+    Rwt a b x ->
+      Fail $ CantInfer span (normalCtx 2 d book subs ctx)
     Era -> do
       Fail $ CantInfer span (normalCtx 2 d book subs ctx)
     Sup l a b -> do
@@ -172,8 +172,11 @@ infer d span book subs ctx term =
 -- Check if a term has the expected type
 check :: Int -> Span -> Book -> Subs -> Ctx -> Term -> Term -> Result ()
 check d span book subs ctx term goal =
-  trace ("- check: " ++ show (normal 2 d book [] term) ++ " :: " ++ show (normal 2 d book [] goal)) $
+  -- trace ("- check: " ++ show (normal 2 d book subs term) ++ " :: " ++ show (normal 2 d book subs goal)) $
   case (term, force d book subs goal) of
+    (term, Rwt a b goal) -> do
+      -- trace ("oxi " ++ show a ++ " → " ++ show b ++ " :: " ++ show goal) $
+      check d span book (subs++[(a,b)]) ctx term goal
     (Let v f, _) -> do
       case v of
         Chk val typ -> do
@@ -204,7 +207,7 @@ check d span book subs ctx term goal =
     -- FIXME: doesn't work if we use 'All a b' because whnf removes the Ann (same for Sig)
     (Lam k f, All a (Lam _ b)) -> do
       let x = Ann (Var k d) a
-      check (d+1) span book subs (extend ctx k a (Var k d)) (f x) (b x)
+      check (d+1) span book subs (extend ctx k (Var k d) a) (f x) (b x)
     (Efq, All a _) -> do
       case force d book subs a of
         Emp -> Done ()
@@ -213,52 +216,52 @@ check d span book subs ctx term goal =
       xT <- infer d span book subs ctx x
       case force d book subs xT of
         Uni -> do
-          check d span book ((x,One):subs) ctx f goal
+          check d span book subs ctx f (Rwt x One goal)
         _ -> Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs Uni) (normal 2 d book subs xT)
     (BitM x f t, goal) -> do
       xT <- infer d span book subs ctx x
       case force d book subs xT of
         Bit -> do
-          check d span book ((x,Bt0):subs) ctx f goal
-          check d span book ((x,Bt1):subs) ctx t goal
+          check d span book subs ctx f (Rwt x Bt0 goal)
+          check d span book subs ctx t (Rwt x Bt1 goal)
         _ -> Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs Bit) (normal 2 d book subs xT)
     (NatM x z s, goal) -> do
       xT <- infer d span book subs ctx x
       case force d book subs xT of
         Nat -> do
-          check d span book ((x,Zer):subs) ctx z goal
-          let s_goal = All Nat (Lam "p" (\p -> goal))
-          check d span book subs ctx s s_goal
+          check d span book subs ctx z (Rwt x Zer goal)
+          -- check d span book ((x,Suc (Var "p" d)):subs) ctx s $ All Nat (Lam "p" (\p -> goal))
+          check d span book subs ctx s $ All Nat (Lam "p" (\p -> Rwt x (Suc p) goal))
         _ -> Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs Nat) (normal 2 d book subs xT)
     (LstM x n c, goal) -> do
       xT <- infer d span book subs ctx x
       case force d book subs xT of
         Lst a -> do
-          check d span book ((x,Nil):subs) ctx n goal
-          let c_goal = All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> goal))))
-          check d span book ((x,Con (Var "h" d) (Var "t" (d+1))):subs) ctx c c_goal
+          check d span book subs ctx n (Rwt x Nil goal)
+          -- check d span book ((x,Con (Var "h" d) (Var "t" (d+1))):subs) ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> goal))))
+          check d span book subs ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> Rwt x (Con h t) goal))))
         _ -> Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs (Lst (Var "_" 0))) (normal 2 d book subs xT)
     (Sym s, Enu y) -> do
       if s `elem` y
         then Done ()
         else Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs (Enu y)) (normal 2 d book subs (Sym s))
-    (EnuM x cs e, goal) -> do
+    (EnuM x cs df, goal) -> do
       xT <- infer d span book subs ctx x
       case force d book subs xT of
         Enu syms -> do
+          mapM_ (\(s, t) -> check d span book subs ctx t (Rwt x (Sym s) goal)) cs
           let covered_syms = map fst cs
-          mapM_ (\(s, t) -> check d span book ((x,Sym s):subs) ctx t goal) cs
-          let all_covered = length covered_syms >= length syms && all (`elem` syms) covered_syms
+          let all_covered = length covered_syms >= length syms
+                         && all (`elem` syms) covered_syms
           if not all_covered
-            then check d span book subs ctx e goal
+            then check d span book subs ctx df goal
             else Done ()
         _ -> Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs (Enu [])) (normal 2 d book subs xT)
     (SigM x f, goal) -> do
       xT <- infer d span book subs ctx x
       case force d book subs xT of
         Sig a b -> do
-          let f_goal = All a (Lam "h" (\h -> All (App b h) (Lam "t" (\t -> goal))))
-          check d span book ((x,(Tup (Var "h" d) (Var "t" (d+1)))):subs) ctx f f_goal
+          check d span book subs ctx f $ All a (Lam "x" (\h -> All (App b h) (Lam "y" (\t -> Rwt x (Tup h t) goal))))
         _ -> Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs (Sig (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (normal 2 d book subs xT)
     (Tup a b, Sig aT (Lam _ bT)) -> do
       check d span book subs ctx a aT
@@ -287,13 +290,11 @@ check d span book subs ctx term goal =
       xT <- infer d span book subs ctx x
       case force d book subs xT of
         Eql t a b -> do
-          check d span book ((x,Rfl):(a,b):subs) ctx f goal
+          check d span book subs ctx f (Rwt x Rfl (Rwt a b goal))
         _ -> Fail $ TypeMismatch span (normalCtx 2 d book subs ctx) (normal 2 d book subs (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (normal 2 d book subs xT)
 
-
-
     (Fix k f, _) -> do
-      check d span book subs (extend ctx k goal (Var k d)) (f (Ann (Fix k f) goal)) goal
+      check d span book subs (extend ctx k (Var k d) goal) (f (Ann (Fix k f) goal)) goal
     (Loc l t, _) -> do
       check d l book subs ctx t goal
     (Val (U64_V _), Num U64_T) -> do
@@ -322,23 +323,13 @@ check d span book subs ctx term goal =
     -- (f x) :: G
     -- --------------------------------------------------- specialize
     -- f :: ∀(v : typeof x). (G where x is rewritten by v)
-    -- (App f x, _) ->
-      -- if isLamApp f
-        -- then do
-          -- (xv,xt) <- case cut x of
-            -- Ann xv xt -> do
-              -- return (xv, xt)
-            -- xv -> do
-              -- xt <- infer d span book subs ctx xv
-              -- return (xv, xt)
-          -- -- let old_goal = All xt $ Lam "_" $ \x -> whnf 1 book subs goal
-          -- -- let new_goal = All xt $ Lam "_" $ \x -> whnf 1 book subs goal
-          -- -- trace ("rwt " ++ show xv ++ " → ^" ++ show d ++ " !" ++
-            -- -- "\n- " ++ show (normal 2 d book [] old_goal) ++
-            -- -- "\n- " ++ show (normal 2 d book [] new_goal)) $
-          -- check d span book ((xv,x):subs) ctx f $ All xt $ Lam "_" $ \x -> goal
-        -- else do
-          -- verify d span book subs ctx term goal
+    (App f x, _) ->
+      if isLamApp f
+        then do
+          xt <- infer d span book subs ctx x
+          check d span book ((x,Var "_" d):subs) ctx f $ All xt $ Lam "_" $ \x -> goal
+        else do
+          verify d span book subs ctx term goal
 
     (_, _) -> do
       verify d span book subs ctx term goal
