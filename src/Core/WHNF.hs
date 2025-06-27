@@ -11,25 +11,35 @@ import Data.IORef
 import Data.Bits
 import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 
+-- Main normalizer
 whnf :: Int -> Book -> Term -> Term
-whnf lv book term = do
+whnf lv book term =
   -- trace ("whnf " ++ show term) $
   case term of
-    Let v f   -> whnfLet lv book v f
-    Ref k     -> whnfRef lv book k
-    Fix k f   -> whnfFix lv book k f
-    Ann x _   -> whnf lv book x
-    Chk x _   -> whnf lv book x
-    App f x   -> whnfApp lv book (App f x) f x
-    Loc _ t   -> whnf lv book t
-    Op2 o a b -> whnfOp2 lv book o a b
-    Op1 o a   -> whnfOp1 lv book o a
-    Pri p     -> Pri p
-    _         -> term
+    Let v f     -> whnfLet lv book v f
+    Ref k       -> whnfRef lv book k
+    Fix k f     -> whnfFix lv book k f
+    Ann x _     -> whnf lv book x
+    Chk x _     -> whnf lv book x
+    App f x     -> whnfApp lv book (App f x) f x
+    Loc _ t     -> whnf lv book t
+    Op2 o a b   -> whnfOp2 lv book o a b
+    Op1 o a     -> whnfOp1 lv book o a
+    Pri p       -> Pri p
+    UniM x f    -> whnfUniM lv book term x f
+    BitM x f t  -> whnfBitM lv book term x f t
+    NatM x z s  -> whnfNatM lv book term x z s
+    LstM x n c  -> whnfLstM lv book term x n c
+    EnuM x cs d -> whnfEnuM lv book x cs d
+    SigM x f    -> whnfSigM lv book term x f
+    EqlM x f    -> whnfEqlM lv book term x f
+    _           -> term
 
+-- Normalizes a let binding
 whnfLet :: Int -> Book -> Term -> Term -> Term
 whnfLet lv book v f = whnf lv book (App f v)
 
+-- Normalizes a reference
 whnfRef :: Int -> Book -> Name -> Term
 whnfRef lv book k =
   case lv of
@@ -43,6 +53,7 @@ whnfRef lv book k =
       Nothing           -> Ref k
     _ -> error "unreachable"
 
+-- Normalizes a fixpoint
 whnfFix :: Int -> Book -> String -> Body -> Term
 whnfFix lv book k f =
   case lv of
@@ -51,6 +62,7 @@ whnfFix lv book k f =
     2 -> whnf lv book (f (Fix k f))
     _ -> error "unreachable"
 
+-- Normalizes a reference in an application
 whnfAppRef :: Int -> Book -> Term -> Name -> Term -> Term
 whnfAppRef 0  _    undo k x = App (Ref k) x
 whnfAppRef 1  book undo k x =
@@ -63,93 +75,100 @@ whnfAppRef lv book undo k x =
     Just (_, term, _) -> whnfApp lv book undo term x
     Nothing           -> undo
 
+-- Normalizes an application
 whnfApp :: Int -> Book -> Term -> Term -> Term -> Term
-whnfApp lv book undo f x = 
-  case app (whnf lv book f) x of
-    App (Bif _ _) x -> undo
-    App (Swi _ _) x -> undo
-    App (Mat _ _) x -> undo
-    App (Cse _ _) x -> undo
-    App (Use _  ) x -> undo
-    App (Get _  ) x -> undo
-    App (Rwt _  ) x -> undo
-    res             -> res
-  where
-    app (Lam _ f  ) x = whnfAppLam lv book f x
-    app (Sup l a b) x = error "not-supported"
-    app (Fix k f  ) x = whnfAppFix lv book undo k f x
-    app (Ref k    ) x = whnfAppRef lv book undo k x
-    app (Use f    ) x = whnfAppUse lv book undo f x
-    app (Bif f t  ) x = whnfAppBif lv book undo f t x
-    app (Swi z s  ) x = whnfAppSwi lv book undo z s x
-    app (Mat n c  ) x = whnfAppMat lv book undo n c x
-    app (Cse c e  ) x = whnfAppCse lv book undo c e x
-    app (Get f    ) x = whnfAppGet lv book undo f x
-    app (Pri p    ) x = whnfAppPri lv book undo p x
-    app _           x = undo
+whnfApp lv book undo f x =
+  case whnf lv book f of
+    Lam _ f'  -> whnfAppLam lv book f' x
+    Fix k f'  -> whnfAppFix lv book undo k f' x
+    Ref k     -> whnfAppRef lv book undo k x
+    Pri p     -> whnfAppPri lv book undo p x
+    Sup _ _ _ -> error "Sup interactions unsupported in Haskell"
+    _         -> undo
 
+-- Normalizes a lambda application
 whnfAppLam :: Int -> Book -> Body -> Term -> Term
 whnfAppLam lv book f x = whnf lv book (f x)
 
+-- Normalizes a fixpoint application
 whnfAppFix :: Int -> Book -> Term -> String -> Body -> Term -> Term
 whnfAppFix 0  book undo k f x = App (Fix k f) x
 whnfAppFix lv book undo k f x = whnfApp lv book undo (f (Fix k f)) x
 
-whnfAppUse :: Int -> Book -> Term -> Term -> Term -> Term
-whnfAppUse lv book undo f x =
+-- Eliminator normalizers
+-- ----------------------
+
+-- Normalizes a unit match
+whnfUniM :: Int -> Book -> Term -> Term -> Term -> Term
+whnfUniM lv book undo x f =
   case whnf lv book x of
     One -> whnf lv book f
     _   -> undo
 
-whnfAppBif :: Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfAppBif lv book undo t0 t1 x =
+-- Normalizes a boolean match
+whnfBitM :: Int -> Book -> Term -> Term -> Term -> Term -> Term
+whnfBitM lv book undo x f t =
   case whnf lv book x of
-    Bt0 -> whnf lv book t0
-    Bt1 -> whnf lv book t1
+    Bt0 -> whnf lv book f
+    Bt1 -> whnf lv book t
     _   -> undo
 
-whnfAppSwi :: Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfAppSwi lv book undo z s x =
+-- Normalizes a natural number match
+whnfNatM :: Int -> Book -> Term -> Term -> Term -> Term -> Term
+whnfNatM lv book undo x z s =
   case whnf lv book x of
-    Zer       -> whnf lv book z
-    Suc n     -> whnf lv book (App s (whnf lv book n))
-    Sup l a b -> error "Sup interactions unsupported in Haskell"
-    _         -> undo
+    Zer   -> whnf lv book z
+    Suc n -> whnf lv book (App s (whnf lv book n))
+    _     -> undo
 
-whnfAppMat :: Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfAppMat lv book undo n c x =
+-- Normalizes a list match
+whnfLstM :: Int -> Book -> Term -> Term -> Term -> Term -> Term
+whnfLstM lv book undo x n c =
   case whnf lv book x of
-    Nil       -> whnf lv book n
-    Con h t   -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
-    Sup l a b -> error "Sup interactions unsupported in Haskell"
-    _         -> undo
+    Nil     -> whnf lv book n
+    Con h t -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
+    _       -> undo
 
-whnfAppGet :: Int -> Book -> Term -> Term -> Term -> Term
-whnfAppGet lv book undo f x =
+-- Normalizes a pair match
+whnfSigM :: Int -> Book -> Term -> Term -> Term -> Term
+whnfSigM lv book undo x f =
   case whnf lv book x of
     Tup a b -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
     _       -> undo
 
-whnfAppCse :: Int -> Book -> Term -> [(String,Term)] -> Term -> Term -> Term
-whnfAppCse lv book undo c d x =
+-- Normalizes an enum match
+whnfEnuM :: Int -> Book -> Term -> [(String,Term)] -> Term -> Term
+whnfEnuM lv book x cs d =
   case whnf lv book x of
-    Sym s -> case lookup s c of
+    Sym s -> case lookup s cs of
       Just t  -> whnf lv book t
       Nothing -> whnf lv book (App d (Sym s))
-    x -> whnf lv book (App d x)
+    x'    -> whnf lv book (App d x')
 
+-- Normalizes an equality match
+whnfEqlM :: Int -> Book -> Term -> Term -> Term -> Term
+whnfEqlM lv book undo x f =
+  case whnf lv book x of
+    Rfl -> whnf lv book f
+    _   -> undo
+
+-- Normalizes a primitive application
 whnfAppPri :: Int -> Book -> Term -> PriF -> Term -> Term
 whnfAppPri lv book undo U64_TO_CHAR x =
   case whnf lv book x of
     Val (U64_V n) -> Val (CHR_V (toEnum (fromIntegral n)))
     _             -> undo
 
+-- Forces evaluation
 force :: Book -> Term -> Term
 force book t =
   case whnf 2 book t of
     Ind t -> force book t
     Frz t -> force book t
     t     -> t
+
+-- Numeric operations
+-- ------------------
 
 whnfOp2 :: Int -> Book -> NOp2 -> Term -> Term -> Term
 whnfOp2 lv book op a b =

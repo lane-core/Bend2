@@ -1,3 +1,12 @@
+-- PROBLEM:
+--   we're currently refactoring this programming language to use expression-based
+--   pattern matches like '~ x { True: t ; False : t }', instead of lambda matches
+--   like '(λ{ True: t ; False: t } x)'
+-- INSTRUCTIONS:
+-- - fully rewrite the commented-out code above FILL_HERE to apply this change
+-- - do not remove any existing feature or comments from the code you edit
+-- - ALWAYS REPLICATE THE SAME STYLE AS THE ORIGINAL FILE, AS CLOSE AS POSSIBLE
+
 module Core.Type where
 
 import Data.List (intercalate)
@@ -69,32 +78,37 @@ data Term
   | Efq -- λ{}
 
   -- Unit
-  | Uni      -- Unit
-  | One      -- ()
-  | Use Term -- λ{():f}
+  | Uni            -- Unit
+  | One            -- ()
+  -- | Use Term -- λ{():f}
+  | UniM Term Term -- ~x{():f}
 
   -- Bool
-  | Bit           -- Bool
-  | Bt0           -- False
-  | Bt1           -- True
-  | Bif Term Term -- λ{False:f;True:t}
+  | Bit                 -- Bool
+  | Bt0                 -- False
+  | Bt1                 -- True
+  -- | Bif Term Term      -- λ{False:f;True:t}
+  | BitM Term Term Term -- ~x{False:t;True:t}
 
   -- Nat
-  | Nat           -- Nat
-  | Zer           -- 0
-  | Suc Term      -- ↑n
-  | Swi Term Term -- λ{0:z;+:s}
+  | Nat                 -- Nat
+  | Zer                 -- 0
+  | Suc Term            -- ↑n
+  -- | Swi Term Term       -- λ{0n:z;1n+:s}
+  | NatM Term Term Term -- ~x{0n:z;1n+:s}
 
   -- List
-  | Lst Type      -- T[]
-  | Nil           -- []
-  | Con Term Term -- h<>t
-  | Mat Term Term -- λ{[]:n;<>:c}
+  | Lst Type            -- T[]
+  | Nil                 -- []
+  | Con Term Term       -- h<>t
+  -- | Mat Term Term      -- λ{[]:n;<>:c}
+  | LstM Term Term Term -- ~x{[]:n;<>:c}
 
   -- Enum
-  | Enu [String]             -- {@foo,@bar...}
-  | Sym String               -- @foo
-  | Cse [(String,Term)] Term -- λ{@foo:f;@bar:b;...d}
+  | Enu [String]                   -- {@foo,@bar...}
+  | Sym String                     -- @foo
+  -- | Cse [(String,Term)] Term -- λ{@foo:f;@bar:b;...d}
+  | EnuM Term [(String,Term)] Term -- ~x{@foo:f;@bar:b;...d}
 
   -- Numbers
   | Num NTyp           -- CHR | U64 | I64 | F64
@@ -103,9 +117,10 @@ data Term
   | Op1 NOp1 Term      -- !x
 
   -- Pair
-  | Sig Type Type -- ΣA.B
-  | Tup Term Term -- (a,b)
-  | Get Term      -- λ{(,):f}
+  | Sig Type Type       -- ΣA.B
+  | Tup Term Term       -- (a,b)
+  -- | Get Term      -- λ{(,):f}
+  | SigM Term Term      -- ~x{(,):f}
 
   -- Function
   | All Type Type -- ∀A.B
@@ -114,8 +129,9 @@ data Term
 
   -- Equality
   | Eql Type Term Term -- T{a==b}
-  | Rfl                -- {=}
-  | Rwt Term           -- λ{{=}:f}
+  | Rfl                -- {==}
+  -- | Rwt Term           -- λ{{==}:f}
+  | EqlM Term Term     -- ~x{{==}:f}
 
   -- MetaVar
   | Met Int Type [Term] -- ?N:T{x0,x1,...}
@@ -141,6 +157,9 @@ data Term
 type Inj  = Bool -- "is injective" flag. improves pretty printing
 type Defn = (Inj, Term, Type)
 data Book = Book (M.Map Name Defn)
+
+-- Substitution Map
+type Subs = [(Term,Term)]
 
 -- Error Location (NEW TYPE)
 data Span = Span
@@ -173,7 +192,7 @@ instance Monad Result where
   Fail e >>= _ = Fail e
 
 instance Show Term where
-  show (Var k i)      = k
+  show (Var k i)      = k ++ "^" ++ show i
   show (Ref k)        = k
   -- show (Sub t)        = error "unreachable"
   show (Sub t)        = show t
@@ -186,29 +205,28 @@ instance Show Term where
   show (Efq)          = "λ{}"
   show (Uni)          = "Unit"
   show (One)          = "()"
-  show (Use f)        = "λ{ ():" ++ show f ++ " }"
+  show (UniM x f)     = "~" ++ show x ++ "{ (): " ++ show f ++ " }"
   show (Bit)          = "Bool"
   show (Bt0)          = "False"
   show (Bt1)          = "True"
-  show (Bif f t)      = "λ{ False: " ++ show f ++ " ; True: " ++ show t ++ " }"
+  show (BitM x f t)   = "~" ++ show x ++ "{ False: " ++ show f ++ " ; True: " ++ show t ++ " }"
   show (Nat)          = "Nat"
   show (Zer)          = "0n"
   show (Suc n)        = "1n+" ++ show n
-  show (Swi z s)      = "λ{ 0n: " ++ show z ++ " ; 1n+: " ++ show s ++ " }"
+  show (NatM x z s)   = "~" ++ show x ++ "{ 0n: " ++ show z ++ " ; 1n+: " ++ show s ++ " }"
   show (Lst t)        = show t ++ "[]"
   show (Nil)          = "[]"
   show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
-  show (Mat n c)      = "λ{ []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
+  show (LstM x n c)   = "~" ++ show x ++ "{ []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
   show (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
   show (Sym s)        = "@" ++ s
-  -- show (Cse c)        = "λ{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " }"
-  show (Cse c e)      = "λ{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
+  show (EnuM x c e)   = "~" ++ show x ++ "{ " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
   show (Sig a b)      = sig a b where
     sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
     sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
     sig a b           = "Σ" ++ show a ++ ". " ++ (show b)
   show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
-  show (Get f)        = "λ{ (,):" ++ show f ++ " }"
+  show (SigM x f)     = "~" ++ show x ++ "{ (,):" ++ show f ++ " }"
   show (All a b)      = all a b where
     all a (Lam "_" f) = show a ++ " -> " ++ show (f (Var "_" 0))
     all a (Lam k f)   = "∀" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
@@ -222,7 +240,7 @@ instance Show Term where
               fn      -> "(" ++ show fn ++ ")"
   show (Eql t a b)     = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)           = "{==}"
-  show (Rwt f)         = "λ{ {==}:" ++ show f ++ " }"
+  show (EqlM x f)      = "~" ++ show x ++ "{ {==}:" ++ show f ++ " }"
   show (Ind t)         = "~{" ++ show t ++ "}"
   show (Frz t)         = "∅" ++ show t
   show (Loc _ t)       = show t
@@ -301,6 +319,7 @@ instance Show Error where
 showContext :: Term -> String
 showContext ctx = 
   let lines = map snd (reverse (dedup S.empty (reverse (go ctx []))))
+  -- let lines = map snd (reverse ((reverse (go ctx []))))
   in if null lines then "" else init (unlines lines)
   where
 

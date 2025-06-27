@@ -185,9 +185,10 @@ doParseBook file input =
   case evalState (runParserT p file input) (ParserState True input M.empty) of
     Left err  -> Left (formatError input err)
     Right res -> 
-      let book = bindBook (moveBook (unpatBook (flattenBook res)))
-      in Right book
-      -- in Right (trace (show book) book)
+      let book = bindBook ((unpatBook (flattenBook res)))
+      -- let book = bindBook (moveBook (unpatBook (flattenBook res)))
+      -- in Right book
+      in Right (trace (show book) book)
   where
     p = do
       skip
