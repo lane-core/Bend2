@@ -180,7 +180,7 @@ instance Monad Result where
   Fail e >>= _ = Fail e
 
 instance Show Term where
-  show (Var k i)      = k -- ++ "^" ++ show i
+  show (Var k i)      = k ++ "^" ++ show i
   show (Ref k)        = k
   -- show (Sub t)        = error "unreachable"
   show (Sub t)        = show t

@@ -17,37 +17,40 @@ import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 -- ==========
 
 -- Levels:
--- - 0: reduce nothing
+-- - 0: reduce decorators
 -- - 1: reduce applications, eliminators, operators and primitives
 -- - 2: reduce Fixes and non-injective Refs in wnf position
 -- - 3: reduce everything
 
 -- Reduction
 whnf :: Int -> Int -> Book -> Subs -> Term -> Term
-whnf 0  d book subs term = term
+whnf 0 d book subs term =
+  case term of
+    Let v f -> whnfLet 0 d book subs v f
+    Ann x _ -> whnf 0 d book subs x
+    Chk x _ -> whnf 0 d book subs x
+    Loc _ t -> whnf 0 d book subs t
+    _       -> term
 whnf lv d book subs term = ret where
-  nf = case subst lv d book subs [] term of
-    Just (s,t) -> whnf lv d book s t
-    Nothing    -> 
-      case term of
-        Let v f    -> whnfLet lv d book subs v f
-        Ref k      -> whnfRef lv d book subs k
-        Fix k f    -> whnfFix lv d book subs k f
-        Ann x _    -> whnf lv d book subs x
-        Chk x _    -> whnf lv d book subs x
-        App f x    -> whnfApp lv d book subs (App f x) f x
-        Loc _ t    -> whnf lv d book subs t
-        Op2 o a b  -> whnfOp2 lv d book subs o a b
-        Op1 o a    -> whnfOp1 lv d book subs o a
-        Pri p      -> Pri p
-        UniM x f   -> whnfUniM lv d book subs term x f
-        BitM x f t -> whnfBitM lv d book subs term x f t
-        NatM x z s -> whnfNatM lv d book subs term x z s
-        LstM x n c -> whnfLstM lv d book subs term x n c
-        EnuM x c f -> whnfEnuM lv d book subs term x c f
-        SigM x f   -> whnfSigM lv d book subs term x f
-        EqlM x f   -> whnfEqlM lv d book subs term x f
-        _          -> term
+  nf = case term of
+    Let v f    -> whnfLet lv d book subs v f
+    Ref k      -> whnfRef lv d book subs k
+    Fix k f    -> whnfFix lv d book subs k f
+    Ann x _    -> whnf lv d book subs x
+    Chk x _    -> whnf lv d book subs x
+    App f x    -> whnfApp lv d book subs (App f x) f x
+    Loc _ t    -> whnf lv d book subs t
+    Op2 o a b  -> whnfOp2 lv d book subs o a b
+    Op1 o a    -> whnfOp1 lv d book subs o a
+    Pri p      -> Pri p
+    UniM x f   -> whnfUniM lv d book subs term x f
+    BitM x f t -> whnfBitM lv d book subs term x f t
+    NatM x z s -> whnfNatM lv d book subs term x z s
+    LstM x n c -> whnfLstM lv d book subs term x n c
+    EnuM x c f -> whnfEnuM lv d book subs term x c f
+    SigM x f   -> whnfSigM lv d book subs term x f
+    EqlM x f   -> whnfEqlM lv d book subs term x f
+    _          -> term
   -- When a term reduces to an ugly stuck form, such as
   -- `~x{...}`, we will undo this reduction, for pretty
   -- printing purposes. This is harmless, because such
@@ -62,7 +65,7 @@ whnf lv d book subs term = ret where
     EqlM v _   -> undo v term nf
     _          -> nf
     where
-      undo s tm nf = case whnf lv d book subs s of
+      undo s tm nf = case whnf 0 d book subs s of
         Var _ _ -> tm
         App _ _ -> tm
         Ref _   -> tm
@@ -295,31 +298,92 @@ whnfOp1 lv d book subs op a =
 -- Substitution
 -- ============
 
-subst :: Int -> Int -> Book -> Subs -> Subs -> Term -> Maybe (Subs, Term)
-subst 0 d book subs rems x
-  = Nothing
-subst lv d book ((k,v):subs) rems x
-  | eql (lv-1) d book [] k x = trace ("sub " ++ show (normal lv d book [] k) ++ " → " ++ show (normal lv d book [] v)) $ Just (rems ++ subs , v)
-  -- | eql lv d book [] k x = Just (rems ++ ((k,v):subs) , v)
-  | otherwise            = subst lv d book subs (rems ++ [(k,v)]) x
-subst lv d book [] rems x = Nothing
+rewrites :: Int -> Int -> Book -> Subs -> Term -> Term
+rewrites lv d book []               val = val
+-- rewrites lv d book ((old,neo):subs) val = trace ("rwt " ++ show old ++ " → " ++ show neo) $ rewrites lv d book subs (rewrite lv d book subs old neo val)
+rewrites lv d book ((old,neo):subs) val = rewrites lv d book subs (rewrite lv d book subs old neo val)
+
+rewrite :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term
+rewrite lv d book subs old neo val
+  | equal 0 book subs old val = neo
+  | otherwise                 = case whnf 0 d book subs val of
+    Suc x -> Suc $ rewriteGo lv d book subs old neo x
+    _     -> rewriteGo lv d book subs old neo val
+
+-- Recursively rewrites occurrences of 'old' with 'neo' in 'val'
+-- TODO: complete this fn
+rewriteGo :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term
+rewriteGo lv d book subs old neo val = case val of
+  Var k i    -> Var k i
+  Ref k      -> Ref k
+  Sub t      -> t
+  Fix k f    -> Fix k (\x -> rewrite lv d book subs old neo (f x))
+  Let v f    -> Let (rewrite lv d book subs old neo v) (rewrite lv d book subs old neo f)
+  Set        -> Set
+  Ann x t    -> Ann (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo t)
+  Chk x t    -> Chk (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo t)
+  Emp        -> Emp
+  Efq        -> Efq
+  Uni        -> Uni
+  One        -> One
+  UniM x f   -> UniM (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo f)
+  Bit        -> Bit
+  Bt0        -> Bt0
+  Bt1        -> Bt1
+  BitM x f t -> BitM (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo f) (rewrite lv d book subs old neo t)
+  Nat        -> Nat
+  Zer        -> Zer
+  Suc n      -> Suc (rewrite lv d book subs old neo n)
+  NatM x z s -> NatM (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo z) (rewrite lv d book subs old neo s)
+  Lst t      -> Lst (rewrite lv d book subs old neo t)
+  Nil        -> Nil
+  Con h t    -> Con (rewrite lv d book subs old neo h) (rewrite lv d book subs old neo t)
+  LstM x n c -> LstM (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo n) (rewrite lv d book subs old neo c)
+  Enu s      -> Enu s
+  Sym s      -> Sym s
+  EnuM x c e -> EnuM (rewrite lv d book subs old neo x) (map (\(s,t) -> (s, rewrite lv d book subs old neo t)) c) (rewrite lv d book subs old neo e)
+  Num t      -> Num t
+  Val v      -> Val v
+  Op2 o a b  -> Op2 o (rewrite lv d book subs old neo a) (rewrite lv d book subs old neo b)
+  Op1 o a    -> Op1 o (rewrite lv d book subs old neo a)
+  Sig a b    -> Sig (rewrite lv d book subs old neo a) (rewrite lv d book subs old neo b)
+  Tup a b    -> Tup (rewrite lv d book subs old neo a) (rewrite lv d book subs old neo b)
+  SigM x f   -> SigM (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo f)
+  All a b    -> All (rewrite lv d book subs old neo a) (rewrite lv d book subs old neo b)
+  Lam k f    -> Lam k (\x -> rewrite lv d book subs old neo (f x))
+  App f x    -> App (rewrite lv d book subs old neo f) (rewrite lv d book subs old neo x)
+  Eql t a b  -> Eql (rewrite lv d book subs old neo t) (rewrite lv d book subs old neo a) (rewrite lv d book subs old neo b)
+  Rfl        -> Rfl
+  EqlM x f   -> EqlM (rewrite lv d book subs old neo x) (rewrite lv d book subs old neo f)
+  Met i t a  -> Met i (rewrite lv d book subs old neo t) (map (rewrite lv d book subs old neo) a)
+  Ind t      -> Ind (rewrite lv d book subs old neo t)
+  Frz t      -> Frz (rewrite lv d book subs old neo t)
+  Era        -> Era
+  Sup l a b  -> Sup l (rewrite lv d book subs old neo a) (rewrite lv d book subs old neo b)
+  Loc s t    -> Loc s (rewrite lv d book subs old neo t)
+  Rwt a b x  -> Rwt (rewrite lv d book subs old neo a) (rewrite lv d book subs old neo b) (rewrite lv d book subs old neo x)
+  Pri p      -> Pri p
+  Pat t m c  -> Pat (map (rewrite lv d book subs old neo) t) (map (\(k,v) -> (k, rewrite lv d book subs old neo v)) m) (map (\(ps,v) -> (map (rewrite lv d book subs old neo) ps, rewrite lv d book subs old neo v)) c)
 
 -- Equality
 -- ========
 
+-- showSubs d book subs = concatMap (\ (a,b) -> "\n| " ++ show (normal 3 d book [] a) ++ " → " ++ show (normal 3 d book [] b)) subs
+showSubs d book subs = concatMap (\ (a,b) -> "\n| " ++ show a ++ " → " ++ show b) subs
+
 equal :: Int -> Book -> Subs -> Term -> Term -> Bool
-equal d book subs a b =
-  trace (""
-    ++ "EQ: " ++ show (normal 3 d book []   a) ++ " == " ++ show (normal 3 d book []   b) ++ "\n"
-    ++ "~>: " ++ show (normal 3 d book subs a) ++ " == " ++ show (normal 3 d book subs b)
-    ++ concatMap (\ (a,b) -> "\n| " ++ show (normal 3 d book [] a) ++ " → " ++ show (normal 3 d book [] b)) subs) $
-  eql 3 d book subs a b
+equal d book subs a b = eql 3 d book subs (rewrites 3 d book subs a) (rewrites 3 d book subs b)
 
 eql :: Int -> Int -> Book -> Subs -> Term -> Term -> Bool
 -- eql 0  d book subs a b = cmp 0 d book subs (whnf 0 book subs a) (whnf 0 book subs b)
-eql 0  d book subs a b = cmp 0 d book subs a b
-eql lv d book subs a b = lo_equal || hi_equal where
-  lo_equal = eql (lv-1) d book subs a b
+eql 0  d book subs a b = cmp 0 d book subs (whnf 0 d book subs a) (whnf 0 d book subs b)
+eql lv d book subs a b = 
+  -- trace (""
+    -- ++ "EQ" ++ show lv ++ "| " ++ show (normal 1 d book []   a) ++ " == " ++ show (normal 1 d book []   b) ++ "\n"
+    -- ++ "~>" ++ show lv ++ "| " ++ show (normal 1 d book subs a) ++ " == " ++ show (normal 1 d book subs b)
+    -- ++ showSubs d book subs) $
+  lo_equal || hi_equal where
+  lo_equal = eql 0 d book subs a b
   hi_equal = cmp lv d book subs (whnf lv d book subs a) (whnf lv d book subs b)
 
 cmp :: Int -> Int -> Book -> Subs -> Term -> Term -> Bool
