@@ -239,9 +239,6 @@ check d span book ctx term goal =
   -- trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
   case (term, force d book goal) of
     (term, Rwt a b goal) -> do
-      -- trace ("oxi " ++ show a ++ " → " ++ show b ++ " :: " ++ show goal) $
-      -- check d span book (ctx term goal
-      let old_ctx  = ctx
       let new_ctx  = rewriteCtx 3 d book a b ctx
       let new_term = rewrite 3 d book a b term
       let new_goal = rewrite 3 d book a b goal
@@ -303,7 +300,6 @@ check d span book ctx term goal =
       case force d book xT of
         Nat -> do
           check d span book ctx z (Rwt x Zer goal)
-          -- check d span book ((x,Suc (Var "p" d)):ctx s $ All Nat (Lam "p" (\p -> goal))
           check d span book ctx s $ All Nat (Lam "p" (\p -> Rwt x (Suc p) goal))
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Nat) (format d book xT)
     (LstM x n c, goal) -> do
@@ -311,7 +307,6 @@ check d span book ctx term goal =
       case force d book xT of
         Lst a -> do
           check d span book ctx n (Rwt x Nil goal)
-          -- check d span book ((x,Con (Var "h" d) (Var "t" (d+1))):ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> goal))))
           check d span book ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> Rwt x (Con h t) goal))))
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Lst (Var "_" 0))) (format d book xT)
     (Sym s, Enu y) -> do
@@ -388,10 +383,6 @@ check d span book ctx term goal =
           check d span book ctx f $ All xt $ Lam "_" $ \x -> goal
         else do
           verify d span book ctx term goal
-    -- (One, _) ->
-      -- trace (">> SUBS" ++ showSubs d book subs) $
-      -- trace (">> GOAL: " ++ show (format d book subs goal)) $
-      -- error $ "bye"
     (_, _) -> do
       verify d span book ctx term goal
 
@@ -428,30 +419,3 @@ isLamApp (cut -> EnuM _ _ _) = True
 isLamApp (cut -> SigM _ _)   = True
 isLamApp (cut -> EqlM _ _)   = True
 isLamApp _                   = False
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

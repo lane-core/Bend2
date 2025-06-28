@@ -73,16 +73,6 @@ parseDefFunction f = label "function definition" $ do
     -- TODO: refactor parseArg to use a do-block instead. DO IT BELOW:
     nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (\v -> currType)), Lam argName (\v -> currBod))
 
--- -- | Syntax: name : Type = term (without 'def' keyword)
--- parseShortDef :: Parser (Name, Defn)
--- parseShortDef = label "short definition" $ do
-  -- f <- name
-  -- _ <- symbol ":"
-  -- t <- parseExpr
-  -- _ <- symbol "="
-  -- x <- parseTerm
-  -- return (f, (False, x, t))
-
 -- | Parse a module path like Path/To/Lib
 parseModulePath :: Parser String
 parseModulePath = do

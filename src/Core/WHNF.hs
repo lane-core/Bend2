@@ -356,6 +356,7 @@ force d book t =
     t     -> t
 
 -- Shapes that are rolled back for pretty printing
+-- These shapes are stuck, so, this shouldn't affect proving
 ugly :: Term -> Bool
 ugly (cut -> UniM _ _  ) = True
 ugly (cut -> BitM _ _ _) = True

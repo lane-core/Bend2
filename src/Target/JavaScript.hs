@@ -624,7 +624,6 @@ termToCT book term dep = case term of
   Let v f    -> case f of
      Lam k g -> CLet (termToCT book v dep) (\x -> termToCT book (g (ctToTerm x)) (dep+1))
      _       -> termToCT book (App f v) dep
-  -- Type-level constructs are erased
   Set        -> CEra
   Ann x _    -> termToCT book x dep
   Chk x _    -> termToCT book x dep
@@ -644,7 +643,6 @@ termToCT book term dep = case term of
   Met _ _ _  -> CEra
   Loc _ t    -> termToCT book t dep
   Rwt _ _ _  -> error "TODO"
-  -- Data values
   One        -> COne
   Zer        -> CZer
   Suc n      -> CSuc (termToCT book n dep)
@@ -655,10 +653,8 @@ termToCT book term dep = case term of
   Sym s      -> CSym s
   Tup a b    -> CTup (termToCT book a dep) (termToCT book b dep)
   Val v      -> CVal v
-  -- Functions and eliminators
   Lam k f    -> CLam k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
   App f x    -> CApp (termToCT book f dep) (termToCT book x dep)
-  -- Expression-based matches are compiled to an application of a match-lambda
   UniM x f   -> CApp (CUse (termToCT book f dep)) (termToCT book x dep)
   BitM x f t -> CApp (CBif (termToCT book f dep) (termToCT book t dep)) (termToCT book x dep)
   NatM x z s -> CApp (CSwi (termToCT book z dep) (termToCT book s dep)) (termToCT book x dep)
@@ -669,9 +665,7 @@ termToCT book term dep = case term of
   Op2 o a b  -> COp2 o (termToCT book a dep) (termToCT book b dep)
   Op1 o a    -> COp1 o (termToCT book a dep)
   Pri p      -> CPri p
-  -- Proof-related constructs are erased
   Rfl        -> CEra
-  -- Superpositions
   Era        -> CEra
   Sup l a b  -> CSup l (termToCT book a dep) (termToCT book b dep)
   Pat _ _ _  -> error "unreachable"
