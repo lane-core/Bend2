@@ -305,7 +305,7 @@ rewrites lv d book ((old,neo):subs) val = rewrites lv d book subs (rewrite lv d 
 
 rewrite :: Int -> Int -> Book -> Subs -> Term -> Term -> Term -> Term
 rewrite lv d book subs old neo val
-  | equal 0 book subs old val = neo
+  | equal d book subs old val = neo
   | otherwise                 = case whnf 0 d book subs val of
     Suc x -> Suc $ rewriteGo lv d book subs old neo x
     _     -> rewriteGo lv d book subs old neo val
@@ -372,6 +372,7 @@ rewriteGo lv d book subs old neo val = case val of
 showSubs d book subs = concatMap (\ (a,b) -> "\n| " ++ show a ++ " → " ++ show b) subs
 
 equal :: Int -> Book -> Subs -> Term -> Term -> Bool
+-- equal d book subs a b = eql 3 d book subs a b
 equal d book subs a b = eql 3 d book subs (rewrites 3 d book subs a) (rewrites 3 d book subs b)
 
 eql :: Int -> Int -> Book -> Subs -> Term -> Term -> Bool

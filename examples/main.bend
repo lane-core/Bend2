@@ -117,49 +117,49 @@ def is_even_ab_theo(n: Nat) -> Bool{(is_even_a n) == (is_even_b n)}:
     case 2n + p:
       k = double_neg_theo(is_even_b(p))
       rewrite k
+      is_even_ab_theo(p)
+
+# List Map
+def map<A,B>(f: A -> B, xs: A[]) -> B[]:
+  match xs:
+    case []:
+      []
+    case x <> xs:
+      f(x) <> map<A,B>(f, xs)
+
+## Inductive Datatype
+## ------------------
+
+## Can we encode inductive datatypes?
+
+# data Vec (A : Set) : Nat → Set where
+#   nil  : Vec A zero
+#   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
+type Vec<A: Set>(N: Nat) -> Set:
+  case @Nil:
+    e: Nat{N == 0}
+  case @Cons:
+    n: Nat
+    h: A
+    t: Vec(A,n)
+    e: Nat{N == (1n+n)}
+
+def VecInd
+  ( A: Set
+  , P: all n:Nat xs:Vec(A,n). Set
+  , N: P(0,@Nil{finally})
+  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1n+s,@Cons{s,x,xs,finally})
+  , n: Nat
+  , x: Vec(A,n)
+  ) -> P(n,x):
+  match x:
+    case @Nil{e}:
+      rewrite e
+      N
+    case @Cons{n,h,t,e}:
+      rewrite e
+      #C(n,h,t,VecInd(A,P,N,C,n,t))
       ()
-      #is_even_ab_theo(p)
-
-### List Map
-##def map<A,B>(f: A -> B, xs: A[]) -> B[]:
-  ##match xs:
-    ##case []:
-      ##[]
-    ##case x <> xs:
-      ##f(x) <> map<A,B>(f, xs)
-
-### Inductive Datatype
-### ------------------
-
-### Can we encode inductive datatypes?
-
-### data Vec (A : Set) : Nat → Set where
-###   nil  : Vec A zero
-###   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
-##type Vec<A: Set>(N: Nat) -> Set:
-  ##case @Nil:
-    ##e: Nat{N == 0}
-  ##case @Cons:
-    ##n: Nat
-    ##h: A
-    ##t: Vec(A,n)
-    ##e: Nat{N == (1n+n)}
-
-##def VecInd
-  ##( A: Set
-  ##, P: all n:Nat xs:Vec(A,n). Set
-  ##, N: P(0,@Nil{finally})
-  ##, C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1n+s,@Cons{s,x,xs,finally})
-  ##, n: Nat
-  ##, x: Vec(A,n)
-  ##) -> P(n,x):
-  ##match x:
-    ##case @Nil{e}:
-      ##rewrite e
-      ##N
-    ##case @Cons{n,h,t,e}:
-      ##rewrite e
-      ##C(n,h,t,VecInd(A,P,N,C,n,t))
 
 ####def VecInd
 ####:(∀A: Set.

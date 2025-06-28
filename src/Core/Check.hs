@@ -19,6 +19,7 @@ extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 
 format :: Int -> Book -> Subs -> Term -> Term
 format d book subs x = normal 2 d book subs $ rewrites 2 d book subs $ x
+-- format d book subs x = normal 2 d book subs $ x
 
 formatCtx :: Int -> Book -> Subs -> Ctx -> Ctx
 formatCtx d book subs (Ctx ctx) = Ctx (map formatAnn ctx)
@@ -237,7 +238,8 @@ check d span book subs ctx term goal =
   case (term, force d book subs goal) of
     (term, Rwt a b goal) -> do
       -- trace ("oxi " ++ show a ++ " → " ++ show b ++ " :: " ++ show goal) $
-      check d span book (subs++[(a,b)]) ctx term goal
+      -- check d span book (subs++[(a,b)]) ctx term goal
+      check d span book (subs++[(a,b)]) ctx term (rewrite 3 d book subs a b goal)
     (Let v f, _) -> do
       case v of
         Chk val typ -> do
@@ -320,7 +322,7 @@ check d span book subs ctx term goal =
         _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Enu [])) (format d book subs xT)
     (SigM x f, goal) -> do
       xT <- infer d span book subs ctx x
-      case force d book subs xT of
+      case force d book subs (rewrites 2 d book subs xT) of
         Sig a b -> do
           check d span book subs ctx f $ All a (Lam "x" (\h -> All (App b h) (Lam "y" (\t -> Rwt x (Tup h t) goal))))
         _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Sig (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (format d book subs xT)
