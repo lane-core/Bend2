@@ -22,14 +22,16 @@ library
     import:           warnings
     exposed-modules:  Core.Type,
                       Core.Bind,
-                      Core.Check,
                       Core.CLI,
+                      Core.Check,
+                      Core.Equal,
                       Core.Flatten,
                       Core.Import,
                       Core.Parse,
                       Core.Parse.Book,
                       Core.Parse.Term,
                       Core.Parse.WithSpan,
+                      Core.Rewrite,
                       Core.WHNF,
                       Target.JavaScript
     build-depends:    base ^>= 4.21.0.0,

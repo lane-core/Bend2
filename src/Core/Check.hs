@@ -8,6 +8,8 @@ import qualified Data.Map as M
 
 import Debug.Trace
 
+import Core.Equal
+import Core.Rewrite
 import Core.Type
 import Core.WHNF
 
@@ -17,57 +19,57 @@ import Core.WHNF
 extend :: Ctx -> Name -> Term -> Term -> Ctx
 extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 
-format :: Int -> Book -> Subs -> Term -> Term
-format d book subs x = normal 2 d book subs $ rewrites 2 d book subs $ x
--- format d book subs x = normal 2 d book subs $ x
+format :: Int -> Book -> Term -> Term
+-- format d book subs x = normal 2 d book subs $ rewrites 2 d book subs $ x
+format d book x = normal 2 d book $ x
 
-formatCtx :: Int -> Book -> Subs -> Ctx -> Ctx
-formatCtx d book subs (Ctx ctx) = Ctx (map formatAnn ctx)
-  where formatAnn (k,v,t) = (k, format d book subs v, format d book subs t)
+formatCtx :: Int -> Book -> Ctx -> Ctx
+formatCtx d book (Ctx ctx) = Ctx (map formatAnn ctx)
+  where formatAnn (k,v,t) = (k, format d book v, format d book t)
 
 -- Type Checker
 -- ------------
 
 -- Infer the type of a term
-infer :: Int -> Span -> Book -> Subs -> Ctx -> Term -> Result Term
-infer d span book subs ctx term =
-  -- trace ("- infer: " ++ show (format d book subs term)) $
+infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
+infer d span book ctx term =
+  -- trace ("- infer: " ++ show (format d book term)) $
   case term of
     Var k i -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Ref k -> do
       case deref book k of
         Just (_, _, typ) -> Done typ
-        Nothing          -> Fail $ CantInfer span (formatCtx d book subs ctx)
+        Nothing          -> Fail $ CantInfer span (formatCtx d book ctx)
     Sub x -> do
-      infer d span book subs ctx x
+      infer d span book ctx x
     Let v f -> do
       case v of
         Chk val typ -> do
-          check d span book subs ctx val typ
-          infer d span book subs ctx (App f (Ann val typ))
+          check d span book ctx val typ
+          infer d span book ctx (App f (Ann val typ))
         _ -> do
-          t <- infer d span book subs ctx v
-          infer d span book subs ctx (App f (Ann v t))
+          t <- infer d span book ctx v
+          infer d span book ctx (App f (Ann v t))
     Fix k f -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Ann v t -> do
       Done t
     Chk v t -> do
-      check d span book subs ctx v t
+      check d span book ctx v t
       Done t
     Set -> do
       Done Set
     Emp -> do
       Done Set
     Efq -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Uni -> do
       Done Set
     One -> do
       Done Uni
     UniM _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Bit -> do
       Done Set
     Bt0 -> do
@@ -75,86 +77,86 @@ infer d span book subs ctx term =
     Bt1 -> do
       Done Bit
     BitM _ _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Nat -> do
       Done Set
     Zer -> do
       Done Nat
     Suc n -> do
-      nT <- infer d span book subs ctx n
-      case force d book subs nT of
+      nT <- infer d span book ctx n
+      case force d book nT of
         Nat ->
           Done $ Nat
         Eql Nat a b ->
           Done $ Eql Nat (Suc a) (Suc b)
         _ ->
-          Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs Nat) (format d book subs nT)
+          Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Nat) (format d book nT)
     NatM _ _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Lst t -> do
-      check d span book subs ctx t Set
+      check d span book ctx t Set
       Done Set
     Nil -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Con h t -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     LstM _ _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Enu s -> do
       Done Set
     Sym s -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     EnuM _ _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Sig a b -> do
-      check d span book subs ctx a Set
-      check d span book subs ctx b (All a (Lam "_" (\_ -> Set)))
+      check d span book ctx a Set
+      check d span book ctx b (All a (Lam "_" (\_ -> Set)))
       Done Set
     Tup a b -> do
-      aT <- infer d span book subs ctx a
-      bT <- infer d span book subs ctx b
+      aT <- infer d span book ctx a
+      bT <- infer d span book ctx b
       Done $ Sig aT (Lam "_" (\_ -> bT))
     SigM _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     All a b -> do
-      check d span book subs ctx a Set
-      check d span book subs ctx b (All a (Lam "_" (\_ -> Set)))
+      check d span book ctx a Set
+      check d span book ctx b (All a (Lam "_" (\_ -> Set)))
       Done Set
     Lam _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     App f x ->
       case (f,x) of
         -- TODO: can we generalize this to other lam forms?
         (Lam k f, Ann xv xt) -> do
-          infer (d+1) span book subs (extend ctx k xv xt) (f (Ann xv xt))
+          infer (d+1) span book (extend ctx k xv xt) (f (Ann xv xt))
         _ -> do
-          fT <- infer d span book subs ctx f
-          case force d book subs fT of
+          fT <- infer d span book ctx f
+          case force d book fT of
             All fA fB -> do
-              check d span book subs ctx x fA
+              check d span book ctx x fA
               Done $ App fB x
             _ -> do
-              Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (All (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (format d book subs fT)
+              Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (All (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (format d book fT)
     Eql t a b -> do
       Done Set
     Rfl -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     EqlM _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Ind _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Frz _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Loc l t ->
-      infer d l book subs ctx t
+      infer d l book ctx t
     Rwt a b x ->
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Era -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Sup l a b -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Met _ _ _ -> do
-      Fail $ CantInfer span (formatCtx d book subs ctx)
+      Fail $ CantInfer span (formatCtx d book ctx)
     Num _ -> do
       Done Set
     Val (U64_V _) -> do
@@ -166,20 +168,20 @@ infer d span book subs ctx term =
     Val (CHR_V _) -> do
       Done (Num CHR_T)
     Op2 op a b -> do
-      ta <- infer d span book subs ctx a
-      tb <- infer d span book subs ctx b
-      inferOp2Type d span book subs ctx op a b ta tb
+      ta <- infer d span book ctx a
+      tb <- infer d span book ctx b
+      inferOp2Type d span book ctx op a b ta tb
     Op1 op a -> do
-      ta <- infer d span book subs ctx a
-      inferOp1Type d span book subs ctx op a ta
+      ta <- infer d span book ctx a
+      inferOp1Type d span book ctx op a ta
     Pri U64_TO_CHAR -> do
       Done (All (Num U64_T) (Lam "x" (\_ -> Num CHR_T)))
     Pat _ _ _ -> do
       error "Pat not supported in infer"
 
 -- Infer the result type of a binary numeric operation
-inferOp2Type :: Int -> Span -> Book -> Subs -> Ctx -> NOp2 -> Term -> Term -> Term -> Term -> Result Term
-inferOp2Type d span book subs ctx op a b ta tb = do
+inferOp2Type :: Int -> Span -> Book -> Ctx -> NOp2 -> Term -> Term -> Term -> Term -> Result Term
+inferOp2Type d span book ctx op a b ta tb = do
   -- For arithmetic ops, both operands must have the same numeric type
   case op of
     ADD -> numericOp ta tb
@@ -201,53 +203,61 @@ inferOp2Type d span book subs ctx op a b ta tb = do
     SHL -> integerOp ta tb
     SHR -> integerOp ta tb
   where
-    numericOp ta tb = case (force d book subs ta, force d book subs tb) of
+    numericOp ta tb = case (force d book ta, force d book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done (Num t1)
-      _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs ta) (format d book subs tb)
+      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)
     
-    comparisonOp ta tb = case (force d book subs ta, force d book subs tb) of
+    comparisonOp ta tb = case (force d book ta, force d book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done Bit
-      _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs ta) (format d book subs tb)
+      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)
     
-    integerOp ta tb = case (force d book subs ta, force d book subs tb) of
+    integerOp ta tb = case (force d book ta, force d book tb) of
       (Num U64_T, Num U64_T) -> Done (Num U64_T)
       (Num I64_T, Num I64_T) -> Done (Num U64_T)  -- Bitwise on I64 returns U64
       (Num F64_T, Num F64_T) -> Done (Num U64_T)  -- Bitwise on F64 returns U64
-      (Num CHR_T, Num CHR_T) -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs ta) (format d book subs tb)  -- Bitwise not supported for CHR
-      _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs ta) (format d book subs tb)
+      (Num CHR_T, Num CHR_T) -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)  -- Bitwise not supported for CHR
+      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)
 
 -- Infer the result type of a unary numeric operation
-inferOp1Type :: Int -> Span -> Book -> Subs -> Ctx -> NOp1 -> Term -> Term -> Result Term
-inferOp1Type d span book subs ctx op a ta = case op of
-  NOT -> case force d book subs ta of
+inferOp1Type :: Int -> Span -> Book -> Ctx -> NOp1 -> Term -> Term -> Result Term
+inferOp1Type d span book ctx op a ta = case op of
+  NOT -> case force d book ta of
     Num U64_T -> Done (Num U64_T)
     Num I64_T -> Done (Num U64_T)  -- Bitwise NOT on I64 returns U64
     Num F64_T -> Done (Num U64_T)  -- Bitwise NOT on F64 returns U64
-    Num CHR_T -> Fail $ CantInfer span (formatCtx d book subs ctx)  -- Bitwise NOT not supported for CHR
-    _         -> Fail $ CantInfer span (formatCtx d book subs ctx)
-  NEG -> case force d book subs ta of
+    Num CHR_T -> Fail $ CantInfer span (formatCtx d book ctx)  -- Bitwise NOT not supported for CHR
+    _         -> Fail $ CantInfer span (formatCtx d book ctx)
+  NEG -> case force d book ta of
     Num I64_T -> Done (Num I64_T)
     Num F64_T -> Done (Num F64_T)
-    Num CHR_T -> Fail $ CantInfer span (formatCtx d book subs ctx)  -- Negation not supported for CHR
-    _         -> Fail $ CantInfer span (formatCtx d book subs ctx)
+    Num CHR_T -> Fail $ CantInfer span (formatCtx d book ctx)  -- Negation not supported for CHR
+    _         -> Fail $ CantInfer span (formatCtx d book ctx)
 
 -- Check if a term has the expected type
-check :: Int -> Span -> Book -> Subs -> Ctx -> Term -> Term -> Result ()
-check d span book subs ctx term goal =
-  -- trace ("- check: " ++ show (format d book subs term) ++ " :: " ++ show (format d book subs goal)) $
-  case (term, force d book subs goal) of
+check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
+check d span book ctx term goal =
+  -- trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
+  case (term, force d book goal) of
     (term, Rwt a b goal) -> do
       -- trace ("oxi " ++ show a ++ " → " ++ show b ++ " :: " ++ show goal) $
-      -- check d span book (subs++[(a,b)]) ctx term goal
-      check d span book (subs++[(a,b)]) ctx term (rewrite 3 d book subs a b goal)
+      -- check d span book (ctx term goal
+      let old_ctx  = ctx
+      let new_ctx  = rewriteCtx 3 d book a b ctx
+      let new_term = rewrite 3 d book a b term
+      let new_goal = rewrite 3 d book a b goal
+      -- trace ("> REWRITE " ++ show (normal 2 d book a) ++ " → " ++ show (normal 2 d book b) ++ ":\n" ++
+        -- -- "- ctx : " ++ show (normalCtx 2 d book ctx) ++ " → " ++ show (normalCtx 2 d book new_ctx) ++ "\n" ++
+        -- "- goal: " ++ show (normal 2 d book goal) ++ " → " ++ show (normal 2 d book new_goal) ++ "\n" ++
+        -- "- term: " ++ show (normal 2 d book term) ++ " → " ++ show (normal 2 d book new_term)) $
+      check d span book new_ctx new_term new_goal
     (Let v f, _) -> do
       case v of
         Chk val typ -> do
-          check d span book subs ctx val typ
-          check d span book subs ctx (App f (Ann val typ)) goal
+          check d span book ctx val typ
+          check d span book ctx (App f (Ann val typ)) goal
         _ -> do
-          t <- infer d span book subs ctx v
-          check d span book subs ctx (App f (Ann v t)) goal
+          t <- infer d span book ctx v
+          check d span book ctx (App f (Ann v t)) goal
     (One, Uni) -> do
       Done ()
     (Bt0, Bit) -> do
@@ -256,108 +266,95 @@ check d span book subs ctx term goal =
       Done ()
     (Zer, Nat) -> do
       Done ()
-    (Suc n, Eql t (force d book subs -> Suc a) (force d book subs -> Suc b)) -> do
-      check d span book subs ctx n (Eql t a b)
+    (Suc n, Eql t (force d book -> Suc a) (force d book -> Suc b)) -> do
+      check d span book ctx n (Eql t a b)
     (Suc n, Nat) -> do
-      check d span book subs ctx n Nat
+      check d span book ctx n Nat
     (Nil, Lst _) -> do
       Done ()
     (Nil, goal) ->
-      Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Lst (Var "_" 0))) (format d book subs goal)
+      Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Lst (Var "_" 0))) (format d book goal)
     (Con h t, Lst tT) -> do
-      check d span book subs ctx h tT
-      check d span book subs ctx t (Lst tT)
+      check d span book ctx h tT
+      check d span book ctx t (Lst tT)
     -- FIXME: doesn't work if we use 'All a b' because whnf removes the Ann (same for Sig)
     (Lam k f, All a (Lam _ b)) -> do
       let x = Ann (Var k d) a
-      check (d+1) span book subs (extend ctx k (Var k d) a) (f x) (b x)
+      check (d+1) span book (extend ctx k (Var k d) a) (f x) (b x)
     (Efq, All a _) -> do
-      case force d book subs a of
+      case force d book a of
         Emp -> Done ()
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs Emp) (format d book subs a)
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Emp) (format d book a)
     (UniM x f, goal) -> do
-      xT <- infer d span book subs ctx x
-      case force d book subs xT of
+      xT <- infer d span book ctx x
+      case force d book xT of
         Uni -> do
-          check d span book subs ctx f (Rwt x One goal)
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs Uni) (format d book subs xT)
+          check d span book ctx f (Rwt x One goal)
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Uni) (format d book xT)
     (BitM x f t, goal) -> do
-      xT <- infer d span book subs ctx x
-      case force d book subs xT of
+      xT <- infer d span book ctx x
+      case force d book xT of
         Bit -> do
-          check d span book subs ctx f (Rwt x Bt0 goal)
-          check d span book subs ctx t (Rwt x Bt1 goal)
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs Bit) (format d book subs xT)
+          check d span book ctx f (Rwt x Bt0 goal)
+          check d span book ctx t (Rwt x Bt1 goal)
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Bit) (format d book xT)
     (NatM x z s, goal) -> do
-      xT <- infer d span book subs ctx x
-      case force d book subs xT of
+      xT <- infer d span book ctx x
+      case force d book xT of
         Nat -> do
-          check d span book subs ctx z (Rwt x Zer goal)
-          -- check d span book ((x,Suc (Var "p" d)):subs) ctx s $ All Nat (Lam "p" (\p -> goal))
-          check d span book subs ctx s $ All Nat (Lam "p" (\p -> Rwt x (Suc p) goal))
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs Nat) (format d book subs xT)
+          check d span book ctx z (Rwt x Zer goal)
+          -- check d span book ((x,Suc (Var "p" d)):ctx s $ All Nat (Lam "p" (\p -> goal))
+          check d span book ctx s $ All Nat (Lam "p" (\p -> Rwt x (Suc p) goal))
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Nat) (format d book xT)
     (LstM x n c, goal) -> do
-      xT <- infer d span book subs ctx x
-      case force d book subs xT of
+      xT <- infer d span book ctx x
+      case force d book xT of
         Lst a -> do
-          check d span book subs ctx n (Rwt x Nil goal)
-          -- check d span book ((x,Con (Var "h" d) (Var "t" (d+1))):subs) ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> goal))))
-          check d span book subs ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> Rwt x (Con h t) goal))))
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Lst (Var "_" 0))) (format d book subs xT)
+          check d span book ctx n (Rwt x Nil goal)
+          -- check d span book ((x,Con (Var "h" d) (Var "t" (d+1))):ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> goal))))
+          check d span book ctx c $ All a (Lam "h" (\h -> All (Lst a) (Lam "t" (\t -> Rwt x (Con h t) goal))))
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Lst (Var "_" 0))) (format d book xT)
     (Sym s, Enu y) -> do
       if s `elem` y
         then Done ()
-        else Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Enu y)) (format d book subs (Sym s))
+        else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu y)) (format d book (Sym s))
     (EnuM x cs df, goal) -> do
-      xT <- infer d span book subs ctx x
-      case force d book subs xT of
+      xT <- infer d span book ctx x
+      case force d book xT of
         Enu syms -> do
-          mapM_ (\(s, t) -> check d span book subs ctx t (Rwt x (Sym s) goal)) cs
+          mapM_ (\(s, t) -> check d span book ctx t (Rwt x (Sym s) goal)) cs
           let covered_syms = map fst cs
           let all_covered = length covered_syms >= length syms
                          && all (`elem` syms) covered_syms
           if not all_covered
-            then check d span book subs ctx df goal
+            then check d span book ctx df goal
             else Done ()
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Enu [])) (format d book subs xT)
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu [])) (format d book xT)
     (SigM x f, goal) -> do
-      xT <- infer d span book subs ctx x
-      case force d book subs (rewrites 2 d book subs xT) of
+      xT <- infer d span book ctx x
+      case force d book xT of
         Sig a b -> do
-          check d span book subs ctx f $ All a (Lam "x" (\h -> All (App b h) (Lam "y" (\t -> Rwt x (Tup h t) goal))))
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Sig (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (format d book subs xT)
+          check d span book ctx f $ All a (Lam "x" (\h -> All (App b h) (Lam "y" (\t -> Rwt x (Tup h t) goal))))
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Sig (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (format d book xT)
     (Tup a b, Sig aT (Lam _ bT)) -> do
-      check d span book subs ctx a aT
-      check d span book subs ctx b (bT a)
+      check d span book ctx a aT
+      check d span book ctx b (bT a)
     (Rfl, Eql t a b) -> do
-      check d span book subs ctx a t
-      check d span book subs ctx b t
-      if equal d book subs a b
+      check d span book ctx a t
+      check d span book ctx b t
+      if equal d book a b
         then Done ()
-        else Fail $ TermMismatch span (formatCtx d book subs ctx) (format d book subs a) (format d book subs b)
-    -- (EqlM x f, goal) -> do
-      -- xT <- infer d span book subs ctx x
-      -- case force d book subs xT of
-        -- Eql t a b -> do
-          -- check d span book ((a,b):subs) ctx f (rewrite d book a b goal)
-        -- _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (format d book subs xT)
-    -- Q: there is a problem in the EqlM clause above. can you identify it?
-    -- A: -- A: the clause inserts the pair (a,b) into the substitution list but
-    --    forgets to substitute the scrutinee variable ‘x’ with Rfl; we should
-    --    add (x,Rfl) (and possibly keep (a,b) as an equality hint) otherwise
-    --    ‘f’ is type-checked while ‘x’ remains free, producing an ill-typed
-    --    context.
-    -- fix it below:
+        else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
     (EqlM x f, goal) -> do
-      xT <- infer d span book subs ctx x
-      case force d book subs xT of
+      xT <- infer d span book ctx x
+      case force d book xT of
         Eql t a b -> do
-          check d span book subs ctx f (Rwt x Rfl (Rwt a b goal))
-        _ -> Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (format d book subs xT)
+          check d span book ctx f (Rwt x Rfl (Rwt a b goal))
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (format d book xT)
     (Fix k f, _) -> do
-      check d span book subs (extend ctx k (Var k d) goal) (f (Ann (Fix k f) goal)) goal
+      check d span book (extend ctx k (Var k d) goal) (f (Ann (Fix k f) goal)) goal
     (Loc l t, _) -> do
-      check d l book subs ctx t goal
+      check d l book ctx t goal
     (Val (U64_V _), Num U64_T) -> do
       Done ()
     (Val (I64_V _), Num I64_T) -> do
@@ -367,18 +364,18 @@ check d span book subs ctx term goal =
     (Val (CHR_V _), Num CHR_T) -> do
       Done ()
     (Op2 op a b, _) -> do
-      ta <- infer d span book subs ctx a
-      tb <- infer d span book subs ctx b
-      tr <- inferOp2Type d span book subs ctx op a b ta tb
-      if equal d book subs tr goal
+      ta <- infer d span book ctx a
+      tb <- infer d span book ctx b
+      tr <- inferOp2Type d span book ctx op a b ta tb
+      if equal d book tr goal
         then Done ()
-        else Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs goal) (format d book subs tr)
+        else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book tr)
     (Op1 op a, _) -> do
-      ta <- infer d span book subs ctx a
-      tr <- inferOp1Type d span book subs ctx op a ta
-      if equal d book subs tr goal
+      ta <- infer d span book ctx a
+      tr <- inferOp1Type d span book ctx op a ta
+      if equal d book tr goal
         then Done ()
-        else Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs goal) (format d book subs tr)
+        else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book tr)
     (Pat _ _ _, _) -> do
       error "not-supported"
     -- (f x) :: G
@@ -387,24 +384,24 @@ check d span book subs ctx term goal =
     (App f x, _) ->
       if isLamApp f
         then do
-          xt <- infer d span book subs ctx x
-          check d span book ((x,Var "_" d):subs) ctx f $ All xt $ Lam "_" $ \x -> goal
+          xt <- infer d span book ctx x
+          check d span book ctx f $ All xt $ Lam "_" $ \x -> goal
         else do
-          verify d span book subs ctx term goal
+          verify d span book ctx term goal
     -- (One, _) ->
       -- trace (">> SUBS" ++ showSubs d book subs) $
       -- trace (">> GOAL: " ++ show (format d book subs goal)) $
       -- error $ "bye"
     (_, _) -> do
-      verify d span book subs ctx term goal
+      verify d span book ctx term goal
 
 -- Verify that a term has the expected type by inference
-verify :: Int -> Span -> Book -> Subs -> Ctx -> Term -> Term -> Result ()
-verify d span book subs ctx term goal = do
-  t <- infer d span book subs ctx term
-  if equal d book subs t goal
+verify :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
+verify d span book ctx term goal = do
+  t <- infer d span book ctx term
+  if equal d book t goal
     then Done ()
-    else Fail $ TypeMismatch span (formatCtx d book subs ctx) (format d book subs goal) (format d book subs t)
+    else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book t)
 
 -- Utils
 -- -----
@@ -414,7 +411,7 @@ checkBook :: Book -> Result ()
 checkBook book@(Book defs) = mapM_ checkDef (M.toList defs)
   where
     checkDef (name, (_, term, typ)) = do
-      check 0 noSpan book [] (Ctx []) term typ
+      check 0 noSpan book (Ctx []) term typ
 
 -- Utils
 -- -----
@@ -431,3 +428,30 @@ isLamApp (cut -> EnuM _ _ _) = True
 isLamApp (cut -> SigM _ _)   = True
 isLamApp (cut -> EqlM _ _)   = True
 isLamApp _                   = False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
