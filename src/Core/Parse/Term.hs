@@ -40,6 +40,7 @@ parseTermIni = choice
   , parseBifIf
   , parsePat
   , parseRewrite
+  , parseAbsurd
   , parseAll
   , parseSig
   , parseTildeExpr
@@ -486,6 +487,14 @@ parseRewrite = label "rewrite" $ do
   scrut <- parseTerm
   body <- parseTerm
   return (Pat [scrut] [] [([Rfl], body)])
+
+-- | Syntax: absurd expr
+-- Desugars to: match expr {}
+parseAbsurd :: Parser Term
+parseAbsurd = label "absurd" $ do
+  _ <- symbol "absurd"
+  scrut <- parseTerm
+  return (Pat [scrut] [] [])
 
 -- | Syntax: (term1, term2) | (f arg1 arg2)
 -- Disambiguates between tuples and applications
