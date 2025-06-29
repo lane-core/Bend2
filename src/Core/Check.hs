@@ -189,6 +189,7 @@ inferOp2Type d span book ctx op a b ta tb = do
     MUL -> numericOp ta tb
     DIV -> numericOp ta tb
     MOD -> numericOp ta tb
+    POW -> numericOp ta tb
     -- Comparison ops return Bool
     EQL -> comparisonOp ta tb
     NEQ -> comparisonOp ta tb

@@ -209,6 +209,7 @@ whnfOp2 lv d book op a b =
       XOR -> Val (U64_V (x `xor` y))
       SHL -> Val (U64_V (x `shiftL` fromIntegral y))
       SHR -> Val (U64_V (x `shiftR` fromIntegral y))
+      POW -> Val (U64_V (x ^ y))
     (Val (I64_V x), Val (I64_V y)) -> case op of
       ADD -> Val (I64_V (x + y))
       SUB -> Val (I64_V (x - y))
@@ -227,6 +228,7 @@ whnfOp2 lv d book op a b =
       XOR -> Val (U64_V (fromIntegral x `xor` fromIntegral y))
       SHL -> Val (U64_V (fromIntegral x `shiftL` fromIntegral y))
       SHR -> Val (U64_V (fromIntegral x `shiftR` fromIntegral y))
+      POW -> Val (I64_V (x ^ y))
     (Val (F64_V x), Val (F64_V y)) -> case op of
       ADD -> Val (F64_V (x + y))
       SUB -> Val (F64_V (x - y))
@@ -245,6 +247,7 @@ whnfOp2 lv d book op a b =
       XOR -> Val (U64_V (castDoubleToWord64 x `xor` castDoubleToWord64 y))
       SHL -> Val (U64_V (castDoubleToWord64 x `shiftL` fromIntegral (castDoubleToWord64 y)))
       SHR -> Val (U64_V (castDoubleToWord64 x `shiftR` fromIntegral (castDoubleToWord64 y)))
+      POW -> Val (F64_V (x ** y))
     (Val (CHR_V x), Val (CHR_V y)) -> case op of
       ADD -> Val (CHR_V (toEnum (fromEnum x + fromEnum y)))
       SUB -> Val (CHR_V (toEnum (fromEnum x - fromEnum y)))
@@ -263,6 +266,7 @@ whnfOp2 lv d book op a b =
       XOR -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
       SHL -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
       SHR -> Op2 op (Val (CHR_V x)) (Val (CHR_V y)) -- bitwise not defined for chars
+      POW -> Val (CHR_V (toEnum ((fromEnum x) ^ (fromEnum y))))
     (a', b') -> Op2 op a' b'
 
 whnfOp1 :: Int -> Int -> Book -> NOp1 -> Term -> Term

@@ -45,6 +45,7 @@ parseTermIni = choice
   , parseTildeExpr
   , parseEfq
   , parseOne
+  , parseReturn
   , parseNat
   , parseNatLit
   , parseNumLit
@@ -458,6 +459,13 @@ parseLstLit = label "list literal" $ do
   _ <- symbol "]"
   return $ foldr Con Nil terms
 
+-- | Syntax: return term
+parseReturn :: Parser Term
+parseReturn = label "return statement" $ do
+  _ <- try $ symbol "return"
+  t <- parseTerm
+  return t
+
 -- | Syntax: {==} | finally
 parseRfl :: Parser Term
 parseRfl = label "reflexivity ({==} or finally)" $ choice
@@ -595,12 +603,13 @@ parseNumOp lhs = label "numeric operation" $ do
       ]
     , [ try $ symbol "===" >> return EQL
       , try $ symbol "!=" >> return NEQ
+      , try $ symbol "&&" >> return AND
+      , try $ symbol "||" >> return OR
+      , try $ symbol "**" >> return POW
       , try $ symbol "-"  >> return SUB
       , try $ symbol "*"  >> return MUL
       , try $ symbol "/"  >> return DIV
       , try $ symbol "%"  >> return MOD
-      , try $ symbol "&&" >> return AND
-      , try $ symbol "||" >> return OR
       , try $ symbol "^"  >> return XOR
       ]
     ]
@@ -908,3 +917,4 @@ doReadTerm input =
   case doParseTerm "<input>" input of
     Left err  -> error err
     Right res -> res
+    

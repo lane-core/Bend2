@@ -31,7 +31,7 @@ data NVal
   deriving (Show, Eq)
 
 data NOp2
-  = ADD | SUB | MUL | DIV | MOD
+  = ADD | SUB | MUL | DIV | MOD | POW
   | EQL | NEQ  
   | LST | GRT | LEQ | GEQ
   | AND | OR  | XOR
@@ -268,6 +268,7 @@ instance Show Term where
   show (Op2 XOR a b)   = "(" ++ show a ++ " ^ " ++ show b ++ ")"
   show (Op2 SHL a b)   = "(" ++ show a ++ " << " ++ show b ++ ")"
   show (Op2 SHR a b)   = "(" ++ show a ++ " >> " ++ show b ++ ")"
+  show (Op2 POW a b)   = "(" ++ show a ++ " ** " ++ show b ++ ")"
   show (Op1 NOT a)     = "(!" ++ show a ++ ")"
   show (Op1 NEG a)     = "(-" ++ show a ++ ")"
   show (Pat t m c)     = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ " }" where
