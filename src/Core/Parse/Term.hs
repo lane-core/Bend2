@@ -570,15 +570,19 @@ parseLst t = label "list type" $ do
   _ <- try $ symbol "[]"
   return (Lst t)
 
--- | Syntax: Type{term1 == term2}
+-- | Syntax: Type{term1 == term2} or Type{term1 != term2}
 parseEql :: Term -> Parser Term
 parseEql t = label "equality type" $ do
   _ <- try $ symbol "{"
   a <- parseExpr
-  _ <- symbol "=="
+  op <- choice
+    [ symbol "==" >> return True
+    , symbol "!=" >> return False
+    ]
   b <- parseExpr
   _ <- symbol "}"
-  return (Eql t a b)
+  let eql = Eql t a b
+  return $ if op then eql else App (Ref "Not") eql
 
 -- | Parse numeric binary operations
 parseNumOp :: Term -> Parser Term
