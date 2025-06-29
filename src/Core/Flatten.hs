@@ -58,7 +58,7 @@ flatten d Set         = Set
 flatten d (Ann x t)   = Ann (flatten d x) (flatten d t)
 flatten d (Chk x t)   = Chk (flatten d x) (flatten d t)
 flatten d Emp         = Emp
-flatten d Efq         = Efq
+flatten d (EmpM x)    = EmpM (flatten d x)
 flatten d Uni         = Uni
 flatten d One         = One
 flatten d (UniM x f)  = UniM (flatten d x) (flatten d f)
@@ -221,7 +221,7 @@ unpat d Set             = Set
 unpat d (Ann x t)       = Ann (unpat d x) (unpat d t)
 unpat d (Chk x t)       = Chk (unpat d x) (unpat d t)
 unpat d Emp             = Emp
-unpat d Efq             = Efq
+unpat d (EmpM x)        = EmpM (unpat d x)
 unpat d Uni             = Uni
 unpat d One             = One
 unpat d (UniM x f)      = UniM (unpat d x) (unpat d f)
@@ -262,7 +262,7 @@ unpat d (Pri p)         = Pri p
 unpat d (Loc s t)       = Loc s (unpat d t)
 unpat d (Rwt a b f)     = Rwt (unpat d a) (unpat d b) (unpat d f)
 unpat d (Pat [s] ms cs) = desugarWiths ms (match d s ms cs)
-unpat d (Pat ss  ms []) = Efq
+unpat d (Pat ss  ms []) = One
 unpat d (Pat ss  ms cs) = error "unpat: multiple scrutinees after flattening"
 
 -- Desugars `with` statements into `let` bindings.
@@ -405,7 +405,7 @@ match d x ms (([(cut -> Var k i)], body) : _) =
 -- -----------
 -- λ{}
 match d x ms [] =
-  wrap d ms Efq
+  wrap d ms (EmpM x)
 
 -- Invalid pattern
 match d s ms cs = error $ "match - invalid pattern: " ++ show (d, s, ms, cs)
@@ -426,7 +426,7 @@ lamsTerm d ks (UniM x u)   = UniM x (lams d ks u)
 lamsTerm d ks (SigM x p)   = SigM x (lams d ks p)
 lamsTerm d ks (EnuM x c e) = EnuM x [(s, lams d ks t) | (s,t) <- c] (lams d ks e)
 lamsTerm d ks (EqlM x r)   = EqlM x (lams d ks r)
-lamsTerm d ks Efq          = Efq
+lamsTerm d ks (EmpM x)     = EmpM x
 lamsTerm d ks other        = error $ "lamsTerm: unexpected term: " ++ show other
 
 unpatBook :: Book -> Book
@@ -491,7 +491,7 @@ subst name val term = go name val term where
     Chk x t    -> Chk (go name val x) (go name val t)
     Set        -> Set
     Emp        -> Emp
-    Efq        -> Efq
+    EmpM x     -> EmpM (go name val x)
     Uni        -> Uni
     One        -> One
     UniM x f   -> UniM (go name val x) (go name val f)

@@ -62,7 +62,7 @@ infer d span book ctx term =
       Done Set
     Emp -> do
       Done Set
-    Efq -> do
+    EmpM _ -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Uni -> do
       Done Set
@@ -279,10 +279,18 @@ check d span book ctx term goal =
     (Lam k f, All a (Lam _ b)) -> do
       let x = Ann (Var k d) a
       check (d+1) span book (extend ctx k (Var k d) a) (f x) (b x)
-    (Efq, All a _) -> do
-      case force d book a of
-        Emp -> Done ()
-        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Emp) (format d book a)
+    (EmpM x, goal) -> do
+      xT <- infer d span book ctx x
+      case force d book xT of
+        Emp -> do
+          Done ()
+        Eql t a b -> do
+          check d span book ctx a t
+          check d span book ctx b t
+          if not (equal d book a b)
+            then Done ()
+            else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
+        _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Emp) (format d book xT)
     (UniM x f, goal) -> do
       xT <- infer d span book ctx x
       case force d book xT of
@@ -411,7 +419,7 @@ checkBook book@(Book defs) = mapM_ checkDef (M.toList defs)
 isLamApp :: Term -> Bool
 isLamApp (cut -> App f _)    = isLamApp f
 isLamApp (cut -> Lam _ _)    = True
-isLamApp (cut -> Efq)        = True
+isLamApp (cut -> EmpM _)     = True
 isLamApp (cut -> UniM _ _)   = True
 isLamApp (cut -> BitM _ _ _) = True
 isLamApp (cut -> NatM _ _ _) = True

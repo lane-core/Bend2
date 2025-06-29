@@ -65,8 +65,8 @@ data Term
   | Chk Term Type -- x::t
 
   -- Empty
-  | Emp -- Empty
-  | Efq -- λ{}
+  | Emp       -- Empty
+  | EmpM Term -- ~x{}
 
   -- Unit
   | Uni            -- Unit
@@ -189,7 +189,7 @@ instance Show Term where
   show (Ann x t)      = "<" ++ show x ++ ":" ++ show t ++ ">"
   show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
   show (Emp)          = "Empty"
-  show (Efq)          = "λ{}"
+  show (EmpM x)       = "~" ++ show x ++ "{}"
   show (Uni)          = "Unit"
   show (One)          = "()"
   show (UniM x f)     = "~ " ++ show x ++ " { (): " ++ show f ++ " }"

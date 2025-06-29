@@ -44,7 +44,7 @@ collectRefs term = case term of
   Ann x t     -> S.union (collectRefs x) (collectRefs t)
   Chk x t     -> S.union (collectRefs x) (collectRefs t)
   Emp         -> S.empty
-  Efq         -> S.empty
+  EmpM x      -> collectRefs x
   Uni         -> S.empty
   One         -> S.empty
   UniM x f    -> S.union (collectRefs x) (collectRefs f)

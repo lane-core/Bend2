@@ -24,7 +24,7 @@ binder lv term ctx vars = case term of
   Ann x t    -> Ann (binder lv x ctx vars) (binder lv t ctx vars)
   Chk x t    -> Chk (binder lv x ctx vars) (binder lv t ctx vars)
   Emp        -> Emp
-  Efq        -> Efq
+  EmpM x     -> EmpM (binder lv x ctx vars)
   Uni        -> Uni
   One        -> One
   UniM x f   -> UniM (binder lv x ctx vars) (binder lv f ctx vars)

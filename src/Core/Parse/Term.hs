@@ -43,7 +43,6 @@ parseTermIni = choice
   , parseAll
   , parseSig
   , parseTildeExpr
-  , parseEfq
   , parseOne
   , parseReturn
   , parseNat
@@ -122,9 +121,6 @@ parseVar = label "variable" $ do
     "U64_TO_CHAR" -> return (Pri U64_TO_CHAR)
     _             -> return $ Var n 0
 
--- | Syntax: λ{}
-parseEfq :: Parser Term
-parseEfq = label "empty type eliminator (λ{})" $ symbol "λ{}" >> return Efq
 
 -- | Syntax: ()
 parseOne :: Parser Term
@@ -262,11 +258,7 @@ parsePat = label "pattern match" $ do
 -- | Syntax: case pattern1 pattern2: body
 -- Indentation-sensitive clause list (stops when out-dented)
 parseIndentClauses :: Int -> Int -> Parser [Case]
-parseIndentClauses col arity = many1 where
-    many1 = do
-      first <- clause
-      rest  <- many (try clause)
-      pure (first:rest)
+parseIndentClauses col arity = many clause where
 
     clause = label "case clause" . try $ do
       skip                               -- eat leading ws / newlines
@@ -774,17 +766,24 @@ parseTildeExpr = label "tilde expression (induction or match)" $ do
         case is_match of
           Just _ -> do -- It's a match expression
             _ <- symbol "{"
-            term <- choice
-              [ parseUniMCases scrut
-              , parseBitMCases scrut
-              , parseNatMCases scrut
-              , parseLstMCases scrut
-              , parseSigMCases scrut
-              , parseEqlMCases scrut
-              , parseEnuMCases scrut
-              ]
-            _ <- symbol "}"
-            return term
+            -- Check for empty pattern match first
+            mb_close <- optional (lookAhead (symbol "}"))
+            case mb_close of
+              Just _ -> do
+                _ <- symbol "}"
+                return (EmpM scrut)
+              Nothing -> do
+                term <- choice
+                  [ parseUniMCases scrut
+                  , parseBitMCases scrut
+                  , parseNatMCases scrut
+                  , parseLstMCases scrut
+                  , parseSigMCases scrut
+                  , parseEqlMCases scrut
+                  , parseEnuMCases scrut
+                  ]
+                _ <- symbol "}"
+                return term
           Nothing -> return (Ind scrut) -- It's an Ind expression
     ]
 

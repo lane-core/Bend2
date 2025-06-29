@@ -75,7 +75,7 @@ termToCT book term dep = case term of
   Ann x _    -> termToCT book x dep
   Chk x _    -> termToCT book x dep
   Emp        -> CEra
-  Efq        -> CEra
+  EmpM _     -> CEra
   Uni        -> CEra
   Bit        -> CEra
   Nat        -> CEra
@@ -629,7 +629,7 @@ termToCT book term dep = case term of
   Ann x _    -> termToCT book x dep
   Chk x _    -> termToCT book x dep
   Emp        -> CEra
-  Efq        -> CEra
+  EmpM _     -> CEra
   Uni        -> CEra
   Bit        -> CEra
   Nat        -> CEra

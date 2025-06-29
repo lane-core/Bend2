@@ -302,7 +302,7 @@ normal lv d book term =
     Ann x t    -> Ann (normal lv d book x) (normal lv d book t)
     Chk x t    -> Chk (normal lv d book x) (normal lv d book t)
     Emp        -> Emp
-    Efq        -> Efq
+    EmpM x     -> EmpM (normal lv d book x)
     Uni        -> Uni
     One        -> One
     UniM x f   -> UniM (normal lv d book x) (normal lv d book f)

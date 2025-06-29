@@ -38,7 +38,7 @@ cmp lv d book a b =
     (Ann xa ta    , Ann xb tb    ) -> eql lv d book xa xb && eql lv d book ta tb
     (Chk xa ta    , Chk xb tb    ) -> eql lv d book xa xb && eql lv d book ta tb
     (Emp          , Emp          ) -> True
-    (Efq          , Efq          ) -> True
+    (EmpM xa      , EmpM xb      ) -> eql lv d book xa xb
     (Uni          , Uni          ) -> True
     (One          , One          ) -> True
     (UniM xa fa   , UniM xb fb   ) -> eql lv d book xa xb && eql lv d book fa fb

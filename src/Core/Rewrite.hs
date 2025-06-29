@@ -31,7 +31,7 @@ rewriteGo lv d book old neo val = case val of
   Ann x t    -> Ann (rewrite lv d book old neo x) (rewrite lv d book old neo t)
   Chk x t    -> Chk (rewrite lv d book old neo x) (rewrite lv d book old neo t)
   Emp        -> Emp
-  Efq        -> Efq
+  EmpM x     -> EmpM (rewrite lv d book old neo x)
   Uni        -> Uni
   One        -> One
   UniM x f   -> UniM (rewrite lv d book old neo x) (rewrite lv d book old neo f)
