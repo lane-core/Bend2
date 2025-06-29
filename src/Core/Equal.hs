@@ -64,6 +64,8 @@ cmp lv d book a b =
     (Lam ka fa    , Lam kb fb    ) -> eql lv (d+1) book (fa (Var ka d)) (fb (Var kb d))
     (App fa xa    , App fb xb    ) -> eql lv d book fa fb && eql lv d book xa xb
     (Eql ta aa ba , Eql tb ab bb ) -> eql lv d book ta tb && eql lv d book aa ab && eql lv d book ba bb
+    -- (Eql ta _  _  , b            ) -> eql lv d book ta b
+    -- (a            , Eql tb _  _  ) -> eql lv d book a tb
     (Rfl          , Rfl          ) -> True
     (EqlM xa fa   , EqlM xb fb   ) -> eql lv d book xa xb && eql lv d book fa fb
     (Ind ta       , b            ) -> eql lv d book ta b

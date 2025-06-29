@@ -2,6 +2,22 @@
 def id<A>(x: A) -> A:
   x
 
+# Type Negation
+def Not(A: Set) -> Set:
+  A -> Empty
+
+# Congruence of equality
+def app
+  ( A: Set
+  , B: Set
+  , a: A
+  , b: A
+  , f: A -> B
+  , e: A{a == b}
+  ) -> B{f(a) == f(b)}:
+  rewrite e
+  finally
+
 # Negation on booleans
 # - not(True)  = False
 # - not(False) = True
@@ -42,18 +58,6 @@ def div2(n: Nat) -> Nat:
     case 2n + p:
       1n + div2(p)
 
-# Congruence of equality
-def cong
-  ( A: Set
-  , B: Set
-  , a: A
-  , b: A
-  , f: A -> B
-  , e: A{a == b}
-  ) -> B{f(a) == f(b)}:
-  rewrite e
-  finally
-
 # Proof: n*2/2 = n (old method)
 def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
   match n:
@@ -61,16 +65,32 @@ def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
       finally
     case 1n + p:
       ind = div2_mul2_theo(p)
-      prf = cong(Nat, Nat, div2(mul2(p)), p, λx. 1n + x, ind)
+      prf = app(Nat, Nat, div2(mul2(p)), p, λx. 1n + x, ind)
       prf
 
+# Nat Predecessor
+def pred(n: Nat) -> Nat:
+  match n:
+    case 0n:
+      return 0n
+    case 1n + p:
+      return p
+
+# Nat Addition
+def add(a: Nat, b: Nat) -> Nat:
+  match a:
+    case 0n:
+      b
+    case 1n + p:
+      1n + add(p, b)
+
 # Nat Equality
-def equal(a: Nat, b: Nat) -> Bool:
+def eql(a: Nat, b: Nat) -> Bool:
   match a b:
     case 0n   0n  : True
     case 1n+a 0n  : False
     case 0n   1n+b: False
-    case 1n+a 1n+b: equal(a, b)
+    case 1n+a 1n+b: eql(a, b)
 
 # Proof: n*2/2 = n (simpler method)
 def div2_mul2_theo_2(n: Nat) -> Nat{(div2 (mul2 n)) == n}:
@@ -127,6 +147,48 @@ def map<A,B>(f: A -> B, xs: A[]) -> B[]:
     case x <> xs:
       f(x) <> map<A,B>(f, xs)
 
+# Add: reduce zero on right
+def zero_right(a: Nat) -> Nat{a == add(a,0n)}:
+  match a:
+    case 0n:
+      finally
+    case 1n + ap:
+      1n + zero_right(ap)
+
+# Add: reduce succ on right
+def succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
+  match a:
+    case 0n:
+      finally
+    case 1n + ap:
+      1n + succ_right(ap,b)
+
+# Add commutes
+def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
+  match a:
+    case 0n:
+      zero_right(b)
+    case 1n+ap:
+      rewrite comm(ap,b)
+      rewrite succ_right(b,ap)
+      finally
+
+# 0 != 1+n
+def succ_neq_zero(n: Nat) -> Nat{0n != (1n+n)}:
+  lambda e. match e {}
+
+# 1n+n = 1n+m implies n = m
+def succ_inj(n: Nat, m: Nat, e: Nat{(1n+n)==(1n+m)}) -> Nat{n==m}:
+  match n m e:
+    case 0n 0n e:
+      finally
+    case 1n+n 0n e:
+      absurd e
+    case 0n 1n+m e:
+      absurd e
+    case 1n+n 1n+m e:
+      app<Nat,Nat>(1n+1n+n, 1n+1n+m, pred, e)
+
 # Inductive Datatype
 # ------------------
 
@@ -160,35 +222,3 @@ def VecInd
       rewrite e
       C(n,h,t,VecInd(A,P,N,C,n,t))
 
-# Commutation of Addition
-# -----------------------
-
-def add(a: Nat, b: Nat) -> Nat:
-  match a:
-    case 0n:
-      b
-    case 1n + p:
-      1n + add(p, b)
-
-def zero_right(a: Nat) -> Nat{a == add(a,0n)}:
-  match a:
-    case 0n:
-      finally
-    case 1n + ap:
-      1n + zero_right(ap)
-
-def succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
-  match a:
-    case 0n:
-      finally
-    case 1n + ap:
-      1n + succ_right(ap,b)
-
-def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
-  match a:
-    case 0n:
-      zero_right(b)
-    case 1n+ap:
-      rewrite comm(ap,b)
-      rewrite succ_right(b,ap)
-      finally

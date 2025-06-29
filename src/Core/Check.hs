@@ -135,6 +135,7 @@ infer d span book ctx term =
             All fA fB -> do
               check d span book ctx x fA
               Done $ App fB x
+
             _ -> do
               Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (All (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (format d book fT)
     Eql t a b -> do
