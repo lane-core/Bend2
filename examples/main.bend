@@ -196,15 +196,6 @@ def succ_inj(n: Nat, m: Nat, e: Nat{(1n+n)==(1n+m)}) -> Nat{n==m}:
     case 1n+n 1n+m e:
       app<Nat,Nat>(1n+1n+n, 1n+1n+m, pred, e)
 
-## Left-distributivity of multiplication over addition
-#def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
-  #match n:
-    #case 0n:
-      #finally
-    #case 1n + p:
-      #rewrite mul_dist_left(p,m,k)
-      #()
-
 # Inductive Datatype
 # ------------------
 
@@ -235,3 +226,79 @@ def VecInd
     case @Cons{n,h,t,e}:
       rewrite e
       C(n,h,t,VecInd(A,P,N,C,n,t))
+
+# Proofs by o3
+# ------------
+
+# Add: reduce zero on the *left*
+def zero_left(b: Nat) -> Nat{add(0n, b) == b}:
+  finally
+
+# Add: associativity (helper)
+def assoc(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
+  match a:
+    case 0n:
+      finally
+    case 1n + ap:
+      1n + assoc(ap, b, c)
+
+# Left-distributivity of multiplication over addition
+def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
+  match n:
+    case 0n:
+      finally
+    case 1n + p:
+      rewrite mul_dist_left(p, m, k)               #- Goal: Nat{add(add(m,k),add(mul(p,m),mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      rewrite assoc(m, k, add(mul(p,m),mul(p,k)))  #- Goal: Nat{add(m,add(k,add(mul(p,m),mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      rewrite comm(k, add(mul(p,m),mul(p,k)))      #- Goal: Nat{add(m,add(add(mul(p,m),mul(p,k)),k)) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      rewrite assoc(mul(p,m), mul(p,k), k)         #- Goal: Nat{add(m,add(mul(p,m),add(mul(p,k),k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      rewrite comm(mul(p,k), k)                    #- Goal: Nat{add(m,add(mul(p,m),add(k,mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      rewrite assoc(m, mul(p,m), add(k,mul(p,k)))  #- Goal: Nat{add(add(m,mul(p,m)),add(k,mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      finally
+
+# Multiplication: zero on the **right**
+def mul_zero_right(n: Nat) -> Nat{mul(n, 0n) == 0n}:
+  match n:
+    case 0n:
+      finally
+    case 1n + p:
+      rewrite mul_zero_right(p) #- Goal: Nat{add(0n, 0n) == 0n}
+      finally
+
+# Multiplication: zero on the **left**
+def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
+  finally
+
+# Multiplication: zero on the **left**
+def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
+  finally
+
+# Multiplication: successor on the **left**
+def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
+  finally
+
+## Multiplication: successor on the **right**
+#def succ_right_mul(a: Nat, b: Nat)
+  #-> Nat{mul(a, 1n + b) == add(mul(a,b), a)}:
+  #match a:
+    #case 0n:
+      #finally
+    #case 1n + p:
+                                                   ##- Goal: Nat{mul(1n+p , 1n+b) == add(mul(1n+p , b), 1n+p)}
+      #rewrite succ_left_mul(p, 1n + b)            #- Goal: Nat{add(1n+b , mul(p , 1n+b)) == add(mul(1n+p , b), 1n+p)}
+      #rewrite succ_left_mul(p, b)                 #- Goal: Nat{add(1n+b , mul(p , 1n+b)) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite succ_right_mul(p , b)               #- Goal: Nat{add(1n+b , add(mul(p,b), p)) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite assoc(1n + b , mul(p,b) , p)        #- Goal: Nat{add(add(1n+b , mul(p,b)), p) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite comm(1n + b , mul(p,b))             #- Goal: Nat{add(add(mul(p,b) , 1n+b), p) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite assoc(mul(p,b) , 1n + b , p)        #- Goal: Nat{add(mul(p,b) , add(1n+b , p)) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite comm(1n + b , p)                    #- Goal: Nat{add(mul(p,b) , add(p , 1n+b)) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite succ_right(p , b)                   #- Goal: Nat{add(mul(p,b) , 1n + add(p,b)) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite comm(mul(p,b) , 1n + add(p,b))      #- Goal: Nat{add(1n + add(p,b) , mul(p,b)) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite assoc(1n , p , b)                   #- Goal: Nat{add(add(1n+p , b) , mul(p,b)) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite assoc(1n + p , b , mul(p,b))        #- Goal: Nat{add(1n+p , add(b , mul(p,b))) == add(add(b , mul(p,b)), 1n+p)}
+      #rewrite comm(1n + p , add(b , mul(p,b)))    #- Goal: Nat{add(add(b , mul(p,b)) , 1n+p) == add(add(b , mul(p,b)) , 1n+p)}
+      #finally
+
+
+
+
