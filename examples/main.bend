@@ -276,16 +276,3 @@ def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
 # Multiplication: successor on the **left**
 def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
   finally
-
-# Multiplication: successor on the **right**
-def succ_right_mul(a: Nat, b: Nat)
-  -> Nat{mul(a, 1n + b) == add(mul(a,b), a)}:
-  match a:
-    case 0n:
-      finally
-    case 1n + p:
-      ()
-
-
-
-

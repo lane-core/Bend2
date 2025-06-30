@@ -205,9 +205,9 @@ instance Show Term where
   show (Nil)          = "[]"
   show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
   show (LstM x n c)   = "~ " ++ show x ++ " { []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
-  show (Enu s)        = "{" ++ intercalate "," (map (\x -> "@" ++ x) s) ++ "}"
-  show (Sym s)        = "@" ++ s
-  show (EnuM x c e)   = "~ " ++ show x ++ " { " ++ intercalate " ; " (map (\(s,t) -> "@" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
+  show (Enu s)        = "&{" ++ intercalate "," (map (\x -> "&" ++ x) s) ++ "}"
+  show (Sym s)        = "&" ++ s
+  show (EnuM x c e)   = "~ " ++ show x ++ " { " ++ intercalate " ; " (map (\(s,t) -> "&" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
   show (Sig a b)      = sig a b where
     sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
     sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))

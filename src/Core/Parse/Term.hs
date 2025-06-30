@@ -196,41 +196,60 @@ parseAllSimple = do
 -- Enum Type Parsers
 -- -----------------
 
--- | Syntax: @{tag1, tag2, tag3}
+-- | Syntax: &{tag1, tag2, tag3}
 parseEnu :: Parser Term
 parseEnu = label "enum type" $ do
-  _ <- try $ symbol "@{"
+  _ <- try $ symbol "&{"
   s <- sepBy parseSymbolName (symbol ",")
   _ <- symbol "}"
   return (Enu s)
 
--- | Syntax: @name
+-- | Syntax: &name
 -- Helper for parsing enum tag names
 parseSymbolName :: Parser String
 parseSymbolName = do
-  _ <- symbol "@"
+  _ <- symbol "&"
   n <- some (satisfy isNameChar)
   return n
 
--- | Syntax: @tag | @tag{field1, field2}
+-- | Syntax: @tag | @tag{field1, field2} | &tag
 parseSym :: Parser Term
 parseSym = label "enum symbol / constructor" $ try $ do
-  _ <- symbol "@"
-  notFollowedBy (char '{')          -- make sure we are *not* an Enum "@{"
-  n <- some (satisfy isNameChar)
-  mfields <- optional $ try $ do
-    _ <- symbol "{"
-    f <- sepEndBy parseTerm (symbol ",")
-    _ <- symbol "}"
-    return f
-  return $ case mfields of
-    Nothing -> Sym n
-    Just fs -> buildCtor n fs
+  choice
+    [ parseConstructor  -- @tag{...} -> (&tag,(fields...))
+    , parseNewSymbol    -- &tag
+    , parseOldSymbol    -- @tag -> (&tag,())
+    ]
   where
+    -- Parse @tag{...} constructor syntax (unchanged)
+    parseConstructor = try $ do
+      _ <- symbol "@"
+      n <- some (satisfy isNameChar)
+      _ <- symbol "{"
+      f <- sepEndBy parseTerm (symbol ",")
+      _ <- symbol "}"
+      return $ buildCtor n f
+    
+    -- Parse new &tag bare symbol syntax  
+    parseNewSymbol = try $ do
+      _ <- char '&'
+      notFollowedBy (char '{')  -- make sure we are not &{...} enum type
+      n <- some (satisfy isNameChar)
+      skip
+      return $ Sym n
+    
+    -- Parse old @tag bare symbol syntax and desugar to (&tag,())
+    parseOldSymbol = try $ do
+      _ <- symbol "@"
+      notFollowedBy (char '{')  -- make sure we are not @{...} or @tag{...}
+      n <- lexeme $ some (satisfy isNameChar)
+      -- Desugar @Foo to (&Foo,())
+      return $ Tup (Sym n) One
+    
     buildCtor :: String -> [Term] -> Term
     buildCtor tag fs =
       let tup = foldr Tup One fs       -- Build (f1,(f2,(...,()))
-      in  Tup (Sym tag) tup            -- (@Tag,(f1,(f2,(...,()))))
+      in  Tup (Sym tag) tup            -- (&Tag,(f1,(f2,(...,()))))
 
 -- | Syntax: match expr: case pat: body | match expr { case pat: body }
 parsePat :: Parser Term
@@ -883,12 +902,12 @@ parseEqlMCases scrut = do
   _ <- parseSemi
   return (EqlM scrut f)
 
--- | Syntax: @tag1: term1; @tag2: term2; ...; default;
+-- | Syntax: &tag1: term1; &tag2: term2; ...; default; (also accepts @tag for compatibility)
 parseEnuMCases :: Term -> Parser Term
 parseEnuMCases scrut = do
-  _ <- try (lookAhead (symbol "@"))
+  _ <- try (lookAhead (choice [symbol "@", symbol "&"]))
   cases <- many $ try $ do
-    _ <- symbol "@"
+    _ <- choice [symbol "@", symbol "&"]
     s <- some (satisfy isNameChar)
     _ <- symbol ":"
     t <- parseTerm
@@ -897,6 +916,7 @@ parseEnuMCases scrut = do
   def <- option One $ try $ do
     notFollowedBy (symbol "}")
     notFollowedBy (symbol "@")
+    notFollowedBy (symbol "&")
     term <- parseTerm
     _ <- parseSemi
     return term
