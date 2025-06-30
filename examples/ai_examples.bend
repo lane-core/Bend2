@@ -178,4 +178,4 @@ def succ_inj(n: Nat, m: Nat, e: Nat{(1n+n)==(1n+m)}) -> Nat{n==m}:
       absurd e
     case 1n+n 1n+m e:
       # Nat{1n+n==1n+m}
-      app<Nat,Nat>(1n+1n+n, 1n+1n+m, pred, e)
+      return app<Nat,Nat>(1n+1n+n, 1n+1n+m, pred, e)
