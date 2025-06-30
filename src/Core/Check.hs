@@ -319,7 +319,10 @@ check d span book ctx term goal =
           let all_covered = length covered_syms >= length syms
                          && all (`elem` syms) covered_syms
           if not all_covered
-            then check d span book ctx df goal
+            then do
+              let enu_type = Enu syms
+              let lam_goal = All enu_type (Lam "_" (\_ -> goal))
+              check d span book ctx df lam_goal
             else Done ()
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu [])) (format d book xT)
     (SigM x f, goal) -> do
