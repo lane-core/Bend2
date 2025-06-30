@@ -277,27 +277,14 @@ def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
 def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
   finally
 
-## Multiplication: successor on the **right**
-#def succ_right_mul(a: Nat, b: Nat)
-  #-> Nat{mul(a, 1n + b) == add(mul(a,b), a)}:
-  #match a:
-    #case 0n:
-      #finally
-    #case 1n + p:
-                                                   ##- Goal: Nat{mul(1n+p , 1n+b) == add(mul(1n+p , b), 1n+p)}
-      #rewrite succ_left_mul(p, 1n + b)            #- Goal: Nat{add(1n+b , mul(p , 1n+b)) == add(mul(1n+p , b), 1n+p)}
-      #rewrite succ_left_mul(p, b)                 #- Goal: Nat{add(1n+b , mul(p , 1n+b)) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite succ_right_mul(p , b)               #- Goal: Nat{add(1n+b , add(mul(p,b), p)) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite assoc(1n + b , mul(p,b) , p)        #- Goal: Nat{add(add(1n+b , mul(p,b)), p) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite comm(1n + b , mul(p,b))             #- Goal: Nat{add(add(mul(p,b) , 1n+b), p) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite assoc(mul(p,b) , 1n + b , p)        #- Goal: Nat{add(mul(p,b) , add(1n+b , p)) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite comm(1n + b , p)                    #- Goal: Nat{add(mul(p,b) , add(p , 1n+b)) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite succ_right(p , b)                   #- Goal: Nat{add(mul(p,b) , 1n + add(p,b)) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite comm(mul(p,b) , 1n + add(p,b))      #- Goal: Nat{add(1n + add(p,b) , mul(p,b)) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite assoc(1n , p , b)                   #- Goal: Nat{add(add(1n+p , b) , mul(p,b)) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite assoc(1n + p , b , mul(p,b))        #- Goal: Nat{add(1n+p , add(b , mul(p,b))) == add(add(b , mul(p,b)), 1n+p)}
-      #rewrite comm(1n + p , add(b , mul(p,b)))    #- Goal: Nat{add(add(b , mul(p,b)) , 1n+p) == add(add(b , mul(p,b)) , 1n+p)}
-      #finally
+# Multiplication: successor on the **right**
+def succ_right_mul(a: Nat, b: Nat)
+  -> Nat{mul(a, 1n + b) == add(mul(a,b), a)}:
+  match a:
+    case 0n:
+      finally
+    case 1n + p:
+      ()
 
 
 
