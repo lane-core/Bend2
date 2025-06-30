@@ -17,7 +17,7 @@ import Debug.Trace
 rewrite :: Int -> Int -> Book -> Term -> Term -> Term -> Term
 rewrite lv d book old neo val
   | equal d book old val = neo
-  | otherwise            = rewriteGo lv d book old neo $ whnf 2 d book val
+  | otherwise            = rewriteGo lv d book old neo $ whnf book val
   -- | equal d book old val = trace ("eq " ++ show old ++ " → " ++ show neo ++ " |" ++ show val ++ " → " ++ show (whnf 2 d book val)) $ neo
   -- | otherwise            = trace ("rw " ++ show old ++ " → " ++ show neo ++ " |" ++ show val ++ " → " ++ show (whnf 2 d book val))
                          -- $ rewriteGo lv d book old neo $ whnf 2 d book val

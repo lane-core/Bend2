@@ -1,3 +1,5 @@
+{-# LANGUAGE ViewPatterns #-}
+
 module Core.Type where
 
 import Data.List (intercalate)
@@ -340,8 +342,8 @@ collectArgs = go [] where
   go acc goal              = (acc, goal)
 
 collectApps :: Term -> [Term] -> (Term, [Term])
-collectApps (App f x) args = collectApps f (x:args)
-collectApps f         args = (f, args)
+collectApps (cut -> App f x) args = collectApps f (x:args)
+collectApps f                args = (f, args)
 
 natToInt :: Term -> Maybe Int
 natToInt Zer       = Just 0

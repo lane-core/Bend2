@@ -23,136 +23,136 @@ import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 -- - 3: reduce everything
 
 -- Reduction
-whnf :: Int -> Int -> Book -> Term -> Term
-whnf lv d book term
+whnf :: Book -> Term -> Term
+whnf book term
   | ugly nf   = term
   | otherwise = nf
-  where nf = whnfGo lv d book term
+  where nf = whnfGo book term
 
-whnfGo :: Int -> Int -> Book -> Term -> Term
-whnfGo lv d book term =
+whnfGo :: Book -> Term -> Term
+whnfGo book term =
   case term of
-    Let v f    -> whnfLet lv d book v f
-    Ref k      -> whnfRef lv d book k
-    Fix k f    -> whnfFix lv d book k f
-    Ann x _    -> whnf lv d book x
-    Chk x _    -> whnf lv d book x
-    App f x    -> whnfApp lv d book (App f x) f x
-    Loc _ t    -> whnf lv d book t
-    Op2 o a b  -> whnfOp2 lv d book o a b
-    Op1 o a    -> whnfOp1 lv d book o a
+    Let v f    -> whnfLet book v f
+    Ref k      -> whnfRef book k
+    Fix k f    -> whnfFix book k f
+    Ann x _    -> whnf book x
+    Chk x _    -> whnf book x
+    App f x    -> whnfApp book (App f x) f x
+    Loc _ t    -> whnf book t
+    Op2 o a b  -> whnfOp2 book o a b
+    Op1 o a    -> whnfOp1 book o a
     Pri p      -> Pri p
-    UniM x f   -> whnfUniM lv d book term x f
-    BitM x f t -> whnfBitM lv d book term x f t
-    NatM x z s -> whnfNatM lv d book term x z s
-    LstM x n c -> whnfLstM lv d book term x n c
-    EnuM x c f -> whnfEnuM lv d book term x c f
-    SigM x f   -> whnfSigM lv d book term x f
-    EqlM x f   -> whnfEqlM lv d book term x f
+    UniM x f   -> whnfUniM book term x f
+    BitM x f t -> whnfBitM book term x f t
+    NatM x z s -> whnfNatM book term x z s
+    LstM x n c -> whnfLstM book term x n c
+    EnuM x c f -> whnfEnuM book term x c f
+    SigM x f   -> whnfSigM book term x f
+    EqlM x f   -> whnfEqlM book term x f
     _          -> term
 
 -- Normalizes a let binding
-whnfLet :: Int -> Int -> Book -> Term -> Term -> Term
-whnfLet lv d book v f = whnf lv d book (App f v)
+whnfLet :: Book -> Term -> Term -> Term
+whnfLet book v f = whnf book (App f v)
 
 -- Normalizes a reference
-whnfRef :: Int -> Int -> Book -> Name -> Term
-whnfRef lv d book k =
+whnfRef :: Book -> Name -> Term
+whnfRef book k =
   case deref book k of
-    Just (_, term, _) -> whnf lv d book term
-    Nothing           -> Ref k
+    Just (False, term, _) -> whnf book term
+    otherwise             -> Ref k
 
 -- Normalizes a fixpoint
-whnfFix :: Int -> Int -> Book -> String -> Body -> Term
-whnfFix lv d book k f = whnf lv d book (f (Fix k f))
+whnfFix :: Book -> String -> Body -> Term
+whnfFix book k f = whnf book (f (Fix k f))
 
 -- Normalizes an application
-whnfApp :: Int -> Int -> Book -> Term -> Term -> Term -> Term
-whnfApp lv d book undo f x =
-  case whnf lv d book f of
-    Lam _ f'  -> whnfAppLam lv d book f' x
-    Pri p     -> whnfAppPri lv d book undo p x
-    Sup _ _ _ -> error "Sup interactions unsupported in Haskell"
+whnfApp :: Book -> Term -> Term -> Term -> Term
+whnfApp book undo f x =
+  case whnf book f of
+    Lam _ f'  -> whnfAppLam book f' x
+    Pri p     -> whnfAppPri book undo p x
+    Sup _ _ _ -> error "Sup interactions unsupportein Haskell"
     _         -> undo
 
 -- Normalizes a lambda application
-whnfAppLam :: Int -> Int -> Book -> Body -> Term -> Term
-whnfAppLam lv d book f x = whnf lv d book (f x)
+whnfAppLam :: Book -> Body -> Term -> Term
+whnfAppLam book f x = whnf book (f x)
 
 -- Normalizes a fixpoint application
-whnfAppFix :: Int -> Int -> Book -> Term -> String -> Body -> Term -> Term
-whnfAppFix lv d book undo k f x = whnfApp lv d book undo (f (Fix k f)) x
+whnfAppFix :: Book -> Term -> String -> Body -> Term -> Term
+whnfAppFix book undo k f x = whnfApp book undo (f (Fix k f)) x
 
 -- Eliminator normalizers
 -- ----------------------
 
 -- Normalizes a unit match
-whnfUniM :: Int -> Int -> Book -> Term -> Term -> Term -> Term
-whnfUniM lv d book undo x f =
-  case whnf lv d book x of
-    One -> whnf lv d book f
+whnfUniM :: Book -> Term -> Term -> Term -> Term
+whnfUniM book undo x f =
+  case whnf book x of
+    One -> whnf book f
     _   -> undo
 
 -- Normalizes a boolean match
-whnfBitM :: Int -> Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfBitM lv d book undo x f t =
-  case whnf lv d book x of
-    Bt0 -> whnf lv d book f
-    Bt1 -> whnf lv d book t
+whnfBitM :: Book -> Term -> Term -> Term -> Term -> Term
+whnfBitM book undo x f t =
+  case whnf book x of
+    Bt0 -> whnf book f
+    Bt1 -> whnf book t
     _   -> undo
 
 -- Normalizes a natural number match
-whnfNatM :: Int -> Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfNatM lv d book undo x z s =
-  case whnf lv d book x of
-    Zer   -> whnf lv d book z
-    Suc n -> whnf lv d book (App s (whnf lv d book n))
+whnfNatM :: Book -> Term -> Term -> Term -> Term -> Term
+whnfNatM book undo x z s =
+  case whnf book x of
+    Zer   -> whnf book z
+    Suc n -> whnf book (App s (whnf book n))
     _     -> undo
 
 -- Normalizes a list match
-whnfLstM :: Int -> Int -> Book -> Term -> Term -> Term -> Term -> Term
-whnfLstM lv d book undo x n c =
-  case whnf lv d book x of
-    Nil     -> whnf lv d book n
-    Con h t -> whnf lv d book (App (App c (whnf lv d book h)) (whnf lv d book t))
+whnfLstM :: Book -> Term -> Term -> Term -> Term -> Term
+whnfLstM book undo x n c =
+  case whnf book x of
+    Nil     -> whnf book n
+    Con h t -> whnf book (App (App c (whnf book h)) (whnf book t))
     _       -> undo
 
 -- Normalizes a pair match
-whnfSigM :: Int -> Int -> Book -> Term -> Term -> Term -> Term
-whnfSigM lv d book undo x f =
-  case whnf lv d book x of
-    Tup a b -> whnf lv d book (App (App f (whnf lv d book a)) (whnf lv d book b))
+whnfSigM :: Book -> Term -> Term -> Term -> Term
+whnfSigM book undo x f =
+  case whnf book x of
+    Tup a b -> whnf book (App (App f (whnf book a)) (whnf book b))
     _       -> undo
 
 -- Normalizes an enum match
-whnfEnuM :: Int -> Int -> Book -> Term -> Term -> [(String,Term)] -> Term -> Term
-whnfEnuM lv d book undo x c f =
-  case whnf lv d book x of
+whnfEnuM :: Book -> Term -> Term -> [(String,Term)] -> Term -> Term
+whnfEnuM book undo x c f =
+  case whnf book x of
     Sym s -> case lookup s c of
-      Just t  -> whnf lv d book t
-      Nothing -> whnf lv d book (App f (Sym s))
+      Just t  -> whnf book t
+      Nothing -> whnf book (App f (Sym s))
     _         -> undo
 
 -- Normalizes an equality match
-whnfEqlM :: Int -> Int -> Book -> Term -> Term -> Term -> Term
-whnfEqlM lv d book undo x f =
-  case whnf lv d book x of
-    Rfl -> whnf lv d book f
+whnfEqlM :: Book -> Term -> Term -> Term -> Term
+whnfEqlM book undo x f =
+  case whnf book x of
+    Rfl -> whnf book f
     _   -> undo
 
 -- Normalizes a primitive application
-whnfAppPri :: Int -> Int -> Book -> Term -> PriF -> Term -> Term
-whnfAppPri lv d book undo U64_TO_CHAR x =
-  case whnf lv d book x of
+whnfAppPri :: Book -> Term -> PriF -> Term -> Term
+whnfAppPri book undo U64_TO_CHAR x =
+  case whnf book x of
     Val (U64_V n) -> Val (CHR_V (toEnum (fromIntegral n)))
     _             -> undo
 
 -- Numeric operations
 -- ------------------
 
-whnfOp2 :: Int -> Int -> Book -> NOp2 -> Term -> Term -> Term
-whnfOp2 lv d book op a b =
-  case (whnf lv d book a, whnf lv d book b) of
+whnfOp2 :: Book -> NOp2 -> Term -> Term -> Term
+whnfOp2 book op a b =
+  case (whnf book a, whnf book b) of
     (Val (U64_V x), Val (U64_V y)) -> case op of
       ADD -> Val (U64_V (x + y))
       SUB -> Val (U64_V (x - y))
@@ -230,9 +230,9 @@ whnfOp2 lv d book op a b =
       POW -> Val (CHR_V (toEnum ((fromEnum x) ^ (fromEnum y))))
     (a', b') -> Op2 op a' b'
 
-whnfOp1 :: Int -> Int -> Book -> NOp1 -> Term -> Term
-whnfOp1 lv d book op a =
-  case whnf lv d book a of
+whnfOp1 :: Book -> NOp1 -> Term -> Term
+whnfOp1 book op a =
+  case whnf book a of
     Val (U64_V x) -> case op of
       NOT -> Val (U64_V (complement x))
       NEG -> Op1 op (Val (U64_V x)) -- negation not defined for unsigned
@@ -250,76 +250,82 @@ whnfOp1 lv d book op a =
 -- Normalization
 -- =============
 
-normal :: Int -> Int -> Book -> Term -> Term
-normal lv d book term =
-  -- trace ("normal: " ++ show lv ++ " " ++ show term) $
-  case whnf lv d book term of
+normal :: Int -> Book -> Term -> Term
+normal d book term =
+  -- trace ("normal: " ++ show ++ " " ++ show term) $
+  case whnf book term of
     Var k i    -> Var k i
     Ref k      -> Ref k
-    Sub t      -> normal lv d book t
-    Fix k f    -> Fix k (\x -> normal lv (d+1) book (f x))
-    Let v f    -> Let (normal lv d book v) (normal lv d book f)
+    Sub t      -> normal d book t
+    Fix k f    -> Fix k (\x -> normal (d+1) book (f x))
+    Let v f    -> Let (normal d book v) (normal d book f)
     Set        -> Set
-    Ann x t    -> Ann (normal lv d book x) (normal lv d book t)
-    Chk x t    -> Chk (normal lv d book x) (normal lv d book t)
+    Ann x t    -> Ann (normal d book x) (normal d book t)
+    Chk x t    -> Chk (normal d book x) (normal d book t)
     Emp        -> Emp
-    EmpM x     -> EmpM (normal lv d book x)
+    EmpM x     -> EmpM (normal d book x)
     Uni        -> Uni
     One        -> One
-    UniM x f   -> UniM (normal lv d book x) (normal lv d book f)
+    UniM x f   -> UniM (normal d book x) (normal d book f)
     Bit        -> Bit
     Bt0        -> Bt0
     Bt1        -> Bt1
-    BitM x f t -> BitM (normal lv d book x) (normal lv d book f) (normal lv d book t)
+    BitM x f t -> BitM (normal d book x) (normal d book f) (normal d book t)
     Nat        -> Nat
     Zer        -> Zer
-    Suc n      -> Suc (normal lv d book n)
-    NatM x z s -> NatM (normal lv d book x) (normal lv d book z) (normal lv d book s)
-    Lst t      -> Lst (normal lv d book t)
+    Suc n      -> Suc (normal d book n)
+    NatM x z s -> NatM (normal d book x) (normal d book z) (normal d book s)
+    Lst t      -> Lst (normal d book t)
     Nil        -> Nil
-    Con h t    -> Con (normal lv d book h) (normal lv d book t)
-    LstM x n c -> LstM (normal lv d book x) (normal lv d book n) (normal lv d book c)
+    Con h t    -> Con (normal d book h) (normal d book t)
+    LstM x n c -> LstM (normal d book x) (normal d book n) (normal d book c)
     Enu s      -> Enu s
     Sym s      -> Sym s
-    EnuM x c e -> EnuM (normal lv d book x) (map (\(s, t) -> (s, normal lv d book t)) c) (normal lv d book e)
-    Sig a b    -> Sig (normal lv d book a) (normal lv d book b)
-    Tup a b    -> Tup (normal lv d book a) (normal lv d book b)
-    SigM x f   -> SigM (normal lv d book x) (normal lv d book f)
-    All a b    -> All (normal lv d book a) (normal lv d book b)
+    EnuM x c e -> EnuM (normal d book x) (map (\(s, t) -> (s, normal d book t)) c) (normal d book e)
+    Sig a b    -> Sig (normal d book a) (normal d book b)
+    Tup a b    -> Tup (normal d book a) (normal d book b)
+    SigM x f   -> SigM (normal d book x) (normal d book f)
+    All a b    -> All (normal d book a) (normal d book b)
     Lam k f    -> Lam k f -- note: uses lv=0 for finite pretty printing
-    App f x    -> foldl (\ f x -> App f (normal lv d book x)) fn xs
+    App f x    -> foldl (\ f x -> App f (normal d book x)) fn xs
       where (fn,xs) = collectApps (App f x) []
-    Eql t a b  -> Eql (normal lv d book t) (normal lv d book a) (normal lv d book b)
+    Eql t a b  -> Eql (normal d book t) (normal d book a) (normal d book b)
     Rfl        -> Rfl
-    EqlM x f   -> EqlM (normal lv d book x) (normal lv d book f)
-    Ind t      -> Ind (normal lv d book t)
-    Frz t      -> Frz (normal lv d book t)
-    Loc l t    -> Loc l (normal lv d book t)
-    Rwt a b x  -> Rwt (normal lv d book a) (normal lv d book b) (normal lv d book x)
+    EqlM x f   -> EqlM (normal d book x) (normal d book f)
+    Ind t      -> Ind (normal d book t)
+    Frz t      -> Frz (normal d book t)
+    Loc l t    -> Loc l (normal d book t)
+    Rwt a b x  -> Rwt (normal d book a) (normal d book b) (normal d book x)
     Era        -> Era
-    Sup l a b  -> Sup l (normal lv d book a) (normal lv d book b)
+    Sup l a b  -> Sup l (normal d book a) (normal d book b)
     Num t      -> Num t
     Val v      -> Val v
-    Op2 o a b  -> Op2 o (normal lv d book a) (normal lv d book b)
-    Op1 o a    -> Op1 o (normal lv d book a)
+    Op2 o a b  -> Op2 o (normal d book a) (normal d book b)
+    Op1 o a    -> Op1 o (normal d book a)
     Pri p      -> Pri p
     Met _ _ _  -> error "not-supported"
     Pat _ _ _  -> error "not-supported"
 
-normalCtx :: Int -> Int -> Book -> Ctx -> Ctx
-normalCtx lv d book (Ctx ctx) = Ctx (map normalAnn ctx)
-  where normalAnn (k,v,t) = (k, normal lv d book v, normal lv d book t)
+normalCtx :: Int -> Book -> Ctx -> Ctx
+normalCtx d book (Ctx ctx) = Ctx (map normalAnn ctx)
+  where normalAnn (k,v,t) = (k, normal d book v, normal d book t)
 
 -- Utils
 -- =====
 
 -- Forces evaluation
-force :: Int -> Book -> Term -> Term
-force d book t =
-  case whnf 3 d book t of
-    Ind t -> force d book t
-    Frz t -> force d book t
-    t     -> t
+force :: Book -> Term -> Term
+force book term =
+  case whnf book term of
+    Ind t -> force book term
+    Frz t -> force book term
+    -- term  -> term
+    term -> case fn of
+      Ref k -> case deref book k of
+        Just (_,fn,_) -> force book $ foldl App fn xs
+        otherwise     -> term
+      otherwise       -> term
+      where (fn,xs) = collectApps term []
 
 -- Shapes that are rolled back for pretty printing
 -- These shapes are stuck, so, this shouldn't affect proving

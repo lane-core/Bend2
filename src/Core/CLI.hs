@@ -75,7 +75,7 @@ runMain book = do
           putStrLn $ show e
           exitFailure
         Done typ -> do
-          let result = normal 2 0 boundBook mainCall
+          let result = normal 0 boundBook mainCall
           putStrLn ""
           putStrLn $ show result
 
