@@ -329,6 +329,8 @@ deref (Book defs) name = M.lookup name defs
 
 cut :: Term -> Term
 cut (Loc _ t) = cut t
+cut (Ann x _) = cut x
+cut (Chk x _) = cut x
 cut t         = t
 
 collectArgs :: Term -> ([(String, Term)], Term)

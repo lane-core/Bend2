@@ -17,7 +17,7 @@ equal :: Int -> Book -> Term -> Term -> Bool
 equal d book a b = eql 3 d book a b
 
 eql :: Int -> Int -> Book -> Term -> Term -> Bool
-eql 0  d book a b = cmp 0 d book (whnf 0 d book a) (whnf 0 d book b)
+eql 0  d book a b = cmp 0 d book (cut a) (cut b)
 eql lv d book a b = identical || similar where
   identical = eql 0 d book a b
   similar   = cmp lv d book (whnf lv d book a) (whnf lv d book b)

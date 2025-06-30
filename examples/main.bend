@@ -65,8 +65,10 @@ def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
       finally
     case 1n + p:
       ind = div2_mul2_theo(p)
+      #prf = app(Nat, Nat, div2(mul2(p)), p, λx. 1n + x, ind)
       prf = app(Nat, Nat, div2(mul2(p)), p, λx. 1n + x, ind)
       prf
+      #()
 
 # Nat Predecessor
 def pred(n: Nat) -> Nat:
@@ -189,36 +191,36 @@ def succ_inj(n: Nat, m: Nat, e: Nat{(1n+n)==(1n+m)}) -> Nat{n==m}:
     case 1n+n 1n+m e:
       app<Nat,Nat>(1n+1n+n, 1n+1n+m, pred, e)
 
-# Inductive Datatype
-# ------------------
+## Inductive Datatype
+## ------------------
 
-## Can we encode inductive datatypes?
+### Can we encode inductive datatypes?
 
-# data Vec (A : Set) : Nat → Set where
-#   nil  : Vec A zero
-#   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
-type Vec<A: Set>(N: Nat) -> Set:
-  case @Nil:
-    e: Nat{N == 0}
-  case @Cons:
-    n: Nat
-    h: A
-    t: Vec(A,n)
-    e: Nat{N == (1n+n)}
+## data Vec (A : Set) : Nat → Set where
+##   nil  : Vec A zero
+##   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
+#type Vec<A: Set>(N: Nat) -> Set:
+  #case @Nil:
+    #e: Nat{N == 0}
+  #case @Cons:
+    #n: Nat
+    #h: A
+    #t: Vec(A,n)
+    #e: Nat{N == (1n+n)}
 
-def VecInd
-  ( A: Set
-  , P: all n:Nat xs:Vec(A,n). Set
-  , N: P(0,@Nil{finally})
-  , C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1n+s,@Cons{s,x,xs,finally})
-  , n: Nat
-  , x: Vec(A,n)
-  ) -> P(n,x):
-  match x:
-    case @Nil{e}:
-      rewrite e
-      N
-    case @Cons{n,h,t,e}:
-      rewrite e
-      C(n,h,t,VecInd(A,P,N,C,n,t))
+#def VecInd
+  #( A: Set
+  #, P: all n:Nat xs:Vec(A,n). Set
+  #, N: P(0,@Nil{finally})
+  #, C: all s:Nat x:A xs:Vec(A,s) . P(s,xs) -> P(1n+s,@Cons{s,x,xs,finally})
+  #, n: Nat
+  #, x: Vec(A,n)
+  #) -> P(n,x):
+  #match x:
+    #case @Nil{e}:
+      #rewrite e
+      #N
+    #case @Cons{n,h,t,e}:
+      #rewrite e
+      #C(n,h,t,VecInd(A,P,N,C,n,t))
 

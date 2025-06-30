@@ -21,6 +21,7 @@ extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 
 format :: Int -> Book -> Term -> Term
 format d book x = normal 3 d book $ x
+-- format d book x = x
 
 formatCtx :: Int -> Book -> Ctx -> Ctx
 formatCtx d book (Ctx ctx) = Ctx (map formatAnn ctx)
@@ -32,14 +33,13 @@ formatCtx d book (Ctx ctx) = Ctx (map formatAnn ctx)
 -- Infer the type of a term
 infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
 infer d span book ctx term =
-  trace ("- infer: " ++ show (format d book term)) $
+  -- trace ("- infer: " ++ show (format d book term)) $
   case term of
     Var _ i -> do
-      -- get the i'th element of the ctx
       let Ctx ks = ctx
       if i < length ks
         then let (_, _, typ) = ks !! i
-             in trace ("typ:"++show typ) Done typ
+             in Done typ
         else Fail $ CantInfer span (formatCtx d book ctx)
     Ref k -> do
       case deref book k of
@@ -235,7 +235,7 @@ inferOp1Type d span book ctx op a ta = case op of
 -- Check if a term has the expected type
 check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 check d span book ctx term goal =
-  trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
+  -- trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
   case (term, force d book goal) of
     (term, Rwt a b goal) -> do
       let new_ctx  = rewriteCtx 3 d book a b ctx

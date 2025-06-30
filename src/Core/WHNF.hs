@@ -30,13 +30,6 @@ whnf lv d book term
   where nf = whnfGo lv d book term
 
 whnfGo :: Int -> Int -> Book -> Term -> Term
-whnfGo 0 d book term =
-  case term of
-    Let v f -> whnfLet 0 d book v f
-    Ann x _ -> whnf 0 d book x
-    Chk x _ -> whnf 0 d book x
-    Loc _ t -> whnf 0 d book t
-    _       -> term
 whnfGo lv d book term =
   case term of
     Let v f    -> whnfLet lv d book v f
@@ -65,49 +58,19 @@ whnfLet lv d book v f = whnf lv d book (App f v)
 -- Normalizes a reference
 whnfRef :: Int -> Int -> Book -> Name -> Term
 whnfRef lv d book k =
-  case lv of
-    0 -> Ref k
-    1 -> Ref k
-    2 -> case deref book k of
-      Just (True , term, _) -> Ref k
-      Just (False, term, _) -> whnf lv d book term
-      Nothing               -> Ref k
-    3 -> case deref book k of
-      Just (_, term, _) -> whnf lv d book term
-      Nothing           -> Ref k
-    _ -> error "unreachable"
+  case deref book k of
+    Just (_, term, _) -> whnf lv d book term
+    Nothing           -> Ref k
 
 -- Normalizes a fixpoint
 whnfFix :: Int -> Int -> Book -> String -> Body -> Term
-whnfFix lv d book k f =
-  case lv of
-    0 -> Fix k f
-    1 -> Fix k f
-    2 -> Fix k f
-    3 -> whnf lv d book (f (Fix k f))
-    _ -> error "unreachable"
-
--- Normalizes a reference in an application
-whnfAppRef :: Int -> Int -> Book -> Term -> Name -> Term -> Term
-whnfAppRef 0  d _    undo k x = App (Ref k) x
-whnfAppRef 1  d _    undo k x = App (Ref k) x
-whnfAppRef 2  d book undo k x =
-  case deref book k of
-    Just (inj, term, _) | inj       -> App (Ref k) x
-                        | otherwise -> whnfApp 1 d book undo term x
-    Nothing -> App (Ref k) x
-whnfAppRef lv d book undo k x =
-  case deref book k of
-    Just (_, term, _) -> whnfApp lv d book undo term x
-    Nothing           -> undo
+whnfFix lv d book k f = whnf lv d book (f (Fix k f))
 
 -- Normalizes an application
 whnfApp :: Int -> Int -> Book -> Term -> Term -> Term -> Term
 whnfApp lv d book undo f x =
   case whnf lv d book f of
     Lam _ f'  -> whnfAppLam lv d book f' x
-    Fix k f'  -> whnfAppFix lv d book undo k f' x
-    Ref k     -> whnfAppRef lv d book undo k x
     Pri p     -> whnfAppPri lv d book undo p x
     Sup _ _ _ -> error "Sup interactions unsupported in Haskell"
     _         -> undo
@@ -118,8 +81,6 @@ whnfAppLam lv d book f x = whnf lv d book (f x)
 
 -- Normalizes a fixpoint application
 whnfAppFix :: Int -> Int -> Book -> Term -> String -> Body -> Term -> Term
-whnfAppFix 0  d book undo k f x = App (Fix k f) x
-whnfAppFix 1  d book undo k f x = App (Fix k f) x
 whnfAppFix lv d book undo k f x = whnfApp lv d book undo (f (Fix k f)) x
 
 -- Eliminator normalizers
@@ -325,8 +286,9 @@ normal lv d book term =
     Tup a b    -> Tup (normal lv d book a) (normal lv d book b)
     SigM x f   -> SigM (normal lv d book x) (normal lv d book f)
     All a b    -> All (normal lv d book a) (normal lv d book b)
-    Lam k f    -> Lam k (\x -> normal 0 (d+1) book (f x)) -- note: uses lv=0 for finite pretty printing
-    App f x    -> App (normal 1  d book f) (normal lv d book x)
+    Lam k f    -> Lam k f -- note: uses lv=0 for finite pretty printing
+    App f x    -> foldl (\ f x -> App f (normal lv d book x)) fn xs
+      where (fn,xs) = collectApps (App f x) []
     Eql t a b  -> Eql (normal lv d book t) (normal lv d book a) (normal lv d book b)
     Rfl        -> Rfl
     EqlM x f   -> EqlM (normal lv d book x) (normal lv d book f)
