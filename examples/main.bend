@@ -196,14 +196,14 @@ def succ_inj(n: Nat, m: Nat, e: Nat{(1n+n)==(1n+m)}) -> Nat{n==m}:
     case 1n+n 1n+m e:
       app<Nat,Nat>(1n+1n+n, 1n+1n+m, pred, e)
 
-# Left-distributivity of multiplication over addition
-def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
-  match n:
-    case 0n:
-      finally
-    case 1n + p:
-      rewrite mul_dist_left(p,m,k)
-      ()
+## Left-distributivity of multiplication over addition
+#def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
+  #match n:
+    #case 0n:
+      #finally
+    #case 1n + p:
+      #rewrite mul_dist_left(p,m,k)
+      #()
 
 # Inductive Datatype
 # ------------------

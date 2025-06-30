@@ -16,12 +16,6 @@ import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 -- Evaluation
 -- ==========
 
--- Levels:
--- - 0: decorations
--- - 1: reduce applications, eliminators, operators and primitives
--- - 2: reduce Fixes and non-injective Refs in wnf position
--- - 3: reduce everything
-
 -- Reduction
 whnf :: Book -> Term -> Term
 whnf book term
@@ -35,20 +29,19 @@ whnfGo book term =
     Let v f    -> whnfLet book v f
     Ref k      -> whnfRef book k
     Fix k f    -> whnfFix book k f
-    Ann x _    -> whnf book x
     Chk x _    -> whnf book x
-    App f x    -> whnfApp book (App f x) f x
+    App f x    -> whnfApp book f x
     Loc _ t    -> whnf book t
     Op2 o a b  -> whnfOp2 book o a b
     Op1 o a    -> whnfOp1 book o a
     Pri p      -> Pri p
-    UniM x f   -> whnfUniM book term x f
-    BitM x f t -> whnfBitM book term x f t
-    NatM x z s -> whnfNatM book term x z s
-    LstM x n c -> whnfLstM book term x n c
-    EnuM x c f -> whnfEnuM book term x c f
-    SigM x f   -> whnfSigM book term x f
-    EqlM x f   -> whnfEqlM book term x f
+    UniM x f   -> whnfUniM book x f
+    BitM x f t -> whnfBitM book x f t
+    NatM x z s -> whnfNatM book x z s
+    LstM x n c -> whnfLstM book x n c
+    EnuM x c f -> whnfEnuM book x c f
+    SigM x f   -> whnfSigM book x f
+    EqlM x f   -> whnfEqlM book x f
     _          -> term
 
 -- Normalizes a let binding
@@ -67,85 +60,85 @@ whnfFix :: Book -> String -> Body -> Term
 whnfFix book k f = whnf book (f (Fix k f))
 
 -- Normalizes an application
-whnfApp :: Book -> Term -> Term -> Term -> Term
-whnfApp book undo f x =
+whnfApp :: Book -> Term -> Term -> Term
+whnfApp book f x =
   case whnf book f of
     Lam _ f'  -> whnfAppLam book f' x
-    Pri p     -> whnfAppPri book undo p x
+    Pri p     -> whnfAppPri book p x
     Sup _ _ _ -> error "Sup interactions unsupportein Haskell"
-    _         -> undo
+    _         -> App f x
 
 -- Normalizes a lambda application
 whnfAppLam :: Book -> Body -> Term -> Term
 whnfAppLam book f x = whnf book (f x)
 
 -- Normalizes a fixpoint application
-whnfAppFix :: Book -> Term -> String -> Body -> Term -> Term
-whnfAppFix book undo k f x = whnfApp book undo (f (Fix k f)) x
+whnfAppFix :: Book -> String -> Body -> Term -> Term
+whnfAppFix book k f x = whnfApp book (f (Fix k f)) x
 
 -- Eliminator normalizers
 -- ----------------------
 
 -- Normalizes a unit match
-whnfUniM :: Book -> Term -> Term -> Term -> Term
-whnfUniM book undo x f =
+whnfUniM :: Book -> Term -> Term -> Term
+whnfUniM book x f =
   case whnf book x of
     One -> whnf book f
-    _   -> undo
+    _   -> Uni
 
 -- Normalizes a boolean match
-whnfBitM :: Book -> Term -> Term -> Term -> Term -> Term
-whnfBitM book undo x f t =
+whnfBitM :: Book -> Term -> Term -> Term -> Term
+whnfBitM book x f t =
   case whnf book x of
     Bt0 -> whnf book f
     Bt1 -> whnf book t
-    _   -> undo
+    _   -> BitM x f t
 
 -- Normalizes a natural number match
-whnfNatM :: Book -> Term -> Term -> Term -> Term -> Term
-whnfNatM book undo x z s =
+whnfNatM :: Book -> Term -> Term -> Term -> Term
+whnfNatM book x z s =
   case whnf book x of
     Zer   -> whnf book z
     Suc n -> whnf book (App s (whnf book n))
-    _     -> undo
+    _     -> NatM x z s
 
 -- Normalizes a list match
-whnfLstM :: Book -> Term -> Term -> Term -> Term -> Term
-whnfLstM book undo x n c =
+whnfLstM :: Book -> Term -> Term -> Term -> Term
+whnfLstM book x n c =
   case whnf book x of
     Nil     -> whnf book n
     Con h t -> whnf book (App (App c (whnf book h)) (whnf book t))
-    _       -> undo
+    _       -> LstM x n c
 
 -- Normalizes a pair match
-whnfSigM :: Book -> Term -> Term -> Term -> Term
-whnfSigM book undo x f =
+whnfSigM :: Book -> Term -> Term -> Term
+whnfSigM book x f =
   case whnf book x of
     Tup a b -> whnf book (App (App f (whnf book a)) (whnf book b))
-    _       -> undo
+    _       -> SigM x f
 
 -- Normalizes an enum match
-whnfEnuM :: Book -> Term -> Term -> [(String,Term)] -> Term -> Term
-whnfEnuM book undo x c f =
+whnfEnuM :: Book -> Term -> [(String,Term)] -> Term -> Term
+whnfEnuM book x c f =
   case whnf book x of
     Sym s -> case lookup s c of
       Just t  -> whnf book t
       Nothing -> whnf book (App f (Sym s))
-    _         -> undo
+    _         -> EnuM x c f
 
 -- Normalizes an equality match
-whnfEqlM :: Book -> Term -> Term -> Term -> Term
-whnfEqlM book undo x f =
+whnfEqlM :: Book -> Term -> Term -> Term
+whnfEqlM book x f =
   case whnf book x of
     Rfl -> whnf book f
-    _   -> undo
+    _   -> EqlM x f
 
 -- Normalizes a primitive application
-whnfAppPri :: Book -> Term -> PriF -> Term -> Term
-whnfAppPri book undo U64_TO_CHAR x =
+whnfAppPri :: Book -> PriF -> Term -> Term
+whnfAppPri book U64_TO_CHAR x =
   case whnf book x of
     Val (U64_V n) -> Val (CHR_V (toEnum (fromIntegral n)))
-    _             -> undo
+    _             -> App (Pri U64_TO_CHAR) x
 
 -- Numeric operations
 -- ------------------
@@ -260,7 +253,6 @@ normal d book term =
     Fix k f    -> Fix k (\x -> normal (d+1) book (f x))
     Let v f    -> Let (normal d book v) (normal d book f)
     Set        -> Set
-    Ann x t    -> Ann (normal d book x) (normal d book t)
     Chk x t    -> Chk (normal d book x) (normal d book t)
     Emp        -> Emp
     EmpM x     -> EmpM (normal d book x)
@@ -313,22 +305,8 @@ normalCtx d book (Ctx ctx) = Ctx (map normalAnn ctx)
 -- Utils
 -- =====
 
--- Forces evaluation
-force :: Book -> Term -> Term
-force book term =
-  case whnf book term of
-    Ind t -> force book term
-    Frz t -> force book term
-    -- term  -> term
-    term -> case fn of
-      Ref k -> case deref book k of
-        Just (_,fn,_) -> force book $ foldl App fn xs
-        otherwise     -> term
-      otherwise       -> term
-      where (fn,xs) = collectApps term []
-
 -- Shapes that are rolled back for pretty printing
--- These shapes are stuck, so, this shouldn't affect proving
+-- This is safe because these terms are stuck
 ugly :: Term -> Bool
 ugly (cut -> UniM _ _  ) = True
 ugly (cut -> BitM _ _ _) = True
@@ -338,3 +316,18 @@ ugly (cut -> EnuM _ _ _) = True
 ugly (cut -> SigM _ _  ) = True
 ugly (cut -> EqlM _ _  ) = True
 ugly _                   = False
+
+-- Evaluates terms that whnf won't, including:
+-- - Type decorations like Ind/Frz
+-- - Injective Refs (whnf skips them for pretty printing)
+force :: Book -> Term -> Term
+force book term =
+  case whnf book term of
+    Ind t -> force book term
+    Frz t -> force book term
+    term  -> case fn of
+      Ref k -> case deref book k of
+        Just (_,fn,_) -> force book $ foldl App fn xs
+        otherwise     -> term
+      otherwise       -> term
+      where (fn,xs) = collectApps term []

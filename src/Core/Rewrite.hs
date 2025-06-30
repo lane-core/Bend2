@@ -31,7 +31,6 @@ rewriteGo lv d book old neo val = case val of
   Fix k f    -> Fix k (\x -> rewrite lv d book old neo (f x))
   Let v f    -> Let (rewrite lv d book old neo v) (rewrite lv d book old neo f)
   Set        -> Set
-  Ann x t    -> Ann (rewrite lv d book old neo x) (rewrite lv d book old neo t)
   Chk x t    -> Chk (rewrite lv d book old neo x) (rewrite lv d book old neo t)
   Emp        -> Emp
   EmpM x     -> EmpM (rewrite lv d book old neo x)

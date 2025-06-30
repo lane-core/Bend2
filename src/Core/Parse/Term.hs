@@ -735,7 +735,7 @@ parseGen = label "generation" $ do
   ctx  <- option [] parseContext
   body <- parseTerm
   let metT = foldr nestType retT args
-  return $ Let (Ann (Met 1 metT ctx) metT) (Lam f (\_ -> body))
+  return $ Let (Chk (Met 1 metT ctx) metT) (Lam f (\_ -> body))
   where
     parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
     nestType (argName, argType) currType = All argType $ Lam argName (\v -> currType)

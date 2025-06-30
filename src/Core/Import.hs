@@ -41,7 +41,6 @@ collectRefs term = case term of
   Fix _ f     -> collectRefs (f (Var "dummy" 0))
   Let v f     -> S.union (collectRefs v) (collectRefs f)
   Set         -> S.empty
-  Ann x t     -> S.union (collectRefs x) (collectRefs t)
   Chk x t     -> S.union (collectRefs x) (collectRefs t)
   Emp         -> S.empty
   EmpM x      -> collectRefs x

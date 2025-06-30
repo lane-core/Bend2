@@ -21,7 +21,6 @@ binder lv term ctx vars = case term of
   Let v f    -> Let (binder lv v ctx vars) (binder lv f ctx vars)
   Fix k f    -> Fix k (\x -> binder (lv+1) (f (Sub x)) (ctx++[x]) (M.insert k x vars))
   Set        -> Set
-  Ann x t    -> Ann (binder lv x ctx vars) (binder lv t ctx vars)
   Chk x t    -> Chk (binder lv x ctx vars) (binder lv t ctx vars)
   Emp        -> Emp
   EmpM x     -> EmpM (binder lv x ctx vars)

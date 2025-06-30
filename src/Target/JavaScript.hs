@@ -72,7 +72,6 @@ termToCT book term dep = case term of
      _       -> termToCT book (App f v) dep
   -- Type-level constructs are erased
   Set        -> CEra
-  Ann x _    -> termToCT book x dep
   Chk x _    -> termToCT book x dep
   Emp        -> CEra
   EmpM _     -> CEra
@@ -626,7 +625,6 @@ termToCT book term dep = case term of
      Lam k g -> CLet (termToCT book v dep) (\x -> termToCT book (g (ctToTerm x)) (dep+1))
      _       -> termToCT book (App f v) dep
   Set        -> CEra
-  Ann x _    -> termToCT book x dep
   Chk x _    -> termToCT book x dep
   Emp        -> CEra
   EmpM _     -> CEra

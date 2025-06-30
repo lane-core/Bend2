@@ -63,7 +63,6 @@ data Term
   | Set -- Set
 
   -- Annotation
-  | Ann Term Type -- <x:t>
   | Chk Term Type -- x::t
 
   -- Empty
@@ -188,7 +187,6 @@ instance Show Term where
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let v f)      = "!" ++ show v ++ ";" ++ show f
   show (Set)          = "Set"
-  show (Ann x t)      = "<" ++ show x ++ ":" ++ show t ++ ">"
   show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
   show (Emp)          = "Empty"
   show (EmpM x)       = "~" ++ show x ++ "{}"
@@ -331,7 +329,6 @@ deref (Book defs) name = M.lookup name defs
 
 cut :: Term -> Term
 cut (Loc _ t) = cut t
-cut (Ann x _) = cut x
 cut (Chk x _) = cut x
 cut t         = t
 

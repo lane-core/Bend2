@@ -55,7 +55,6 @@ flatten d (Sub t)     = Sub (flatten d t)
 flatten d (Fix n f)   = Fix n (\x -> flatten (d+1) (f x))
 flatten d (Let v f)   = Let (flatten d v) (flatten d f)
 flatten d Set         = Set
-flatten d (Ann x t)   = Ann (flatten d x) (flatten d t)
 flatten d (Chk x t)   = Chk (flatten d x) (flatten d t)
 flatten d Emp         = Emp
 flatten d (EmpM x)    = EmpM (flatten d x)
@@ -218,7 +217,6 @@ unpat d (Sub t)         = Sub (unpat d t)
 unpat d (Fix n f)       = Fix n (\x -> unpat (d+1) (f x))
 unpat d (Let v f)       = Let (unpat d v) (unpat d f)
 unpat d Set             = Set
-unpat d (Ann x t)       = Ann (unpat d x) (unpat d t)
 unpat d (Chk x t)       = Chk (unpat d x) (unpat d t)
 unpat d Emp             = Emp
 unpat d (EmpM x)        = EmpM (unpat d x)
@@ -487,7 +485,6 @@ subst name val term = go name val term where
     Sub t      -> Sub (go name val t)
     Fix k f    -> Fix k (\x -> go name val (f x))
     Let v f    -> Let (go name val v) (go name val f)
-    Ann x t    -> Ann (go name val x) (go name val t)
     Chk x t    -> Chk (go name val x) (go name val t)
     Set        -> Set
     Emp        -> Emp

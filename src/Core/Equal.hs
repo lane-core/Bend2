@@ -35,7 +35,6 @@ cmp lv d book a b =
     (Sub ta       , Sub tb       ) -> eql lv d book ta tb
     (Let va fa    , Let vb fb    ) -> eql lv d book va vb && eql lv d book fa fb
     (Set          , Set          ) -> True
-    (Ann xa ta    , Ann xb tb    ) -> eql lv d book xa xb && eql lv d book ta tb
     (Chk xa ta    , Chk xb tb    ) -> eql lv d book xa xb && eql lv d book ta tb
     (Emp          , Emp          ) -> True
     (EmpM xa      , EmpM xb      ) -> eql lv d book xa xb

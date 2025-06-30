@@ -51,8 +51,6 @@ infer d span book ctx term =
       infer d span book ctx (App f v)
     Fix k f -> do
       Fail $ CantInfer span (formatCtx d book ctx)
-    Ann v t -> do
-      Done t
     Chk v t -> do
       check d span book ctx v t
       Done t
