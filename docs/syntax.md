@@ -227,6 +227,10 @@ Bend will automatically import `Foo/bar` from one of:
 - `./Foo/bar.bend`
 - `./Foo/bar/_.bend`
 
+[WanShi](https://github.com/HigherOrderCO/WanShi) is a monorepo where each file includes only ONE Bend definition.
+
+Example: `WanShi/Nat/add.bend` includes the `Nat/add` definition.
+
 # Inference
 
 Bend has no inference. That means every polymorphic application must be explicit. Example:
