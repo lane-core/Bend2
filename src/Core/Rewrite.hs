@@ -9,15 +9,18 @@ import Core.Equal
 import Core.Type
 import Core.WHNF
 
+import Debug.Trace
+
 -- Rewrite
 -- =======
 
 rewrite :: Int -> Int -> Book -> Term -> Term -> Term -> Term
 rewrite lv d book old neo val
   | equal d book old val = neo
-  | otherwise            = case whnf 2 d book val of
-    Suc x -> Suc $ rewriteGo lv d book old neo x
-    _     -> rewriteGo lv d book old neo val
+  | otherwise            = rewriteGo lv d book old neo $ whnf 2 d book val
+  -- | equal d book old val = trace ("eq " ++ show old ++ " → " ++ show neo ++ " |" ++ show val ++ " → " ++ show (whnf 2 d book val)) $ neo
+  -- | otherwise            = trace ("rw " ++ show old ++ " → " ++ show neo ++ " |" ++ show val ++ " → " ++ show (whnf 2 d book val))
+                         -- $ rewriteGo lv d book old neo $ whnf 2 d book val
 
 -- Recursively rewrites occurrences of 'old' with 'neo' in 'val'
 rewriteGo :: Int -> Int -> Book -> Term -> Term -> Term -> Term
@@ -58,8 +61,9 @@ rewriteGo lv d book old neo val = case val of
   Tup a b    -> Tup (rewrite lv d book old neo a) (rewrite lv d book old neo b)
   SigM x f   -> SigM (rewrite lv d book old neo x) (rewrite lv d book old neo f)
   All a b    -> All (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-  Lam k f    -> Lam k (\x -> rewrite lv d book old neo (f x))
-  App f x    -> App (rewrite lv d book old neo f) (rewrite lv d book old neo x)
+  Lam k f    -> Lam k f
+  App f x    -> foldl (\ f x -> App f (rewrite lv d book old neo x)) fn xs
+          where (fn,xs) = collectApps (App f x) []
   Eql t a b  -> Eql (rewrite lv d book old neo t) (rewrite lv d book old neo a) (rewrite lv d book old neo b)
   Rfl        -> Rfl
   EqlM x f   -> EqlM (rewrite lv d book old neo x) (rewrite lv d book old neo f)
@@ -75,4 +79,4 @@ rewriteGo lv d book old neo val = case val of
 
 rewriteCtx :: Int -> Int -> Book -> Term -> Term -> Ctx -> Ctx
 rewriteCtx lv d book old neo (Ctx ctx) = Ctx (map rewriteAnn ctx)
-  where rewriteAnn (k,v,t) = (k, rewrite lv d book old neo v, rewrite lv d book old neo t)
+  where rewriteAnn (k,v,t) = (k, v, rewrite lv d book old neo t)

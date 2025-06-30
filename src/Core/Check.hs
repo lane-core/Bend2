@@ -20,8 +20,7 @@ extend :: Ctx -> Name -> Term -> Term -> Ctx
 extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 
 format :: Int -> Book -> Term -> Term
--- format d book subs x = normal 2 d book subs $ rewrites 2 d book subs $ x
-format d book x = normal 2 d book $ x
+format d book x = normal 3 d book $ x
 
 formatCtx :: Int -> Book -> Ctx -> Ctx
 formatCtx d book (Ctx ctx) = Ctx (map formatAnn ctx)
@@ -33,10 +32,15 @@ formatCtx d book (Ctx ctx) = Ctx (map formatAnn ctx)
 -- Infer the type of a term
 infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
 infer d span book ctx term =
-  -- trace ("- infer: " ++ show (format d book term)) $
+  trace ("- infer: " ++ show (format d book term)) $
   case term of
-    Var k i -> do
-      Fail $ CantInfer span (formatCtx d book ctx)
+    Var _ i -> do
+      -- get the i'th element of the ctx
+      let Ctx ks = ctx
+      if i < length ks
+        then let (_, _, typ) = ks !! i
+             in trace ("typ:"++show typ) Done typ
+        else Fail $ CantInfer span (formatCtx d book ctx)
     Ref k -> do
       case deref book k of
         Just (_, _, typ) -> Done typ
@@ -44,13 +48,7 @@ infer d span book ctx term =
     Sub x -> do
       infer d span book ctx x
     Let v f -> do
-      case v of
-        Chk val typ -> do
-          check d span book ctx val typ
-          infer d span book ctx (App f (Ann val typ))
-        _ -> do
-          t <- infer d span book ctx v
-          infer d span book ctx (App f (Ann v t))
+      infer d span book ctx (App f v)
     Fix k f -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Ann v t -> do
@@ -125,17 +123,16 @@ infer d span book ctx term =
     Lam _ _ -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     App f x ->
-      case (f,x) of
-        -- TODO: can we generalize this to other lam forms?
-        (Lam k f, Ann xv xt) -> do
-          infer (d+1) span book (extend ctx k xv xt) (f (Ann xv xt))
+      case f of
+        Lam k body -> do
+          xT <- infer d span book ctx x
+          infer (d+1) span book (extend ctx k x xT) (body x)
         _ -> do
           fT <- infer d span book ctx f
           case force d book fT of
             All fA fB -> do
               check d span book ctx x fA
               Done $ App fB x
-
             _ -> do
               Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (All (Var "_" 0) (Lam "_" (\_ -> Var "_" 0)))) (format d book fT)
     Eql t a b -> do
@@ -238,25 +235,18 @@ inferOp1Type d span book ctx op a ta = case op of
 -- Check if a term has the expected type
 check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 check d span book ctx term goal =
-  -- trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
+  trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
   case (term, force d book goal) of
     (term, Rwt a b goal) -> do
       let new_ctx  = rewriteCtx 3 d book a b ctx
-      let new_term = rewrite 3 d book a b term
       let new_goal = rewrite 3 d book a b goal
-      -- trace ("> REWRITE " ++ show (normal 2 d book a) ++ " → " ++ show (normal 2 d book b) ++ ":\n" ++
-        -- -- "- ctx : " ++ show (normalCtx 2 d book ctx) ++ " → " ++ show (normalCtx 2 d book new_ctx) ++ "\n" ++
-        -- "- goal: " ++ show (normal 2 d book goal) ++ " → " ++ show (normal 2 d book new_goal) ++ "\n" ++
-        -- "- term: " ++ show (normal 2 d book term) ++ " → " ++ show (normal 2 d book new_term)) $
-      check d span book new_ctx new_term new_goal
+      -- trace ("> REWRITE " ++ show (normal 3 d book a) ++ " → " ++ show (normal 3 d book b) ++ ":\n" ++
+        -- -- "- ctx : " ++ show (normalCtx 3 d book ctx) ++ " → " ++ show (normalCtx 3 d book new_ctx) ++ "\n" ++
+        -- "- goal: " ++ show (normal 3 d book goal) ++ " → " ++ show (normal 3 d book new_goal) ++ "\n" ++
+        -- "- term: " ++ show (normal 3 d book term) ++ " → " ++ show (normal 3 d book new_term)) $
+      check d span book new_ctx term new_goal
     (Let v f, _) -> do
-      case v of
-        Chk val typ -> do
-          check d span book ctx val typ
-          check d span book ctx (App f (Ann val typ)) goal
-        _ -> do
-          t <- infer d span book ctx v
-          check d span book ctx (App f (Ann v t)) goal
+      check d span book ctx (App f v) goal
     (One, Uni) -> do
       Done ()
     (Bt0, Bit) -> do
@@ -276,10 +266,9 @@ check d span book ctx term goal =
     (Con h t, Lst tT) -> do
       check d span book ctx h tT
       check d span book ctx t (Lst tT)
-    -- FIXME: doesn't work if we use 'All a b' because whnf removes the Ann (same for Sig)
     (Lam k f, All a (Lam _ b)) -> do
-      let x = Ann (Var k d) a
-      check (d+1) span book (extend ctx k (Var k d) a) (f x) (b x)
+      let x = Var k d
+      check (d+1) span book (extend ctx k x a) (f x) (b x)
     (EmpM x, goal) -> do
       xT <- infer d span book ctx x
       case force d book xT of
@@ -357,7 +346,7 @@ check d span book ctx term goal =
           check d span book ctx f (Rwt x Rfl (Rwt a b goal))
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (format d book xT)
     (Fix k f, _) -> do
-      check d span book (extend ctx k (Var k d) goal) (f (Ann (Fix k f) goal)) goal
+      check (d+1) span book (extend ctx k (Fix k f) goal) (f (Fix k f)) goal
     (Loc l t, _) -> do
       check d l book ctx t goal
     (Val (U64_V _), Num U64_T) -> do
@@ -390,7 +379,7 @@ check d span book ctx term goal =
       if isLamApp f
         then do
           xt <- infer d span book ctx x
-          check d span book ctx f $ All xt $ Lam "_" $ \x -> goal
+          check d span book ctx f $ All xt $ Lam "_" $ \v -> goal
         else do
           verify d span book ctx term goal
     (_, _) -> do
