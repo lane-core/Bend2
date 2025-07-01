@@ -457,7 +457,7 @@ lamsTerm d ks other        = error $ "lamsTerm: unexpected term: " ++ show other
 unpatBook :: Book -> Book
 unpatBook (Book defs) = Book (M.map unpatDefn defs) where
   unpatDefn (i, x, t) =
-    trace ("unpat: " ++ show x) $
+    -- trace ("unpat: " ++ show x) $
     (i, unpat 0 x, unpat 0 t)
     -- (i, x, t)
 
