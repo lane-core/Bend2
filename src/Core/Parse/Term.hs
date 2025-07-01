@@ -582,6 +582,7 @@ parseFun t = label "function type" $ do
 parseAnd :: Term -> Parser Term
 parseAnd t = label "product type" $ do
   _ <- try $ symbol "&"
+  notFollowedBy (satisfy isNameChar)
   u <- parseTerm
   return (Sig t (Lam "_" (\_ -> u)))
 

@@ -320,9 +320,13 @@ check d span book ctx term goal =
                          && all (`elem` syms) covered_syms
           if not all_covered
             then do
-              let enu_type = Enu syms
-              let lam_goal = All enu_type (Lam "_" (\_ -> goal))
-              check d span book ctx df lam_goal
+              case df of
+                (cut -> Lam k (unlam k d -> One)) -> do
+                  Fail $ IncompleteMatch span (formatCtx d book ctx)
+                _   -> do
+                  let enu_type = Enu syms
+                  let lam_goal = All enu_type (Lam "_" (\_ -> goal))
+                  check d span book ctx df lam_goal
             else Done ()
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu [])) (format d book xT)
     (SigM x f, goal) -> do

@@ -99,21 +99,34 @@ flatten d (Loc s t)   = Loc s (flatten d t)
 flatten d (Rwt a b x) = Rwt (flatten d a) (flatten d b) (flatten d x)
 flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
 
+isVarCol :: [Case] -> Bool
+isVarCol []                        = True
+isVarCol (((cut->Var _ _):_,_):cs) = isVarCol cs
+isVarCol _                         = False
+
 flattenPat :: Int -> Term -> Term
-flattenPat d pat@(Pat (s:ss) ms ((((cut->Var k i):ps),rhs):cs)) =
-  -- trace (">> var: " ++ show pat) $
-  flatten d $ Pat ss ms (joinVarCol (d+1) s (((Var k i:ps),rhs):cs))
-  -- flatten d $ Pat ss (ms++[(k,s)]) (joinVarCol (d+1) (Var k 0) (((Var k i:ps),rhs):cs))
-flattenPat d pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
-  -- trace (">> ctr: " ++ show p ++ " " ++ show pat) $
-  Pat [s] moves [([ct], picks), ([var d], drops)] where
-    (ct,fs) = ctrOf d p
-    (ps,ds) = peelCtrCol ct cs
-    moves   = ms
-    -- moves   = ms ++ map (\ (s,i) -> (patOf (d+i) s, s)) (zip ss [0..])
-    picks   = flatten d' (Pat (fs   ++ ss) ms ps) where d' = d + length fs
-    drops   = flatten d' (Pat (var d : ss) ms ds) where d' = d + 1
-flattenPat d pat = pat
+flattenPat d pat =
+  -- trace ("FLATTEN: " ++ show pat) $
+  flattenPatGo d pat where
+    flattenPatGo d pat@(Pat (s:ss) ms css@((((cut->Var k i):ps),rhs):cs)) | isVarCol css =
+      -- trace (">> var: " ++ show pat) $
+      flatten d $ Pat ss ms (joinVarCol (d+1) s (((Var k i:ps),rhs):cs))
+      -- flatten d $ Pat ss (ms++[(k,s)]) (joinVarCol (d+1) (Var k 0) (((Var k i:ps),rhs):cs))
+    flattenPatGo d pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
+      -- trace (">> ctr: " ++ show p ++ " " ++ show pat
+          -- ++ "\n>> - picks: " ++ show picks
+          -- ++ "\n>> - drops: " ++ show drops) $
+      Pat [s] moves [([ct], flatten (d+length fs) picks), ([var d], flatten (d+1) drops)] where
+        (ct,fs) = ctrOf d p
+        (ps,ds) = peelCtrCol ct cs
+        moves   = ms
+        -- moves   = ms ++ map (\ (s,i) -> (patOf (d+i) s, s)) (zip ss [0..])
+        picks   = Pat (fs   ++ ss) ms ps
+        drops   = Pat (var d : ss) ms ds
+    flattenPatGo d pat@(Pat [] ms (([],rhs):cs)) =
+      flattenPat d (cut rhs)
+    flattenPatGo d pat =
+      pat
 
 -- Converts an all-variable column to a 'with' statement
 -- match x y { case x0 @A: F(x0) ; case x1 @B: F(x1) }
@@ -164,6 +177,7 @@ peelCtrCol (cut->k) ((((cut->p):ps),rhs):cs) =
     (Sym s  , Var k _) -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
     (Rfl    , Rfl    ) -> ((ps, rhs) : picks , drops)
     (Rfl    , Var k _) -> ((ps, subst k Rfl rhs) : picks , ((p:ps),rhs) : drops)
+    (Var _ _, p      ) -> error "TODO" -- (((p:ps), rhs) : picks , drops)
     x                  -> (picks , ((p:ps),rhs) : drops)
   where (picks, drops) = peelCtrCol k cs
 peelCtrCol k cs = (cs,cs)
@@ -432,6 +446,7 @@ unpatBook (Book defs) = Book (M.map unpatDefn defs) where
   unpatDefn (i, x, t) =
     -- trace ("unpat: " ++ show x) $
     (i, unpat 0 x, unpat 0 t)
+    -- (i, x, t)
 
 -- Helpers
 -- -------
@@ -530,3 +545,41 @@ subst name val term = go name val term where
     Rwt a b x  -> Rwt (go name val a) (go name val b) (go name val x)
     Pat s m c  -> Pat (map (go name val) s) m (map cse c)
       where cse (pats, rhs) = (map (go name val) pats, go name val rhs)
+
+
+
+
+
+-- PROBLEM: when trying to flatten:
+
+-- def sum(w: TreeW) -> Nat:
+  -- match w:
+    -- case @Sup{x, f}:
+      -- match x:
+        -- case (&Leaf,value,()):
+          -- ()
+        -- case (&Node,()):
+          -- ()
+
+-- we get the following output:
+
+-- >> ctr: &Sup{x,f} match w { case (&Sup{x,f}): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: &Sup match _x1 _x2 { case (&Sup) ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: (x,f,()) match _x2 { case ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> var: match x _x4 { case (x) ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: (f,()) match _x4 { case ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> var: match f _x6 { case (f) (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: () match _x6 { case (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- unpat: λw. match w { case ((_x1,_x2)): match _x1 { case (&Sup): match _x2 { case ((x,_x4)): match _x4 { case ((f,_x6)): match _x6 { case (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } } } } case (_x3): match _x3 _x2 { } } }
+-- >> ctr: &Sup{x,f} match w { case (&Sup{x,f}): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: &Sup match _x1 _x2 { case (&Sup) ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: (x,f,()) match _x2 { case ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> var: match x _x4 { case (x) ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: (f,()) match _x4 { case ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> var: match f _x6 { case (f) (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- >> ctr: () match _x6 { case (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
+-- oximatch x { case ((&Leaf,value,())): () case ((&Node,())): () }
+-- sum : ∀w:TreeW. Nat = λw. ~ w { (,):λ_x1. λ_x2. ~ _x1 { &Sup: ~ _x2 { (,):λx. λ_x4. ~ _x4 { (,):λf. λ_x6. ~ _x6 { (): ~ x { (,):λ_x7. λ_x8. () } } } } ; λ_x3. () } }
+
+-- note that '&Leaf' and '&Node' vanished completely from the final output. seems like it isn't fully flattening? why?
+

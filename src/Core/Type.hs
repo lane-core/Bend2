@@ -161,6 +161,7 @@ data Error
   = CantInfer Span Ctx
   | TypeMismatch Span Ctx Term Term
   | TermMismatch Span Ctx Term Term
+  | IncompleteMatch Span Ctx
 
 data Result a
   = Done a
@@ -183,7 +184,7 @@ instance Monad Result where
 instance Show Term where
   show (Var k i)      = k -- ++ "^" ++ show i
   show (Ref k)        = k
-  show (Sub t)        = error "unreachable"
+  show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let v f)      = "!" ++ show v ++ ";" ++ show f
   show (Set)          = "Set"
@@ -205,8 +206,8 @@ instance Show Term where
   show (Nil)          = "[]"
   show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
   show (LstM x n c)   = "~ " ++ show x ++ " { []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
-  show (Enu s)        = "&{" ++ intercalate "," (map (\x -> "&" ++ x) s) ++ "}"
-  show (Sym s)        = "&" ++ s
+  show (Enu s)        = "enu &F{" ++ intercalate "," (map (\x -> "&" ++ x) s) ++ "}"
+  show (Sym s)        = "sym &" ++ s
   show (EnuM x c e)   = "~ " ++ show x ++ " { " ++ intercalate " ; " (map (\(s,t) -> "&" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
   show (Sig a b)      = sig a b where
     sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
@@ -278,7 +279,7 @@ instance Show Term where
   show (Op2 POW a b)   = "(" ++ show a ++ " ** " ++ show b ++ ")"
   show (Op1 NOT a)     = "(!" ++ show a ++ ")"
   show (Op1 NEG a)     = "(-" ++ show a ++ ")"
-  show (Pat t m c)     = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ " }" where
+  show (Pat t m c)     = "match " ++ unwords (map show t) ++ " M{" ++ showMoves ++ showCases ++ " }" where
              showMoves = if null m then "" else " with " ++ intercalate " with " (map mv m) where
                mv(k,x) = k ++ "=" ++ show x
              showCases = if null c then "" else " " ++ intercalate " " (map cs c) where
@@ -311,6 +312,10 @@ instance Show Error where
     "\n- " ++ show b ++
     "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
+  show (IncompleteMatch span ctx) = 
+    "\x1b[1mIncompleteMatch:\x1b[0m" ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
+    show span
 
 instance Show Ctx where
   show (Ctx ctx)
@@ -338,6 +343,9 @@ cut :: Term -> Term
 cut (Loc _ t) = cut t
 cut (Chk x _) = cut x
 cut t         = t
+
+unlam :: Name -> Int -> (Term -> Term) -> Term
+unlam k d f = f (Var k d)
 
 collectArgs :: Term -> ([(String, Term)], Term)
 collectArgs = go [] where
@@ -369,7 +377,7 @@ lastElem t         = Just t
 prettyCtr :: Term -> Maybe String
 prettyCtr (Tup (Sym name) rest) = 
   case lastElem rest of
-    Just One -> Just (show (Sym name) ++ "{" ++ intercalate "," (map show (init (flattenTup rest))) ++ "}")
+    Just One -> Just ("@" ++ name ++ "{" ++ intercalate "," (map show (init (flattenTup rest))) ++ "}")
     _        -> Nothing
 prettyCtr _ = Nothing
 
