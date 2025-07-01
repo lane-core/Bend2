@@ -214,10 +214,17 @@ instance Show Term where
     sig a b           = "Σ" ++ show a ++ ". " ++ (show b)
   show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
   show (SigM x f)     = "~ " ++ show x ++ " { (,):" ++ show f ++ " }"
-  show (All a b)      = all a b where
-    all a (Lam "_" f) = show a ++ " -> " ++ show (f (Var "_" 0))
-    all a (Lam k f)   = "∀" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
-    all a b           = "∀" ++ show a ++ ". " ++ (show b)
+  show (All a b) = case b of
+      Lam "_" f -> showArg a ++ " -> " ++ showCodomain (f (Var "_" 0))
+      Lam k   f -> "∀" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
+      _         -> "∀" ++ showArg a ++ ". " ++ show b
+    where
+      showArg t = case t of
+          All{} -> "(" ++ show t ++ ")"
+          _     -> show t
+      showCodomain t = case t of
+          All _ (Lam k _) | k /= "_"  -> "(" ++ show t ++ ")"
+          _                           -> show t
   show (Lam k f)      = "λ" ++ k ++ ". " ++ show (f (Var k 0))
   show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
            (fn, args) = collectApps app []
