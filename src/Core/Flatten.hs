@@ -124,7 +124,9 @@ flattenPat d pat =
         picks   = Pat (fs   ++ ss) ms ps
         drops   = Pat (var d : ss) ms ds
     flattenPatGo d pat@(Pat [] ms (([],rhs):cs)) =
-      flattenPat d (cut rhs)
+      flattenPat d rhs
+    flattenPatGo d (Loc l t) =
+      Loc l (flattenPat d t)
     flattenPatGo d pat =
       pat
 
