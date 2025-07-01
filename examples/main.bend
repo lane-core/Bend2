@@ -286,26 +286,44 @@ type W(A: Set, B: A -> Set):
     x: A
     f: B(x) -> W(A,B)
 
-# Tag of a W-Tree
-type WTree/Tag<A: Set>:
+# Generic W-Type Fold
+def wfold
+  ( A: Set
+  , B: A -> Set
+  , P: Set
+  , w: W(A,B)
+  , F: all x:A k:(B(x) -> P) . P
+  ) -> P:
+  match w:
+    case @Sup{x,f}:
+      F(x, λy. wfold(A,B,P,f(y),F))
+
+# W-Tree
+# ------
+
+# W-Tree Tag
+type WTreeTag<A: Set>:
   case @WLeaf:
     value: A
   case @WNode:
 
-# WTree: Tree encoded as a W-Type
-def WTree : Set =
-  W(WTree/Tag(Nat), λtag.
+# W-Tree Recursive Fields
+def WTreeRec(tag: WTreeTag(Nat)) -> Set:
   match tag:
     case @WLeaf{value}:
       return Empty
     case @WNode:
-      return &{&lft, &rgt})
+      return &{&lft, &rgt}
 
-# Constructs a WLeaf
+# W-Tree Type
+def WTree : Set =
+  W(WTreeTag(Nat), WTreeRec)
+
+# Constructs a W-Leaf
 def WLeaf(n: Nat) -> WTree:
   return @Sup{@WLeaf{n}, λe. absurd e}
 
-# Constructs a WNode
+# Constructs a W-Node
 def WNode(l: WTree, r: WTree) -> WTree:
   return @Sup{@WNode{}, λi. match i: case &lft: l case &rgt: r  }
 
@@ -321,8 +339,12 @@ def sum_wtree(w: WTree) -> Nat:
           b = f(&rgt)
           return add(sum_wtree(a), sum_wtree(b))
 
-
-
-
-
-
+# Sum a W-Tree (using the generic fold)
+def sum_wtree_fold(w: WTree) -> Nat:
+  wfold<WTreeTag(Nat), WTreeRec, Nat>(w,
+    lambda tag f.
+    match tag:
+      case @WLeaf{value}:
+        value
+      case @WNode:
+        add(f(&lft), f(&rgt)))
