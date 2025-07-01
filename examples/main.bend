@@ -315,8 +315,14 @@ def sum_wtree(w: WTree) -> Nat:
     case @Sup{x,f}:
       match x:
         case @WLeaf{value}:
-          value
+          return value
         case @WNode{}:
           a = f(&lft)
           b = f(&rgt)
           return add(sum_wtree(a), sum_wtree(b))
+
+
+
+
+
+
