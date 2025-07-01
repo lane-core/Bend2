@@ -20,7 +20,7 @@ eql :: Int -> Int -> Book -> Term -> Term -> Bool
 eql 0  d book a b = cmp 0 d book (cut a) (cut b)
 eql lv d book a b = identical || similar where
   identical = eql 0 d book a b
-  similar   = cmp lv d book (whnf book a) (whnf book b)
+  similar   = cmp lv d book (force book a) (force book b)
 
 cmp :: Int -> Int -> Book -> Term -> Term -> Bool
 cmp lv d book a b =
