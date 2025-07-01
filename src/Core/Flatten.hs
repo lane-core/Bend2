@@ -33,6 +33,8 @@ module Core.Flatten where
 
 import Data.List (nub, find)
 import qualified Data.Map as M
+import System.IO.Unsafe (unsafePerformIO)
+import System.Exit
 
 import Debug.Trace
 
@@ -179,7 +181,7 @@ peelCtrCol (cut->k) ((((cut->p):ps),rhs):cs) =
     (Sym s  , Var k _) -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
     (Rfl    , Rfl    ) -> ((ps, rhs) : picks , drops)
     (Rfl    , Var k _) -> ((ps, subst k Rfl rhs) : picks , ((p:ps),rhs) : drops)
-    (Var _ _, p      ) -> error "TODO" -- (((p:ps), rhs) : picks , drops)
+    (Var _ _, p      ) -> unsupported
     x                  -> (picks , ((p:ps),rhs) : drops)
   where (picks, drops) = peelCtrCol k cs
 peelCtrCol k cs = (cs,cs)
@@ -455,7 +457,7 @@ lamsTerm d ks other        = error $ "lamsTerm: unexpected term: " ++ show other
 unpatBook :: Book -> Book
 unpatBook (Book defs) = Book (M.map unpatDefn defs) where
   unpatDefn (i, x, t) =
-    -- trace ("unpat: " ++ show x) $
+    trace ("unpat: " ++ show x) $
     (i, unpat 0 x, unpat 0 t)
     -- (i, x, t)
 
@@ -556,3 +558,9 @@ subst name val term = go name val term where
     Rwt a b x  -> Rwt (go name val a) (go name val b) (go name val x)
     Pat s m c  -> Pat (map (go name val) s) m (map cse c)
       where cse (pats, rhs) = (map (go name val) pats, go name val rhs)
+
+unsupported :: a
+unsupported = unsafePerformIO $ do
+  putStrLn $ "Unsupported pattern-match shape."
+  putStrLn $ "Support for it will be added in a future update."
+  exitFailure
