@@ -49,55 +49,55 @@ import Core.Type
 -- Outer scrutinees will be moved inside via 'with'.
 
 flatten :: Int -> Term -> Term
-flatten d (Var n i)   = Var n i
-flatten d (Ref n)     = Ref n
-flatten d (Sub t)     = Sub (flatten d t)
-flatten d (Fix n f)   = Fix n (\x -> flatten (d+1) (f x))
-flatten d (Let v f)   = Let (flatten d v) (flatten d f)
-flatten d Set         = Set
-flatten d (Chk x t)   = Chk (flatten d x) (flatten d t)
-flatten d Emp         = Emp
-flatten d (EmpM x)    = EmpM (flatten d x)
-flatten d Uni         = Uni
-flatten d One         = One
-flatten d (UniM x f)  = UniM (flatten d x) (flatten d f)
-flatten d Bit         = Bit
-flatten d Bt0         = Bt0
-flatten d Bt1         = Bt1
-flatten d (BitM x f t)= BitM (flatten d x) (flatten d f) (flatten d t)
-flatten d Nat         = Nat
-flatten d Zer         = Zer
-flatten d (Suc n)     = Suc (flatten d n)
-flatten d (NatM x z s)= NatM (flatten d x) (flatten d z) (flatten d s)
-flatten d (Lst t)     = Lst (flatten d t)
-flatten d Nil         = Nil
-flatten d (Con h t)   = Con (flatten d h) (flatten d t)
-flatten d (LstM x n c)= LstM (flatten d x) (flatten d n) (flatten d c)
-flatten d (Enu s)     = Enu s
-flatten d (Sym s)     = Sym s
-flatten d (EnuM x c e)= EnuM (flatten d x) [(s, flatten d t) | (s, t) <- c] (flatten d e)
-flatten d (Sig a b)   = Sig (flatten d a) (flatten d b)
-flatten d (Tup a b)   = Tup (flatten d a) (flatten d b)
-flatten d (SigM x f)  = SigM (flatten d x) (flatten d f)
-flatten d (All a b)   = All (flatten d a) (flatten d b)
-flatten d (Lam n f)   = Lam n (\x -> flatten (d+1) (f x))
-flatten d (App f x)   = App (flatten d f) (flatten d x)
-flatten d (Eql t a b) = Eql (flatten d t) (flatten d a) (flatten d b)
-flatten d Rfl         = Rfl
-flatten d (EqlM x f)  = EqlM (flatten d x) (flatten d f)
-flatten d (Met i t x) = Met i (flatten d t) (map (flatten d) x)
-flatten d (Ind t)     = Ind (flatten d t)
-flatten d (Frz t)     = Frz (flatten d t)
-flatten d Era         = Era
-flatten d (Sup l a b) = Sup l (flatten d a) (flatten d b)
-flatten d (Num t)     = Num t
-flatten d (Val v)     = Val v
-flatten d (Op2 o a b) = Op2 o (flatten d a) (flatten d b)
-flatten d (Op1 o a)   = Op1 o (flatten d a)
-flatten d (Pri p)     = Pri p
-flatten d (Loc s t)   = Loc s (flatten d t)
-flatten d (Rwt a b x) = Rwt (flatten d a) (flatten d b) (flatten d x)
-flatten d (Pat s m c) = simplify d $ flattenPat d (Pat s m c)
+flatten d (Var n i)    = Var n i
+flatten d (Ref n)      = Ref n
+flatten d (Sub t)      = Sub (flatten d t)
+flatten d (Fix n f)    = Fix n (\x -> flatten (d+1) (f x))
+flatten d (Let v f)    = Let (flatten d v) (flatten d f)
+flatten d Set          = Set
+flatten d (Chk x t)    = Chk (flatten d x) (flatten d t)
+flatten d Emp          = Emp
+flatten d (EmpM x)     = EmpM (flatten d x)
+flatten d Uni          = Uni
+flatten d One          = One
+flatten d (UniM x f)   = UniM (flatten d x) (flatten d f)
+flatten d Bit          = Bit
+flatten d Bt0          = Bt0
+flatten d Bt1          = Bt1
+flatten d (BitM x f t) = BitM (flatten d x) (flatten d f) (flatten d t)
+flatten d Nat          = Nat
+flatten d Zer          = Zer
+flatten d (Suc n)      = Suc (flatten d n)
+flatten d (NatM x z s) = NatM (flatten d x) (flatten d z) (flatten d s)
+flatten d (Lst t)      = Lst (flatten d t)
+flatten d Nil          = Nil
+flatten d (Con h t)    = Con (flatten d h) (flatten d t)
+flatten d (LstM x n c) = LstM (flatten d x) (flatten d n) (flatten d c)
+flatten d (Enu s)      = Enu s
+flatten d (Sym s)      = Sym s
+flatten d (EnuM x c e) = EnuM (flatten d x) [(s, flatten d t) | (s, t) <- c] (flatten d e)
+flatten d (Sig a b)    = Sig (flatten d a) (flatten d b)
+flatten d (Tup a b)    = Tup (flatten d a) (flatten d b)
+flatten d (SigM x f)   = SigM (flatten d x) (flatten d f)
+flatten d (All a b)    = All (flatten d a) (flatten d b)
+flatten d (Lam n f)    = Lam n (\x -> flatten (d+1) (f x))
+flatten d (App f x)    = App (flatten d f) (flatten d x)
+flatten d (Eql t a b)  = Eql (flatten d t) (flatten d a) (flatten d b)
+flatten d Rfl          = Rfl
+flatten d (EqlM x f)   = EqlM (flatten d x) (flatten d f)
+flatten d (Met i t x)  = Met i (flatten d t) (map (flatten d) x)
+flatten d (Ind t)      = Ind (flatten d t)
+flatten d (Frz t)      = Frz (flatten d t)
+flatten d Era          = Era
+flatten d (Sup l a b)  = Sup l (flatten d a) (flatten d b)
+flatten d (Num t)      = Num t
+flatten d (Val v)      = Val v
+flatten d (Op2 o a b)  = Op2 o (flatten d a) (flatten d b)
+flatten d (Op1 o a)    = Op1 o (flatten d a)
+flatten d (Pri p)      = Pri p
+flatten d (Loc s t)    = Loc s (flatten d t)
+flatten d (Rwt a b x)  = Rwt (flatten d a) (flatten d b) (flatten d x)
+flatten d (Pat s m c)  = simplify d $ flattenPat d (Pat s m c)
 
 isVarCol :: [Case] -> Bool
 isVarCol []                        = True
@@ -545,41 +545,3 @@ subst name val term = go name val term where
     Rwt a b x  -> Rwt (go name val a) (go name val b) (go name val x)
     Pat s m c  -> Pat (map (go name val) s) m (map cse c)
       where cse (pats, rhs) = (map (go name val) pats, go name val rhs)
-
-
-
-
-
--- PROBLEM: when trying to flatten:
-
--- def sum(w: TreeW) -> Nat:
-  -- match w:
-    -- case @Sup{x, f}:
-      -- match x:
-        -- case (&Leaf,value,()):
-          -- ()
-        -- case (&Node,()):
-          -- ()
-
--- we get the following output:
-
--- >> ctr: &Sup{x,f} match w { case (&Sup{x,f}): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: &Sup match _x1 _x2 { case (&Sup) ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: (x,f,()) match _x2 { case ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> var: match x _x4 { case (x) ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: (f,()) match _x4 { case ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> var: match f _x6 { case (f) (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: () match _x6 { case (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- unpat: λw. match w { case ((_x1,_x2)): match _x1 { case (&Sup): match _x2 { case ((x,_x4)): match _x4 { case ((f,_x6)): match _x6 { case (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } } } } case (_x3): match _x3 _x2 { } } }
--- >> ctr: &Sup{x,f} match w { case (&Sup{x,f}): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: &Sup match _x1 _x2 { case (&Sup) ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: (x,f,()) match _x2 { case ((x,f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> var: match x _x4 { case (x) ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: (f,()) match _x4 { case ((f,())): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> var: match f _x6 { case (f) (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- >> ctr: () match _x6 { case (()): match x { case ((&Leaf,value,())): () case ((&Node,())): () } }
--- oximatch x { case ((&Leaf,value,())): () case ((&Node,())): () }
--- sum : ∀w:TreeW. Nat = λw. ~ w { (,):λ_x1. λ_x2. ~ _x1 { &Sup: ~ _x2 { (,):λx. λ_x4. ~ _x4 { (,):λf. λ_x6. ~ _x6 { (): ~ x { (,):λ_x7. λ_x8. () } } } } ; λ_x3. () } }
-
--- note that '&Leaf' and '&Node' vanished completely from the final output. seems like it isn't fully flattening? why?
-

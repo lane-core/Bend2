@@ -267,7 +267,7 @@ check d span book ctx term goal =
     (Lam k f, All a (Lam _ b)) -> do
       let x = Var k d
       check (d+1) span book (extend ctx k x a) (f x) (b x)
-    (EmpM x, goal) -> do
+    (EmpM x, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Emp -> do
@@ -279,27 +279,27 @@ check d span book ctx term goal =
             then Done ()
             else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Emp) (format d book xT)
-    (UniM x f, goal) -> do
+    (UniM x f, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Uni -> do
           check d span book ctx f (Rwt x One goal)
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Uni) (format d book xT)
-    (BitM x f t, goal) -> do
+    (BitM x f t, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Bit -> do
           check d span book ctx f (Rwt x Bt0 goal)
           check d span book ctx t (Rwt x Bt1 goal)
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Bit) (format d book xT)
-    (NatM x z s, goal) -> do
+    (NatM x z s, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Nat -> do
           check d span book ctx z (Rwt x Zer goal)
           check d span book ctx s $ All Nat (Lam "p" (\p -> Rwt x (Suc p) goal))
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Nat) (format d book xT)
-    (LstM x n c, goal) -> do
+    (LstM x n c, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Lst a -> do
@@ -310,7 +310,7 @@ check d span book ctx term goal =
       if s `elem` y
         then Done ()
         else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu y)) (format d book (Sym s))
-    (EnuM x cs df, goal) -> do
+    (EnuM x cs df, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Enu syms -> do
@@ -329,7 +329,7 @@ check d span book ctx term goal =
                   check d span book ctx df lam_goal
             else Done ()
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu [])) (format d book xT)
-    (SigM x f, goal) -> do
+    (SigM x f, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Sig a b -> do
@@ -344,7 +344,7 @@ check d span book ctx term goal =
       if equal d book a b
         then Done ()
         else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
-    (EqlM x f, goal) -> do
+    (EqlM x f, _) -> do
       xT <- infer d span book ctx x
       case force book xT of
         Eql t a b -> do

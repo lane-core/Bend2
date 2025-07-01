@@ -1,3 +1,5 @@
+{-./Type.hs-}
+
 {-# LANGUAGE ViewPatterns #-}
 
 module Core.Equal where
