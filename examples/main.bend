@@ -276,3 +276,47 @@ def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
 # Multiplication: successor on the **left**
 def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
   finally
+
+# W-Types
+# -------
+
+# W-Tree Type
+type W(A: Set, B: A -> Set):
+  case @Sup:
+    x: A
+    f: B(x) -> W(A,B)
+
+# Tag of a W-Tree
+type WTree/Tag<A: Set>:
+  case @WLeaf:
+    value: A
+  case @WNode:
+
+# WTree: Tree encoded as a W-Type
+def WTree : Set =
+  W(WTree/Tag(Nat), λtag.
+  match tag:
+    case @WLeaf{value}:
+      return Empty
+    case @WNode:
+      return &{&lft, &rgt})
+
+# Constructs a WLeaf
+def WLeaf(n: Nat) -> WTree:
+  return @Sup{@WLeaf{n}, λe. absurd e}
+
+# Constructs a WNode
+def WNode(l: WTree, r: WTree) -> WTree:
+  return @Sup{@WNode{}, λi. match i: case &lft: l case &rgt: r  }
+
+# Sums a W-Tree
+def sum_wtree(w: WTree) -> Nat:
+  match w:
+    case @Sup{x,f}:
+      match x:
+        case @WLeaf{value}:
+          value
+        case @WNode{}:
+          a = f(&lft)
+          b = f(&rgt)
+          return add(sum_wtree(a), sum_wtree(b))
