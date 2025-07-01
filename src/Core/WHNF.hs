@@ -249,8 +249,8 @@ normal d book term =
   case whnf book term of
     Var k i    -> Var k i
     Ref k      -> Ref k
-    Sub t      -> normal d book t
-    Fix k f    -> Fix k (\x -> normal (d+1) book (f x))
+    Sub t      -> t
+    Fix k f    -> Fix k (\x -> normal (d+1) book (f (Sub x)))
     Let v f    -> Let (normal d book v) (normal d book f)
     Set        -> Set
     Chk x t    -> Chk (normal d book x) (normal d book t)
@@ -278,7 +278,7 @@ normal d book term =
     Tup a b    -> Tup (normal d book a) (normal d book b)
     SigM x f   -> SigM (normal d book x) (normal d book f)
     All a b    -> All (normal d book a) (normal d book b)
-    Lam k f    -> Lam k f -- note: uses lv=0 for finite pretty printing
+    Lam k f    -> Lam k (\x -> normal d book (f (Sub x)))
     App f x    -> foldl (\ f x -> App f (normal d book x)) fn xs
       where (fn,xs) = collectApps (App f x) []
     Eql t a b  -> Eql (normal d book t) (normal d book a) (normal d book b)
