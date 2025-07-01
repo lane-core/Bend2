@@ -84,7 +84,7 @@ whnfUniM :: Book -> Term -> Term -> Term
 whnfUniM book x f =
   case whnf book x of
     One -> whnf book f
-    _   -> Uni
+    _   -> UniM x f
 
 -- Normalizes a boolean match
 whnfBitM :: Book -> Term -> Term -> Term -> Term

@@ -192,35 +192,44 @@ flattenBook (Book defs) = Book (M.map flattenDefn defs)
 -- ========
 -- Removes redundant matches, adjusts form
 
+
+-- >> match _x7 M{ case (False): () case (_x8): match _x8 M{ } }
+
 -- Substitutes a move list into an expression
 shove :: Int -> [Move] -> Term -> Term
 shove d ms term = foldr (\ (k,v) x -> subst k v x) term ms 
 
--- Converts zero-scrutinee matches to plain expressions
--- match { with x=A ... case: F(x,...) ... }
--- ----------------------------------------- decay
--- F(A,...)
-decay :: Int -> Term -> Term
-decay d (Pat [] ms (([],rhs):cs)) = decay d (shove d ms rhs)
-decay d term                      = term
-
--- Merges redundant case-match chains into parent
--- match ... { ... case x: match x { case A:A ; case B:B ... } ... }
--- ----------------------------------------------------------------- merge
--- match ... { ... case A:A ; case B:B ... }
-merge :: Int -> Term -> Term
-merge d (Pat ss ms cs) = Pat ss ms (cases cs) where 
-  cases :: [Case] -> [Case]
-  cases (([Var x _], (Pat [Var x' _] ms cs')) : cs)
-    | x == x' = csA ++ csB
-    where csA = map (\ (p, rhs) -> (p, merge d (shove d ms rhs))) cs'
-          csB = cases cs
-  cases ((p,rhs):cs) = (p, merge d rhs) : cases cs
-  cases []           = []
-merge d term = term
 
 simplify :: Int -> Term -> Term
-simplify d = merge d . decay d
+simplify d (Pat ss ms cs) =
+  case Pat ss ms (map (\ (p, c) -> (p, simplify d c)) cs) of
+    pat@(Pat [] ms (([],rhs):cs)) ->
+      simplify d (shove d ms rhs)
+    pat@(Pat ss ms cs) -> Pat ss ms (merge d cs)
+simplify d (Loc l t) = Loc l (simplify d t)
+simplify d pat       = pat
+
+-- Merges redundant case-match chains into parent
+-- ... case x: match x { case A:A ; case B:B ... } ...
+-- --------------------------------------------------- simplify
+-- ... case A:A ; case B:B ...
+merge :: Int -> [Case] -> [Case]
+merge d (([Var x _], (Pat [Var x' _] ms cs')) : cs)
+                | x == x' = csA ++ csB
+                where csA = map (\ (p, rhs) -> (p, shove d ms rhs)) cs'
+                      csB = merge d cs
+merge d ((p,rhs):cs) = (p, rhs) : merge d cs
+merge d []           = []
+
+
+-- match { with x=A ... case: F(x,...) ... }
+-- ----------------------------------------- simplify-decay
+-- F(A,...)
+decay :: Int -> Term -> Term
+decay d (Pat [] ms (([],rhs):cs)) = simplify d (shove d ms rhs)
+decay d pat                       = pat
+
+
 
 -- UnPat
 -- =====
