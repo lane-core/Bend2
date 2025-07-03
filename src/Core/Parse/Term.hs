@@ -31,8 +31,7 @@ import Core.Type
 -- | Parse a "core" form
 parseTermIni :: Parser Term
 parseTermIni = choice
-  [ parseLet
-  , parseGen
+  [ parseGen
   , parseTst
   , parseFix
   , parseLam
@@ -713,35 +712,6 @@ parseFix = label "fixed point" $ do
   _ <- symbol "."
   f <- parseTerm
   return (Fix k (\v -> f))
-
--- | Syntax: let x = value; body | let x : Type = value; body
-parseLet :: Parser Term
-parseLet = label "let binding" $ do
-  _ <- try $ symbolStrict "let"
-  x <- name
-  choice [ parseLetTyped x , parseLetUntyped x ]
-
--- | Syntax: = value; body
--- Parses the untyped part of a 'let' binding
-parseLetUntyped :: Name -> Parser Term
-parseLetUntyped x = do
-  _ <- symbol "="
-  v <- parseTerm
-  _ <- parseSemi
-  f <- parseTerm
-  return $ (Let v (Lam x (\_ -> f)))
-
--- | Syntax: : Type = value; body
--- Parses the typed part of a 'let' binding
-parseLetTyped :: Name -> Parser Term
-parseLetTyped x = do
-  _ <- try $ symbol ":"
-  t <- parseTerm
-  _ <- symbol "="
-  v <- parseTerm
-  _ <- parseSemi
-  f <- parseTerm
-  return $ (Let (Chk v t) (Lam x (\_ -> f)))
 
 -- | Syntax: gen name(x: Type1, y: Type2) -> RetType { context } body
 parseGen :: Parser Term
