@@ -266,7 +266,7 @@ instance Show Term where
   show (Op2 DIV a b)   = "(" ++ show a ++ " / " ++ show b ++ ")"
   show (Op2 MOD a b)   = "(" ++ show a ++ " % " ++ show b ++ ")"
   show (Op2 EQL a b)   = "(" ++ show a ++ " == " ++ show b ++ ")"
-  show (Op2 NEQ a b)   = "(" ++ show a ++ " != " ++ show b ++ ")"
+  show (Op2 NEQ a b)   = "(" ++ show a ++ " !== " ++ show b ++ ")"
   show (Op2 LST a b)   = "(" ++ show a ++ " < " ++ show b ++ ")"
   show (Op2 GRT a b)   = "(" ++ show a ++ " > " ++ show b ++ ")"
   show (Op2 LEQ a b)   = "(" ++ show a ++ " <= " ++ show b ++ ")"

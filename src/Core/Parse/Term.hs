@@ -625,7 +625,7 @@ parseNumOp lhs = label "numeric operation" $ do
       , try $ symbol ">"  >> return GRT
       ]
     , [ try $ symbol "==="  >> return EQL
-      , try $ symbol "!="   >> return NEQ
+      , try $ symbol "!=="  >> return NEQ
       , try $ keyword "and" >> return AND
       , try $ keyword "or"  >> return OR
       , try $ keyword "xor" >> return XOR
