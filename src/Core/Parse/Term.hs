@@ -31,8 +31,7 @@ import Core.Type
 -- | Parse a "core" form
 parseTermIni :: Parser Term
 parseTermIni = choice
-  [ parseLet
-  , parseGen
+  [ parseGen
   , parseTst
   , parseFix
   , parseLam
@@ -83,6 +82,7 @@ parseTermOpr t = choice
   , parseChk t   -- ::
   , parseAdd t   -- +
   , parseNumOp t -- <, >, ==, etc.
+  , parseTypedAss t -- : Type =
   , parseAss t   -- =
   , return t ]
 
@@ -682,6 +682,51 @@ parseAss t = label "location binding" $ do
     Var x _ -> return $ Let v (Lam x (\_ -> b))
     _       -> return $ Pat [v] [] [([t], b)]
 
+-- | Syntax: var : Type = value
+parseTypedAss :: Term -> Parser Term
+parseTypedAss t = label "location binding" $ do
+  _ <- try $ do
+    _ <- symbol ":"
+    _ <- choice
+          [
+            parseGen
+          , parseTst
+          , parseFix
+          , parseLam
+          , parseBifIf
+          , parsePat
+          , parseRewrite
+          , parseAbsurd
+          , parseAll
+          , parseSig
+          , parseTildeExpr
+          , parseOne
+          , parseReturn
+          , parseNat
+          , parseNatLit
+          , parseNumLit
+          , parseNumUna
+          , parseCharLit
+          , parseStringLit
+          , parseLstLit
+          , parseNil
+          , parseRfl
+          , parseEnu
+          , parseSym
+          , parseTupApp
+          , parseView
+          , parseVar
+          ]
+    _ <- symbol "="
+    notFollowedBy (char '=')
+  v <- parseTerm
+  _ <- parseSemi
+  b <- parseTerm
+  case t of
+    Var x _ -> return $ Let v (Lam x (\_ -> b))
+    _       -> return $ Pat [v] [] [([t], b)]
+
+
 -- | HOAS‐style binders
 
 -- | Syntax: λ x y z. body | lam x y z. body | λ (x,y) z. body
@@ -715,33 +760,33 @@ parseFix = label "fixed point" $ do
   return (Fix k (\v -> f))
 
 -- | Syntax: let x = value; body | let x : Type = value; body
-parseLet :: Parser Term
-parseLet = label "let binding" $ do
-  _ <- try $ symbolStrict "let"
-  x <- name
-  choice [ parseLetTyped x , parseLetUntyped x ]
+-- parseLet :: Parser Term
+-- parseLet = label "let binding" $ do
+--   _ <- try $ symbolStrict "let"
+--   x <- name
+--   choice [ parseLetTyped x , parseLetUntyped x ]
 
--- | Syntax: = value; body
--- Parses the untyped part of a 'let' binding
-parseLetUntyped :: Name -> Parser Term
-parseLetUntyped x = do
-  _ <- symbol "="
-  v <- parseTerm
-  _ <- parseSemi
-  f <- parseTerm
-  return $ (Let v (Lam x (\_ -> f)))
+-- -- | Syntax: = value; body
+-- -- Parses the untyped part of a 'let' binding
+-- parseLetUntyped :: Name -> Parser Term
+-- parseLetUntyped x = do
+--   _ <- symbol "="
+--   v <- parseTerm
+--   _ <- parseSemi
+--   f <- parseTerm
+--   return $ (Let v (Lam x (\_ -> f)))
 
--- | Syntax: : Type = value; body
--- Parses the typed part of a 'let' binding
-parseLetTyped :: Name -> Parser Term
-parseLetTyped x = do
-  _ <- try $ symbol ":"
-  t <- parseTerm
-  _ <- symbol "="
-  v <- parseTerm
-  _ <- parseSemi
-  f <- parseTerm
-  return $ (Let (Chk v t) (Lam x (\_ -> f)))
+-- -- | Syntax: : Type = value; body
+-- -- Parses the typed part of a 'let' binding
+-- parseLetTyped :: Name -> Parser Term
+-- parseLetTyped x = do
+--   _ <- try $ symbol ":"
+--   t <- parseTerm
+--   _ <- symbol "="
+--   v <- parseTerm
+--   _ <- parseSemi
+--   f <- parseTerm
+--   return $ (Let (Chk v t) (Lam x (\_ -> f)))
 
 -- | Syntax: gen name(x: Type1, y: Type2) -> RetType { context } body
 parseGen :: Parser Term
