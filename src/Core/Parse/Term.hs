@@ -82,7 +82,6 @@ parseTermOpr t = choice
   , parseChk t   -- ::
   , parseAdd t   -- +
   , parseNumOp t -- <, >, ==, etc.
-  , parseTypedAss t -- : Type =
   , parseAss t   -- =
   , return t ]
 
@@ -681,51 +680,6 @@ parseAss t = label "location binding" $ do
   case t of
     Var x _ -> return $ Let v (Lam x (\_ -> b))
     _       -> return $ Pat [v] [] [([t], b)]
-
--- | Syntax: var : Type = value
-parseTypedAss :: Term -> Parser Term
-parseTypedAss t = label "location binding" $ do
-  _ <- try $ do
-    _ <- symbol ":"
-    _ <- choice
-          [
-            parseGen
-          , parseTst
-          , parseFix
-          , parseLam
-          , parseBifIf
-          , parsePat
-          , parseRewrite
-          , parseAbsurd
-          , parseAll
-          , parseSig
-          , parseTildeExpr
-          , parseOne
-          , parseReturn
-          , parseNat
-          , parseNatLit
-          , parseNumLit
-          , parseNumUna
-          , parseCharLit
-          , parseStringLit
-          , parseLstLit
-          , parseNil
-          , parseRfl
-          , parseEnu
-          , parseSym
-          , parseTupApp
-          , parseView
-          , parseVar
-          ]
-    _ <- symbol "="
-    notFollowedBy (char '=')
-  v <- parseTerm
-  _ <- parseSemi
-  b <- parseTerm
-  case t of
-    Var x _ -> return $ Let v (Lam x (\_ -> b))
-    _       -> return $ Pat [v] [] [([t], b)]
-
 
 -- | HOAS‐style binders
 
