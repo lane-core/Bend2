@@ -32,7 +32,7 @@ parseFile file = do
   content <- readFile file
   case doParseBook file content of
     Left err -> do
-      putStrLn $ "Parse error: " ++ err
+      putStrLn $ err
       exitFailure
     Right book -> do
       -- Auto-import unbound references
