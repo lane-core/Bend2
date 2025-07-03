@@ -625,15 +625,15 @@ parseNumOp lhs = label "numeric operation" $ do
       , try $ symbol ">"  >> return GRT
       ]
     , [ try $ symbol "===" >> return EQL
-      , try $ symbol "!=" >> return NEQ
-      , try $ symbol "&&" >> return AND
-      , try $ symbol "||" >> return OR
-      , try $ symbol "**" >> return POW
-      , try $ symbol "-"  >> return SUB
-      , try $ symbol "*"  >> return MUL
-      , try $ symbol "/"  >> return DIV
-      , try $ symbol "%"  >> return MOD
-      , try $ symbol "^"  >> return XOR
+      , try $ symbol "!="  >> return NEQ
+      , try $ symbol "and" >> return AND
+      , try $ symbol "or"  >> return OR
+      , try $ symbol "**"  >> return POW
+      , try $ symbol "-"   >> return SUB
+      , try $ symbol "*"   >> return MUL
+      , try $ symbol "/"   >> return DIV
+      , try $ symbol "%"   >> return MOD
+      , try $ symbol "^"   >> return XOR
       ]
     ]
   rhs <- parseTerm
