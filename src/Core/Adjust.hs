@@ -6,6 +6,8 @@ import Control.Monad.State
 import qualified Data.Map as M
 import qualified Data.Set as S
 
+import Debug.Trace
+
 import Core.Bind
 import Core.Flatten
 import Core.Deps
@@ -15,7 +17,10 @@ import Core.WHNF
 -- | Adjusts a single term, simplifying pattern matching and other constructs.
 -- It uses a book of already-adjusted definitions for context during flattening.
 adjust :: Book -> Term -> Term
-adjust book term = bind (unpat 0 (flatten 0 book term))
+adjust book term =
+  -- trace (">> parsed: " ++ show ret) $
+  ret
+  where ret = bind (unpat 0 (flatten 0 book term))
 
 -- The state for the adjustment process. It holds:
 -- 1. The book of already-adjusted definitions.
