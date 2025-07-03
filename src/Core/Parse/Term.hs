@@ -1,4 +1,5 @@
 {-./../Type.hs-}
+{-/../Parse.hs-}
 
 {-# LANGUAGE ViewPatterns #-}
 
@@ -119,7 +120,6 @@ parseVar = label "variable" $ do
     "Char"        -> return (Num CHR_T)
     "U64_TO_CHAR" -> return (Pri U64_TO_CHAR)
     _             -> return $ Var n 0
-
 
 -- | Syntax: ()
 parseOne :: Parser Term

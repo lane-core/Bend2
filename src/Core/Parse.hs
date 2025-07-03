@@ -107,7 +107,7 @@ isNameChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c ==
 
 reserved :: [Name]
 -- The 'lambda' keyword is removed as part of the refactoring to expression-based matches.
-reserved = ["match","case","else","if","end","all","any","finally","import","as","and","or"]
+reserved = ["match","case","else","if","end","all","any","finally","import","as","and","or","def"]
 
 -- | Parse a raw name without import resolution
 parseRawName :: Parser Name
@@ -116,9 +116,13 @@ parseRawName = do
   t <- many (satisfy isNameChar <?> "letter, digit, or underscore")
   return (h : t)
 
+-- FIXME: before failing, rollback to 'length n' positions before
 -- | Check if a name is reserved
 checkReserved :: Name -> Parser ()
-checkReserved n = when (n `elem` reserved) $
+checkReserved n = when (n `elem` reserved) $ do
+  -- Rollback to the beginning of the name
+  offset <- getOffset
+  setOffset (offset - length n)
   fail ("reserved keyword '" ++ n ++ "'")
 
 -- | Apply import mappings to a name
