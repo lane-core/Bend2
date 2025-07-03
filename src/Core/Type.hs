@@ -277,7 +277,7 @@ instance Show Term where
   show (Op2 SHL a b)   = "(" ++ show a ++ " << " ++ show b ++ ")"
   show (Op2 SHR a b)   = "(" ++ show a ++ " >> " ++ show b ++ ")"
   show (Op2 POW a b)   = "(" ++ show a ++ " ** " ++ show b ++ ")"
-  show (Op1 NOT a)     = "(!" ++ show a ++ ")"
+  show (Op1 NOT a)     = "(not " ++ show a ++ ")"
   show (Op1 NEG a)     = "(-" ++ show a ++ ")"
   show (Pat t m c)     = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ " }" where
              showMoves = if null m then "" else " with " ++ intercalate " with " (map mv m) where

@@ -155,6 +155,36 @@ whnfAppPri lv book U64_TO_CHAR x =
 whnfOp2 :: EvalLevel -> Book -> NOp2 -> Term -> Term -> Term
 whnfOp2 lv book op a b =
   case (whnf lv book a, whnf lv book b) of
+    -- Bool operations
+    (Bt0, Bt0) -> case op of
+      AND -> Bt0
+      OR  -> Bt0
+      XOR -> Bt0
+      EQL -> Bt1
+      NEQ -> Bt0
+      _   -> Op2 op Bt0 Bt0
+    (Bt0, Bt1) -> case op of
+      AND -> Bt0
+      OR  -> Bt1
+      XOR -> Bt1
+      EQL -> Bt0
+      NEQ -> Bt1
+      _   -> Op2 op Bt0 Bt1
+    (Bt1, Bt0) -> case op of
+      AND -> Bt0
+      OR  -> Bt1
+      XOR -> Bt1
+      EQL -> Bt0
+      NEQ -> Bt1
+      _   -> Op2 op Bt1 Bt0
+    (Bt1, Bt1) -> case op of
+      AND -> Bt1
+      OR  -> Bt1
+      XOR -> Bt0
+      EQL -> Bt1
+      NEQ -> Bt0
+      _   -> Op2 op Bt1 Bt1
+    -- Numeric operations
     (Val (U64_V x), Val (U64_V y)) -> case op of
       ADD -> Val (U64_V (x + y))
       SUB -> Val (U64_V (x - y))
@@ -235,6 +265,14 @@ whnfOp2 lv book op a b =
 whnfOp1 :: EvalLevel -> Book -> NOp1 -> Term -> Term
 whnfOp1 lv book op a =
   case whnf lv book a of
+    -- Bool operations
+    Bt0 -> case op of
+      NOT -> Bt1
+      _   -> Op1 op Bt0
+    Bt1 -> case op of
+      NOT -> Bt0
+      _   -> Op1 op Bt1
+    -- Numeric operations
     Val (U64_V x) -> case op of
       NOT -> Val (U64_V (complement x))
       NEG -> Op1 op (Val (U64_V x)) -- negation not defined for unsigned

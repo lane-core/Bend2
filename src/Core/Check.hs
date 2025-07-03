@@ -196,10 +196,10 @@ inferOp2Type d span book ctx op a b ta tb = do
     GRT -> comparisonOp ta tb
     LEQ -> comparisonOp ta tb
     GEQ -> comparisonOp ta tb
-    -- Bitwise ops require integer types
-    AND -> integerOp ta tb
-    OR  -> integerOp ta tb
-    XOR -> integerOp ta tb
+    -- Bitwise/logical ops work on both integers and booleans
+    AND -> boolOrIntegerOp ta tb
+    OR  -> boolOrIntegerOp ta tb
+    XOR -> boolOrIntegerOp ta tb
     SHL -> integerOp ta tb
     SHR -> integerOp ta tb
   where
@@ -209,7 +209,8 @@ inferOp2Type d span book ctx op a b ta tb = do
     
     comparisonOp ta tb = case (force book ta, force book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done Bit
-      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)
+      (Bit, Bit) -> Done Bit  -- Allow Bool comparison
+      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)
     
     integerOp ta tb = case (force book ta, force book tb) of
       (Num U64_T, Num U64_T) -> Done (Num U64_T)
@@ -217,11 +218,19 @@ inferOp2Type d span book ctx op a b ta tb = do
       (Num F64_T, Num F64_T) -> Done (Num U64_T)  -- Bitwise on F64 returns U64
       (Num CHR_T, Num CHR_T) -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)  -- Bitwise not supported for CHR
       _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)
+    
+    boolOrIntegerOp ta tb = case (force book ta, force book tb) of
+      (Bit, Bit) -> Done Bit  -- Logical operations on booleans
+      (Num U64_T, Num U64_T) -> Done (Num U64_T)  -- Bitwise operations on integers
+      (Num I64_T, Num I64_T) -> Done (Num U64_T)
+      (Num F64_T, Num F64_T) -> Done (Num U64_T)
+      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)
 
 -- Infer the result type of a unary numeric operation
 inferOp1Type :: Int -> Span -> Book -> Ctx -> NOp1 -> Term -> Term -> Result Term
 inferOp1Type d span book ctx op a ta = case op of
   NOT -> case force book ta of
+    Bit       -> Done Bit  -- Logical NOT on Bool
     Num U64_T -> Done (Num U64_T)
     Num I64_T -> Done (Num U64_T)  -- Bitwise NOT on I64 returns U64
     Num F64_T -> Done (Num U64_T)  -- Bitwise NOT on F64 returns U64

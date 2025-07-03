@@ -451,11 +451,11 @@ parseStringLit = label "string literal" $ lexeme $ do
       let code = read ("0x" ++ digits) :: Int
       return $ toEnum code
 
--- | Parse numeric unary operations: !x, -x
+-- | Parse numeric unary operations: not x, -x
 parseNumUna :: Parser Term
 parseNumUna = label "numeric unary operation" $ do
   op <- choice
-    [ try $ symbol "!" >> return NOT
+    [ try $ keyword "not" >> return NOT
     , try $ symbol "-" >> return NEG
     ]
   arg <- parseTerm
@@ -628,6 +628,7 @@ parseNumOp lhs = label "numeric operation" $ do
       , try $ symbol "!="   >> return NEQ
       , try $ keyword "and" >> return AND
       , try $ keyword "or"  >> return OR
+      , try $ keyword "xor" >> return XOR
       , try $ symbol "**"   >> return POW
       , try $ symbol "-"    >> return SUB
       , try $ symbol "*"    >> return MUL
