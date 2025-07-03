@@ -128,7 +128,7 @@ parseOne = label "unit value (())" $ symbol "()" >> return One
 -- | Syntax: if condition: trueCase else: falseCase
 parseBifIf :: Parser Term
 parseBifIf = label "if clause" $ do
-  _ <- try $ symbolStrict "if"
+  _ <- try $ keyword "if"
   condition <- parseTerm
   _ <- symbol ":"
   trueCase <- parseTerm
@@ -140,7 +140,7 @@ parseBifIf = label "if clause" $ do
 -- | Syntax: Σ x: Type. body | any x: Type. body | Σ Type. Type | any Type. Type
 parseSig :: Parser Term
 parseSig = label "dependent pair type" $ do
-  _ <- try $ choice [symbol "Σ", symbolStrict "any"]
+  _ <- try $ choice [symbol "Σ", keyword "any"]
   bindings <- many parseBinding
   case bindings of
     [] -> parseSigSimple
@@ -167,7 +167,7 @@ parseSigSimple = do
 -- | Syntax: ∀ x: Type. body | all x: Type. body | ∀ Type. Type | all Type. Type
 parseAll :: Parser Term
 parseAll = label "dependent function type" $ do
-  _ <- try $ choice [symbol "∀", symbolStrict "all"]
+  _ <- try $ choice [symbol "∀", keyword "all"]
   bindings <- many parseBinding
   case bindings of
     [] -> parseAllSimple
@@ -253,7 +253,7 @@ parseSym = label "enum symbol / constructor" $ try $ do
 parsePat :: Parser Term
 parsePat = label "pattern match" $ do
   srcPos  <- getSourcePos
-  _       <- try $ symbolStrict "match"
+  _       <- try $ keyword "match"
   scruts  <- some parseTerm
   delim   <- choice [ ':' <$ symbol ":", '{' <$ symbol "{" ]
   moves   <- many parseWith
@@ -472,7 +472,7 @@ parseLstLit = label "list literal" $ do
 -- | Syntax: return term
 parseReturn :: Parser Term
 parseReturn = label "return statement" $ do
-  _ <- try $ symbolStrict "return"
+  _ <- try $ keyword "return"
   t <- parseTerm
   return t
 
@@ -492,7 +492,7 @@ parseRfl = label "reflexivity ({==} or finally)" $ choice
       return Rfl
     
     parseFinally = do
-      _ <- try $ symbolStrict "finally"
+      _ <- try $ keyword "finally"
       return Rfl
 
 -- | Syntax: rewrite expr body
@@ -500,7 +500,7 @@ parseRfl = label "reflexivity ({==} or finally)" $ choice
 parseRewrite :: Parser Term
 parseRewrite = label "rewrite" $ do
   srcPos <- getSourcePos
-  _ <- try $ symbolStrict "rewrite"
+  _ <- try $ keyword "rewrite"
   scrut <- parseTerm
   body <- parseTerm
   return (Pat [scrut] [] [([Rfl], body)])
@@ -509,7 +509,7 @@ parseRewrite = label "rewrite" $ do
 -- Desugars to: match expr {}
 parseAbsurd :: Parser Term
 parseAbsurd = label "absurd" $ do
-  _ <- try $ symbolStrict "absurd"
+  _ <- try $ keyword "absurd"
   scrut <- parseTerm
   return (Pat [scrut] [] [])
 
@@ -624,16 +624,16 @@ parseNumOp lhs = label "numeric operation" $ do
       , try $ symbol "<"  >> return LST
       , try $ symbol ">"  >> return GRT
       ]
-    , [ try $ symbol "===" >> return EQL
-      , try $ symbol "!="  >> return NEQ
-      , try $ symbol "and" >> return AND
-      , try $ symbol "or"  >> return OR
-      , try $ symbol "**"  >> return POW
-      , try $ symbol "-"   >> return SUB
-      , try $ symbol "*"   >> return MUL
-      , try $ symbol "/"   >> return DIV
-      , try $ symbol "%"   >> return MOD
-      , try $ symbol "^"   >> return XOR
+    , [ try $ symbol "==="  >> return EQL
+      , try $ symbol "!="   >> return NEQ
+      , try $ keyword "and" >> return AND
+      , try $ keyword "or"  >> return OR
+      , try $ symbol "**"   >> return POW
+      , try $ symbol "-"    >> return SUB
+      , try $ symbol "*"    >> return MUL
+      , try $ symbol "/"    >> return DIV
+      , try $ symbol "%"    >> return MOD
+      , try $ symbol "^"    >> return XOR
       ]
     ]
   rhs <- parseTerm
@@ -687,7 +687,7 @@ parseAss t = label "location binding" $ do
 parseLam :: Parser Term
 parseLam = label "lambda abstraction" $ do
   _ <- try $ do
-    _ <- choice [symbol "λ", symbolStrict "lambda"]
+    _ <- choice [symbol "λ", keyword "lambda"]
     notFollowedBy (symbol "{")
     return ()
   -- Parse terms instead of just names to support patterns
@@ -716,7 +716,7 @@ parseFix = label "fixed point" $ do
 -- | Syntax: gen name(x: Type1, y: Type2) -> RetType { context } body
 parseGen :: Parser Term
 parseGen = label "generation" $ do
-  _    <- try $ symbolStrict "gen"
+  _    <- try $ keyword "gen"
   f    <- name
   args <- parens $ sepEndBy parseArg (symbol ",")
   _    <- symbol "->"
@@ -732,7 +732,7 @@ parseGen = label "generation" $ do
 -- | Syntax: test term1 == term2 : Type ...
 parseTst :: Parser Term
 parseTst = label "test statement" $ do
-  _ <- try $ symbolStrict "test"
+  _ <- try $ keyword "test"
   a <- parseTerm
   _ <- symbol "=="
   b <- parseTerm

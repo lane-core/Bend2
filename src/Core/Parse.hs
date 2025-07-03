@@ -9,7 +9,7 @@ module Core.Parse
   , skip
   , lexeme
   , symbol
-  , symbolStrict
+  , keyword
   , parens
   , angles
   , braces
@@ -84,8 +84,8 @@ lexeme p = do
 symbol :: String -> Parser String
 symbol s = lexeme (string s)
 
-symbolStrict :: String -> Parser String
-symbolStrict s = lexeme (string s <* notFollowedBy (satisfy isNameChar))
+keyword :: String -> Parser String
+keyword s = lexeme (string s <* notFollowedBy (satisfy isNameChar))
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
