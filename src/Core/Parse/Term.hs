@@ -277,12 +277,13 @@ parsePat = label "pattern match" $ do
 -- Indentation-sensitive clause list (stops when out-dented)
 parseIndentClauses :: Int -> Int -> Parser [Case]
 parseIndentClauses col arity = many clause where
-
-    clause = label "case clause" . try $ do
-      skip                               -- eat leading ws / newlines
-      pos  <- getSourcePos
-      guard (unPos (sourceColumn pos) >= col)
-      _    <- symbol "case"
+    clause = label "case clause" $ do
+      pos <- try $ do
+        skip
+        pos  <- getSourcePos
+        guard (unPos (sourceColumn pos) >= col)
+        _    <- symbol "case"
+        return pos
       pats <- replicateM arity parseTerm
       _    <- symbol ":"
       body <- parseTerm
@@ -531,7 +532,9 @@ parseApp = label "application" $ do
 -- | Syntax: function<arg1, arg2, arg3>
 parsePol :: Term -> Parser Term
 parsePol f = label "polymorphic application" $ try $ do
-  _    <- symbol "<"
+  _ <- try $ do
+    _ <- symbol "<"
+    notFollowedBy (char '>')
   args <- sepEndBy parseExpr (symbol ",")
   _    <- symbol ">"
   return $ foldl App f args
@@ -564,7 +567,6 @@ parseTup = label "pair" $ try $ do
 parseCon :: Term -> Parser Term
 parseCon t = label "list cons" $ do
   s <- get
-  guard (not (tight s))
   _ <- try $ symbol "<>"
   u <- parseTerm
   return (Con t u)
@@ -621,8 +623,11 @@ parseNumOp lhs = label "numeric operation" $ do
       , try $ symbol ">=" >> return GEQ
       , try $ symbol "<<" >> return SHL
       , try $ symbol ">>" >> return SHR
-      , try $ symbol "<"  >> return LST
       , try $ symbol ">"  >> return GRT
+      , try $ do
+          _ <- symbol "<"
+          notFollowedBy (char '>')
+          return LST
       ]
     , [ try $ symbol "==="  >> return EQL
       , try $ symbol "!=="  >> return NEQ

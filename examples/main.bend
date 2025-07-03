@@ -19,16 +19,16 @@ def app
   finally
 
 # Negation on booleans
-# - not(True)  = False
-# - not(False) = True
-def not(x: Bool) -> Bool:
+# - neg(True)  = False
+# - neg(False) = True
+def neg(x: Bool) -> Bool:
   if x:
     False
   else:
     True
 
 # Proof: double negation is identity
-def double_neg_theo(x: Bool) -> Bool{not(not(x)) == x}:
+def double_neg_theo(x: Bool) -> Bool{neg(neg(x)) == x}:
   if x:
     finally
   else:
@@ -132,7 +132,7 @@ def is_even_b(n: Nat) -> Bool:
     case 0n:
       True
     case 1n + p:
-      not(is_even_b(p))
+      neg(is_even_b(p))
 
 # Proof that both is_even implementations are identical
 # (Can we have FunExt?)
