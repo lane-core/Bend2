@@ -348,7 +348,3 @@ def sum_wtree_fold(w: WTree) -> Nat:
         value
       case @WNode:
         add(f(&lft), f(&rgt)))
-
-def Anat () -> Nat:
-  q :: Nat = 22n;
-  22n
