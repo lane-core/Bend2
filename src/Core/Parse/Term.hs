@@ -503,7 +503,7 @@ parseRewrite = label "rewrite" $ do
   srcPos <- getSourcePos
   _ <- try $ keyword "rewrite"
   scrut <- parseTerm
-  body <- parseTerm
+  body <- expectBody "rewrite" parseTerm
   return (Pat [scrut] [] [([Rfl], body)])
 
 -- | Syntax: absurd expr
@@ -682,7 +682,7 @@ parseAss t = label "location binding" $ do
     notFollowedBy (char '=')
   v <- parseTerm
   _ <- parseSemi
-  b <- parseTerm
+  b <- expectBody "assignment" parseTerm
   case t of
     Var x _ -> return $ Let v (Lam x (\_ -> b))
     _       -> return $ Pat [v] [] [([t], b)]

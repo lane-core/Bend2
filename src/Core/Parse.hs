@@ -34,6 +34,9 @@ module Core.Parse
 
   -- * Error formatting
   , formatError
+  
+  -- * Error recovery
+  , expectBody
   ) where
 
 import Control.Monad (when, replicateM, void, guard)
@@ -161,6 +164,20 @@ located p = do
   (sp, t) <- withSpan p
   return (Loc sp t)
 
+-- | Parse a body expression (of '=', 'rewrite', etc.) with nice errors.
+expectBody :: String -> Parser a -> Parser a  
+expectBody where' parser = do
+  pos <- getOffset
+  tld <- optional $ lookAhead $ choice
+    [ void $ try $ keyword "def"
+    , void $ try $ keyword "type" 
+    , void $ try $ keyword "import"
+    , void eof
+    ]
+  case tld of
+    Just _  -> fail $ "Expected expression after " ++ where' ++ "."
+    Nothing -> parser
+
 -- | Main entry points
 -- These are moved to separate modules to avoid circular dependencies
 -- Use Core.Parse.Term for doParseTerm/doReadTerm
@@ -168,13 +185,16 @@ located p = do
 
 formatError :: String -> ParseErrorBundle String Void -> String
 formatError input bundle = do
-  let errorPos = NE.head $ fst $ attachSourcePos errorOffset (bundleErrors bundle) (bundlePosState bundle)
-  let err = fst errorPos
-  let pos = snd errorPos
+  let erp = NE.head $ fst $ attachSourcePos errorOffset (bundleErrors bundle) (bundlePosState bundle)
+  let err = fst erp
+  let pos = snd erp
   let lin = unPos $ sourceLine pos
   let col = unPos $ sourceColumn pos
+  let off = errorOffset err
+  let end = off >= length input
   let msg = parseErrorTextPretty err
-  let highlighted = highlightError (lin, col) (lin, col+1) input
-  "\nPARSE_ERROR\n" ++ msg
-    ++ "\nAt line " ++ show lin ++ ", column " ++ show col ++ ":\n"
-    ++ highlighted
+  let src = highlightError (lin, col) (lin, col+1) input
+  let cod = if end
+        then "\nAt end of file.\n"
+        else "\nAt line " ++ show lin ++ ", column " ++ show col ++ ":\n" ++ src
+  "\nPARSE_ERROR\n" ++ msg ++ cod
