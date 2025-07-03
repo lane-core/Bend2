@@ -241,10 +241,9 @@ check d span book ctx term goal =
     (term, Rwt a b goal) -> do
       let new_ctx  = rewriteCtx 3 d book a b ctx
       let new_goal = rewrite 3 d book a b goal
-      -- trace ("> REWRITE " ++ show (normal 3 d book a) ++ " → " ++ show (normal 3 d book b) ++ ":\n" ++
-        -- -- "- ctx : " ++ show (normalCtx 3 d book ctx) ++ " → " ++ show (normalCtx 3 d book new_ctx) ++ "\n" ++
-        -- "- goal: " ++ show (normal 3 d book goal) ++ " → " ++ show (normal 3 d book new_goal) ++ "\n" ++
-        -- "- term: " ++ show (normal 3 d book term) ++ " → " ++ show (normal 3 d book new_term)) $
+      -- trace ("> REWRITE " ++ show (normal d book a) ++ " → " ++ show (normal d book b) ++ ":\n" ++
+        -- "- ctx : " ++ show (normalCtx d book ctx) ++ " → " ++ show (normalCtx d book new_ctx) ++ "\n" ++
+        -- "- goal: " ++ show (normal d book goal) ++ " → " ++ show (normal d book new_goal)) $
       check d span book new_ctx term new_goal
     (Let v f, _) -> do
       check d span book ctx (App f v) goal
@@ -326,9 +325,9 @@ check d span book ctx term goal =
               case df of
                 (cut -> Lam k (unlam k d -> One)) -> do
                   Fail $ IncompleteMatch span (formatCtx d book ctx)
-                _   -> do
+                otherwise -> do
                   let enu_type = Enu syms
-                  let lam_goal = All enu_type (Lam "_" (\_ -> goal))
+                  let lam_goal = All enu_type (Lam "_" (\v -> Rwt x v goal))
                   check d span book ctx df lam_goal
             else Done ()
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu [])) (format d book xT)

@@ -16,136 +16,145 @@ import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 -- Evaluation
 -- ==========
 
--- Reduction
-whnf :: Book -> Term -> Term
-whnf book term
-  | ugly nf   = term
-  | otherwise = nf
-  where nf = whnfGo book term
+data EvalLevel
+  = Soft
+  | Full
+  deriving (Show,Eq)
 
-whnfGo :: Book -> Term -> Term
-whnfGo book term =
+-- Levels:
+-- - 0: undo ugly forms
+-- - 1: full evaluation
+
+-- Reduction
+whnf :: EvalLevel -> Book -> Term -> Term
+whnf lv book term
+  | lv == Soft && ugly nf = term
+  | otherwise             = nf
+  where nf = whnfGo lv book term
+
+whnfGo :: EvalLevel -> Book -> Term -> Term
+whnfGo lv book term =
   case term of
-    Let v f    -> whnfLet book v f
-    Ref k      -> whnfRef book k
-    Fix k f    -> whnfFix book k f
-    Chk x _    -> whnf book x
-    App f x    -> whnfApp book f x
-    Loc _ t    -> whnf book t
-    Op2 o a b  -> whnfOp2 book o a b
-    Op1 o a    -> whnfOp1 book o a
+    Let v f    -> whnfLet lv book v f
+    Ref k      -> whnfRef lv book k
+    Fix k f    -> whnfFix lv book k f
+    Chk x _    -> whnf lv book x
+    App f x    -> whnfApp lv book f x
+    Loc _ t    -> whnf lv book t
+    Op2 o a b  -> whnfOp2 lv book o a b
+    Op1 o a    -> whnfOp1 lv book o a
     Pri p      -> Pri p
-    UniM x f   -> whnfUniM book x f
-    BitM x f t -> whnfBitM book x f t
-    NatM x z s -> whnfNatM book x z s
-    LstM x n c -> whnfLstM book x n c
-    EnuM x c f -> whnfEnuM book x c f
-    SigM x f   -> whnfSigM book x f
-    EqlM x f   -> whnfEqlM book x f
+    UniM x f   -> whnfUniM lv book x f
+    BitM x f t -> whnfBitM lv book x f t
+    NatM x z s -> whnfNatM lv book x z s
+    LstM x n c -> whnfLstM lv book x n c
+    EnuM x c f -> whnfEnuM lv book x c f
+    SigM x f   -> whnfSigM lv book x f
+    EqlM x f   -> whnfEqlM lv book x f
     _          -> term
 
 -- Normalizes a let binding
-whnfLet :: Book -> Term -> Term -> Term
-whnfLet book v f = whnf book (App f v)
+whnfLet :: EvalLevel -> Book -> Term -> Term -> Term
+whnfLet lv book v f = whnf lv book (App f v)
 
 -- Normalizes a reference
-whnfRef :: Book -> Name -> Term
-whnfRef book k =
+whnfRef :: EvalLevel -> Book -> Name -> Term
+whnfRef lv book k =
   case deref book k of
-    Just (False, term, _) -> whnf book term
+    Just (False, term, _) -> whnf lv book term
     otherwise             -> Ref k
 
 -- Normalizes a fixpoint
-whnfFix :: Book -> String -> Body -> Term
-whnfFix book k f = whnf book (f (Fix k f))
+whnfFix :: EvalLevel -> Book -> String -> Body -> Term
+whnfFix lv book k f = whnf lv book (f (Fix k f))
 
 -- Normalizes an application
-whnfApp :: Book -> Term -> Term -> Term
-whnfApp book f x =
-  case whnf book f of
-    Lam _ f'  -> whnfAppLam book f' x
-    Pri p     -> whnfAppPri book p x
-    Sup _ _ _ -> error "Sup interactions unsupportein Haskell"
+whnfApp :: EvalLevel -> Book -> Term -> Term -> Term
+whnfApp lv book f x =
+  case whnf lv book f of
+    Lam _ f'  -> whnfAppLam lv book f' x
+    Pri p     -> whnfAppPri lv book p x
+    Sup _ _ _ -> error "Sup interactions unsupported in Haskell"
     _         -> App f x
 
 -- Normalizes a lambda application
-whnfAppLam :: Book -> Body -> Term -> Term
-whnfAppLam book f x = whnf book (f x)
+whnfAppLam :: EvalLevel -> Book -> Body -> Term -> Term
+whnfAppLam lv book f x = whnf lv book (f x)
 
 -- Normalizes a fixpoint application
-whnfAppFix :: Book -> String -> Body -> Term -> Term
-whnfAppFix book k f x = whnfApp book (f (Fix k f)) x
+whnfAppFix :: EvalLevel -> Book -> String -> Body -> Term -> Term
+whnfAppFix lv book k f x = whnfApp lv book (f (Fix k f)) x
 
 -- Eliminator normalizers
 -- ----------------------
 
 -- Normalizes a unit match
-whnfUniM :: Book -> Term -> Term -> Term
-whnfUniM book x f =
-  case whnf book x of
-    One -> whnf book f
+whnfUniM :: EvalLevel -> Book -> Term -> Term -> Term
+whnfUniM lv book x f =
+  case whnf lv book x of
+    One -> whnf lv book f
     _   -> UniM x f
 
 -- Normalizes a boolean match
-whnfBitM :: Book -> Term -> Term -> Term -> Term
-whnfBitM book x f t =
-  case whnf book x of
-    Bt0 -> whnf book f
-    Bt1 -> whnf book t
+whnfBitM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
+whnfBitM lv book x f t =
+  case whnf lv book x of
+    Bt0 -> whnf lv book f
+    Bt1 -> whnf lv book t
     _   -> BitM x f t
 
 -- Normalizes a natural number match
-whnfNatM :: Book -> Term -> Term -> Term -> Term
-whnfNatM book x z s =
-  case whnf book x of
-    Zer   -> whnf book z
-    Suc n -> whnf book (App s (whnf book n))
+whnfNatM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
+whnfNatM lv book x z s =
+  case whnf lv book x of
+    Zer   -> whnf lv book z
+    Suc n -> whnf lv book (App s (whnf lv book n))
     _     -> NatM x z s
 
 -- Normalizes a list match
-whnfLstM :: Book -> Term -> Term -> Term -> Term
-whnfLstM book x n c =
-  case whnf book x of
-    Nil     -> whnf book n
-    Con h t -> whnf book (App (App c (whnf book h)) (whnf book t))
+whnfLstM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
+whnfLstM lv book x n c =
+  case whnf lv book x of
+    Nil     -> whnf lv book n
+    Con h t -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
     _       -> LstM x n c
 
 -- Normalizes a pair match
-whnfSigM :: Book -> Term -> Term -> Term
-whnfSigM book x f =
-  case whnf book x of
-    Tup a b -> whnf book (App (App f (whnf book a)) (whnf book b))
+whnfSigM :: EvalLevel -> Book -> Term -> Term -> Term
+whnfSigM lv book x f =
+  case whnf lv book x of
+    Tup a b -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
     _       -> SigM x f
 
 -- Normalizes an enum match
-whnfEnuM :: Book -> Term -> [(String,Term)] -> Term -> Term
-whnfEnuM book x c f =
-  case whnf book x of
+whnfEnuM :: EvalLevel -> Book -> Term -> [(String,Term)] -> Term -> Term
+whnfEnuM lv book x c f =
+  case whnf lv book x of
     Sym s -> case lookup s c of
-      Just t  -> whnf book t
-      Nothing -> whnf book (App f (Sym s))
+      Just t  -> whnf lv book t
+      Nothing -> whnf lv book (App f (Sym s))
     _         -> EnuM x c f
 
 -- Normalizes an equality match
-whnfEqlM :: Book -> Term -> Term -> Term
-whnfEqlM book x f =
-  case whnf book x of
-    Rfl -> whnf book f
+whnfEqlM :: EvalLevel -> Book -> Term -> Term -> Term
+whnfEqlM lv book x f =
+  case whnf lv book x of
+    Rfl -> whnf lv book f
     _   -> EqlM x f
 
 -- Normalizes a primitive application
-whnfAppPri :: Book -> PriF -> Term -> Term
-whnfAppPri book U64_TO_CHAR x =
-  case whnf book x of
+whnfAppPri :: EvalLevel -> Book -> PriF -> Term -> Term
+whnfAppPri lv book U64_TO_CHAR x =
+  case whnf lv book x of
     Val (U64_V n) -> Val (CHR_V (toEnum (fromIntegral n)))
     _             -> App (Pri U64_TO_CHAR) x
 
 -- Numeric operations
 -- ------------------
 
-whnfOp2 :: Book -> NOp2 -> Term -> Term -> Term
-whnfOp2 book op a b =
-  case (whnf book a, whnf book b) of
+whnfOp2 :: EvalLevel -> Book -> NOp2 -> Term -> Term -> Term
+whnfOp2 lv book op a b =
+  case (whnf lv book a, whnf lv book b) of
     (Val (U64_V x), Val (U64_V y)) -> case op of
       ADD -> Val (U64_V (x + y))
       SUB -> Val (U64_V (x - y))
@@ -223,9 +232,9 @@ whnfOp2 book op a b =
       POW -> Val (CHR_V (toEnum ((fromEnum x) ^ (fromEnum y))))
     (a', b') -> Op2 op a' b'
 
-whnfOp1 :: Book -> NOp1 -> Term -> Term
-whnfOp1 book op a =
-  case whnf book a of
+whnfOp1 :: EvalLevel -> Book -> NOp1 -> Term -> Term
+whnfOp1 lv book op a =
+  case whnf lv book a of
     Val (U64_V x) -> case op of
       NOT -> Val (U64_V (complement x))
       NEG -> Op1 op (Val (U64_V x)) -- negation not defined for unsigned
@@ -246,7 +255,7 @@ whnfOp1 book op a =
 normal :: Int -> Book -> Term -> Term
 normal d book term =
   -- trace ("normal: " ++ show ++ " " ++ show term) $
-  case whnf book term of
+  case whnf Soft book term of
     Var k i    -> Var k i
     Ref k      -> Ref k
     Sub t      -> t
@@ -322,7 +331,7 @@ ugly _                   = False
 -- - Injective Refs (whnf skips them for pretty printing)
 force :: Book -> Term -> Term
 force book term =
-  case whnf book term of
+  case whnf Full book term of
     Ind t -> force book term
     Frz t -> force book term
     term  -> case fn of
