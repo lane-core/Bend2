@@ -49,6 +49,7 @@ collectDeps bound term = case term of
   Loc _ t     -> collectDeps bound t
   Rwt a b x   -> S.unions [collectDeps bound a, collectDeps bound b, collectDeps bound x]
   Sup _ a b   -> S.union (collectDeps bound a) (collectDeps bound b)
+  Frk l a b   -> S.unions [collectDeps bound l, collectDeps bound a, collectDeps bound b]
   Op2 _ a b   -> S.union (collectDeps bound a) (collectDeps bound b)
   Op1 _ a     -> collectDeps bound a
   Pat s m c   -> S.unions $ map (collectDeps bound) s ++ map (collectDeps bound . snd) m ++ concatMap (collectCaseDeps bound) c

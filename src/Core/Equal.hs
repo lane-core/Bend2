@@ -79,6 +79,7 @@ cmp lv d book a b =
     (_            , Rwt _ _ xb   ) -> eql lv d book a xb
     (Era          , Era          ) -> True
     (Sup la aa ba , Sup lb ab bb ) -> la == lb && eql lv d book aa ab && eql lv d book ba bb
+    (Frk la aa ba , Frk lb ab bb ) -> eql lv d book la lb && eql lv d book aa ab && eql lv d book ba bb
     (Num ta       , Num tb       ) -> ta == tb
     (Val va       , Val vb       ) -> va == vb
     (Op2 oa aa ba , Op2 ob ab bb ) -> oa == ob && eql lv d book aa ab && eql lv d book ba bb

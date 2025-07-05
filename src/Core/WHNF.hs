@@ -75,6 +75,7 @@ whnfApp lv book f x =
     Lam _ f'  -> whnfAppLam lv book f' x
     Pri p     -> whnfAppPri lv book p x
     Sup _ _ _ -> error "Sup interactions unsupported in Haskell"
+    Frk _ _ _ -> error "Fork interactions unsupported in Haskell"
     _         -> App f x
 
 -- Normalizes a lambda application
@@ -337,6 +338,7 @@ normal d book term =
     Rwt a b x  -> Rwt (normal d book a) (normal d book b) (normal d book x)
     Era        -> Era
     Sup l a b  -> Sup l (normal d book a) (normal d book b)
+    Frk l a b  -> error "Fork interactions unsupported in Haskell"
     Num t      -> Num t
     Val v      -> Val v
     Op2 o a b  -> Op2 o (normal d book a) (normal d book b)

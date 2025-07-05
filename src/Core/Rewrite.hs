@@ -71,6 +71,7 @@ rewriteGo lv d book old neo val = case val of
   Frz t      -> Frz (rewrite lv d book old neo t)
   Era        -> Era
   Sup l a b  -> Sup l (rewrite lv d book old neo a) (rewrite lv d book old neo b)
+  Frk l a b  -> Frk (rewrite lv d book old neo l) (rewrite lv d book old neo a) (rewrite lv d book old neo b)
   Loc s t    -> Loc s (rewrite lv d book old neo t)
   Rwt a b x  -> Rwt (rewrite lv d book old neo a) (rewrite lv d book old neo b) (rewrite lv d book old neo x)
   Pri p      -> Pri p

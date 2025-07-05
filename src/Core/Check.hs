@@ -154,6 +154,8 @@ infer d span book ctx term =
       Fail $ CantInfer span (formatCtx d book ctx)
     Sup l a b -> do
       Fail $ CantInfer span (formatCtx d book ctx)
+    Frk l a b -> do
+      Fail $ CantInfer span (formatCtx d book ctx)
     Met _ _ _ -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Num _ -> do
@@ -386,6 +388,13 @@ check d span book ctx term goal =
       if equal d book tr goal
         then Done ()
         else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book tr)
+    (Sup l a b, _) -> do
+      check d span book ctx a goal
+      check d span book ctx b goal
+    (Frk l a b, _) -> do
+      check d span book ctx l (Num U64_T)
+      check d span book ctx a goal
+      check d span book ctx b goal
     (Pat _ _ _, _) -> do
       error "not-supported"
     -- (f x) :: G

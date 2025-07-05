@@ -128,6 +128,7 @@ data Term
   -- Supperpositions
   | Era               -- *
   | Sup Int Term Term -- &L{a,b}
+  | Frk Term Term Term -- fork L:a else:b
 
   -- Errors
   | Loc Span Term -- x
@@ -242,6 +243,7 @@ instance Show Term where
   show (Rwt a b x)     = show a ++ " ⇒ " ++ show b ++ "; " ++ show x
   show (Era)           = "*"
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
+  show (Frk l a b)     = "fork " ++ show l ++ ":" ++ show a ++ " else:" ++ show b
   show (Met _ _ _)     = "?"
   show (Pri p)         = pri p where
     pri U64_TO_CHAR    = "U64_TO_CHAR"

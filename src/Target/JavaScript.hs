@@ -49,6 +49,7 @@ data CT
   -- Others
   | CEra
   | CSup Int CT CT
+  | CFrk CT CT CT
   | CPri PriF
 
 type CTBook = M.Map String CT
@@ -111,6 +112,7 @@ termToCT book term dep = case term of
   Rfl        -> CEra
   Era        -> CEra
   Sup l a b  -> CSup l (termToCT book a dep) (termToCT book b dep)
+  Frk l a b  -> CFrk (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
   Pat _ _ _  -> error "unreachable"
 
 -- JavaScript State Monad
@@ -511,6 +513,7 @@ ctToJS book fnName fnArgs isTail var term dep = case term of
   CEql _      -> set var "(x => null)"
   CEra        -> set var "null"
   CSup _ _ _  -> error "Superpositions not supported in JavaScript backend"
+  CFrk _ _ _  -> error "Fork not supported in JavaScript backend"
   CPri p      -> compilePri p
   where
 

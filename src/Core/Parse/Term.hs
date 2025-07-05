@@ -40,6 +40,7 @@ parseTermIni = choice
   , parsePat
   , parseRewrite
   , parseAbsurd
+  , parseFrk
   , parseAll
   , parseSig
   , parseTildeExpr
@@ -299,6 +300,18 @@ parseBraceClauses arity = manyTill singleClause (lookAhead (symbol "}")) where
     _    <- symbol ":"
     body <- parseTerm
     pure (pats, body)
+
+-- | Syntax: fork L:a else:b
+parseFrk :: Parser Term
+parseFrk = label "fork" $ do
+  _ <- try $ symbol "fork"
+  l <- parseTerm
+  _ <- symbol ":"
+  a <- parseTerm
+  _ <- symbol "else"
+  _ <- symbol ":"
+  b <- parseTerm
+  return $ Frk l a b
 
 -- | Syntax: view(functionName)
 parseView :: Parser Term

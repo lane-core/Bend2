@@ -57,6 +57,7 @@ binder lv term ctx vars = case term of
   Rwt a b x  -> Rwt (binder lv a ctx vars) (binder lv b ctx vars) (binder lv x ctx vars)
   Era        -> Era
   Sup l a b  -> Sup l (binder lv a ctx vars) (binder lv b ctx vars)
+  Frk l a b  -> Frk (binder lv l ctx vars) (binder lv a ctx vars) (binder lv b ctx vars)
   Num t      -> Num t
   Val v      -> Val v
   Op2 o a b  -> Op2 o (binder lv a ctx vars) (binder lv b ctx vars)
