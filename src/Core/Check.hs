@@ -263,6 +263,8 @@ check d span book ctx term goal =
         -- "- ctx : " ++ show (normalCtx d book ctx) ++ " → " ++ show (normalCtx d book new_ctx) ++ "\n" ++
         -- "- goal: " ++ show (normal d book goal) ++ " → " ++ show (normal d book new_goal)) $
       check d span book new_ctx term new_goal
+    (Era, _) -> do
+      Done ()
     (Let v f, _) -> do
       check d span book ctx (App f v) goal
     (One, Uni) -> do

@@ -45,6 +45,7 @@ parseTermIni = choice
   , parseSig
   , parseTildeExpr
   , parseOne
+  , parseEra
   , parseReturn
   , parseNat
   , parseNatLit
@@ -125,6 +126,11 @@ parseVar = label "variable" $ do
 -- | Syntax: ()
 parseOne :: Parser Term
 parseOne = label "unit value (())" $ symbol "()" >> return One
+
+-- | Syntax: *
+parseEra :: Parser Term
+parseEra = label "Eraser" $ symbol "*" >> return Era
+
 
 -- | Syntax: if condition: trueCase else: falseCase
 parseBifIf :: Parser Term
