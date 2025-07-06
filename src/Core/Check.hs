@@ -5,6 +5,7 @@
 module Core.Check where
 
 import qualified Data.Map as M
+import Data.List (find)
 
 import Debug.Trace
 
@@ -32,7 +33,7 @@ formatCtx d book (Ctx ctx) = Ctx (map formatAnn ctx)
 
 -- Infer the type of a term
 infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
-infer d span book ctx term =
+infer d span book@(Book defs) ctx term =
   -- trace ("- infer: " ++ show (format d book term)) $
   case term of
     Var _ i -> do
@@ -101,7 +102,13 @@ infer d span book ctx term =
     Enu s -> do
       Done Set
     Sym s -> do
-      Fail $ CantInfer span (formatCtx d book ctx)
+      let bookEnums = [ Enu tags | (k, (_, (Sig (Enu tags) _), Set)) <- M.toList defs ]
+      case find isEnuWithTag bookEnums of
+        Just t  -> Done t
+        Nothing -> Fail $ CantInfer span (formatCtx d book ctx)
+        where
+          isEnuWithTag (Enu tags) = s `elem` tags
+          isEnuWithTag _ = False
     EnuM _ _ _ -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Sig a b -> do
