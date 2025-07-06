@@ -51,6 +51,7 @@ whnfGo lv book term =
     EnuM x c f -> whnfEnuM lv book x c f
     SigM x f   -> whnfSigM lv book x f
     EqlM x f   -> whnfEqlM lv book x f
+    Log s x    -> whnfLog lv book s x
     _          -> term
 
 -- Normalizes a let binding
@@ -142,6 +143,20 @@ whnfEqlM lv book x f =
   case whnf lv book x of
     Rfl -> whnf lv book f
     _   -> EqlM x f
+
+-- Normalizes a log operation
+whnfLog :: EvalLevel -> Book -> Term -> Term -> Term
+whnfLog lv book s x =
+  let extractString :: Term -> Maybe String
+      extractString Nil = Just ""
+      extractString (Con (Val (CHR_V c)) rest) = do
+        restStr <- extractString (whnf lv book rest)
+        return (c : restStr)
+      extractString (Loc _ t) = extractString t
+      extractString _ = Nothing
+  in case extractString (whnf lv book s) of
+       Just str -> trace str (whnf lv book x)
+       Nothing  -> whnf lv book x
 
 -- Normalizes a primitive application
 whnfAppPri :: EvalLevel -> Book -> PriF -> Term -> Term
@@ -336,6 +351,7 @@ normal d book term =
     Frz t      -> Frz (normal d book t)
     Loc l t    -> Loc l (normal d book t)
     Rwt a b x  -> Rwt (normal d book a) (normal d book b) (normal d book x)
+    Log s x    -> Log (normal d book s) (normal d book x)
     Era        -> Era
     Sup l a b  -> Sup l (normal d book a) (normal d book b)
     Frk l a b  -> error "Fork interactions unsupported in Haskell"

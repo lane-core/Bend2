@@ -134,6 +134,17 @@ data Term
   | Loc Span Term -- x
   | Rwt Term Term Term -- a → b ; x
 
+  -- Logging
+  -- NOTE: THIS IS A NEW PRIMITIVE (WIP)
+  -- when the user writes:
+  -- `log "foo" 123`
+  -- the evaluator (whnf) will log "foo" to the screen, and return 123
+  -- it will do so from Haskell-side by using Debug.Trace
+  -- the first term must be a Char[]. the whnfLog function will normalize the
+  -- Bend string layer by layer to convert to a Haskell string, and then print.
+  -- if this fails (say, if ill-typed, or stuck), nothing will be printed.
+  | Log Term Term -- log s ; x
+
   -- Primitive
   | Pri PriF -- SOME_FUNC
 
@@ -245,6 +256,7 @@ instance Show Term where
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
   show (Frk l a b)     = "fork " ++ show l ++ ":" ++ show a ++ " else:" ++ show b
   show (Met _ _ _)     = "?"
+  show (Log s x)       = "log " ++ show s ++ " " ++ show x
   show (Pri p)         = pri p where
     pri U64_TO_CHAR    = "U64_TO_CHAR"
   show (Num U64_T)     = "U64"
