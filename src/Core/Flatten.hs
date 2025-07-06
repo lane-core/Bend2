@@ -550,7 +550,8 @@ subst name val term = go name val term where
     Ind t      -> Ind (go name val t)
     Frz t      -> Frz (go name val t)
     Era        -> Era
-    Sup l a b  -> Sup l (go name val a) (go name val b)
+    Sup l a b  -> Sup (go name val l) (go name val a) (go name val b)
+    Frk l a b  -> Frk (go name val l) (go name val a) (go name val b)
     Num t      -> Num t
     Val v      -> Val v
     Op2 o a b  -> Op2 o (go name val a) (go name val b)
