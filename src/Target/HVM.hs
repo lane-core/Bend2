@@ -4,6 +4,7 @@
 
 module Target.HVM where
 
+import Control.Monad (forM)
 import Core.Type
 import Data.List (isInfixOf, unsnoc)
 import Debug.Trace
@@ -13,7 +14,7 @@ import qualified HVM.Type as HVM
 
 compile :: Book -> String
 compile (Book defs) =
-  let fns = map compileFn (M.toList defs)
+  let fns = map compileDef (M.toList defs)
   in prelude ++ unlines fns
 
 prelude :: String
@@ -24,24 +25,55 @@ prelude = unlines [
     "data Bit { #B0 #B1 }",
     "data Nat { #Z #S{n} }",
     "data Pair { #P{fst snd} }",
-    "@fix(&f x) = (f @fix(f x))",
+    "@fix(&f) = (f @fix(f))",
     "",
     "// Bend to HVM Compiler Output",
     "// ---------------------------",
     ""
   ]
 
-compileFn :: (String, Defn) -> String
-compileFn (name, (_, tm, ty)) = "@" ++ name ++ "$" ++ " = " ++ HVM.showCore (fnToHVM name tm ty)
-
-fnToHVM :: String -> Term -> Type -> HVM.Core
-fnToHVM name tm ty
-  -- TODO: Type definitions
-  | (Just _) <- getCtrDef = typeToHVM tm
+-- Compile a Bend function to an HVM definition
+compileDef :: (String, Defn) -> String
+compileDef (name, (_, tm, ty)) 
+  -- TODO: Remove proof fields?
+  | (Just (_, ctrs)) <- extractTypeDef tm = compileType name ctrs
   -- TODO: Function arguments
-  | otherwise = termToHVM MS.empty tm
+  | otherwise = compileFn name tm
+
+compileType :: String -> [(String, [String])] -> String
+compileType name ctrs = "data " ++ name ++ "$" ++ " { " ++ unwords (map compileCtr ctrs) ++ " }" where
+  compileCtr (nam, fds) = "#" ++ nam ++ "$" ++ "{" ++ unwords fds ++ "}"
+
+compileFn :: String -> Term -> String
+compileFn name tm = "@" ++ name ++ "$" ++ " = " ++ HVM.showCore (termToHVM MS.empty tm)
+
+-- Extract constructor definition info from type definitions
+extractTypeDef :: Term -> Maybe ([String], [(String, [String])])
+extractTypeDef tm = do
+  (args, tmSig) <- getTypeArgs tm []
+  css <- getTypeCss tmSig
+  return (args, css)
   where
-    getCtrDef = undefined
+    getTypeArgs :: Term -> [String] -> Maybe ([String], Term)
+    getTypeArgs (Lam arg tm) args = getTypeArgs (tm (Var arg 0)) (args ++ [arg])
+    getTypeArgs tm           args = Just (args, tm)
+
+    getTypeCss :: Term -> Maybe [(String, [String])]
+    getTypeCss (Sig (Enu _) (Lam "ctr" (subst "ctr" -> EnuM (Var "ctr" _) css (Lam "_" (subst "_" -> One))))) = do
+      forM css (\(ctr, bod) -> do
+        fds <- getTypeCsFds bod
+        return (ctr, fds))
+    getTypeCss _ = Nothing
+
+    getTypeCsFds :: Term -> Maybe [String]
+    getTypeCsFds (Sig _ (Lam fd (subst fd -> tm))) = do
+      fds <- getTypeCsFds tm
+      return $ fd : fds
+    getTypeCsFds Uni = Just []
+    getTypeCsFds _   = Nothing
+
+    subst a f = f (Var a 0)
+
 
 termToHVM :: MS.Map String String -> Term -> HVM.Core
 termToHVM ctx tm = go tm where
@@ -158,7 +190,3 @@ termToHVM ctx tm = go tm where
   go (Rwt _ _ x)  = termToHVM ctx x
   go (Pri p)      = HVM.Era
   go (Pat x m c)  = HVM.Era
-
-typeToHVM :: Term -> HVM.Core
-typeToHVM tm = case tm of
-  _ -> error "TODO: typeToHVM"
