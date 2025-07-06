@@ -48,7 +48,7 @@ data CT
   | COp1 NOp1 CT
   -- Others
   | CEra
-  | CSup Int CT CT
+  | CSup CT CT CT
   | CFrk CT CT CT
   | CPri PriF
 
@@ -111,7 +111,7 @@ termToCT book term dep = case term of
   Pri p      -> CPri p
   Rfl        -> CEra
   Era        -> CEra
-  Sup l a b  -> CSup l (termToCT book a dep) (termToCT book b dep)
+  Sup l a b  -> CSup (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
   Frk l a b  -> CFrk (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
   Pat _ _ _  -> error "unreachable"
 

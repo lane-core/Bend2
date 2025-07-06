@@ -127,7 +127,7 @@ data Term
 
   -- Supperpositions
   | Era               -- *
-  | Sup Int Term Term -- &L{a,b}
+  | Sup Term Term Term -- &L{a,b}
   | Frk Term Term Term -- fork L:a else:b
 
   -- Errors
