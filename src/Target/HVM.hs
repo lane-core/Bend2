@@ -37,39 +37,39 @@ prelude = unlines [
   ]
 
 -- Compile a Bend function to an HVM definition
-compileDef :: (String, Defn) -> Either String String
+compileDef :: (Name, Defn) -> Either String String
 compileDef (nam, (_, tm, ty)) 
   -- TODO: Remove proof fields?
   | (Just (_, ctrs)) <- extractTypeDef tm = Left (compileType nam ctrs)
   -- TODO: Function arguments
   | otherwise = Right (compileFn nam tm)
 
-compileType :: String -> [(String, [String])] -> String
+compileType :: Name -> [(Name, [Name])] -> String
 compileType nam ctrs = "data " ++ (hvmNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }" where
   compileCtr (nam, fds) = "#" ++ (hvmNam nam) ++ "{" ++ unwords fds ++ "}"
 
-compileFn :: String -> Term -> String
+compileFn :: Name -> Term -> String
 compileFn nam tm = "@" ++ (hvmNam nam) ++ " = " ++ HVM.showCore (termToHVM MS.empty tm)
 
 -- Extract constructor definition info from type definitions
-extractTypeDef :: Term -> Maybe ([String], [(String, [String])])
+extractTypeDef :: Term -> Maybe ([Name], [(Name, [Name])])
 extractTypeDef tm = do
   (args, tmSig) <- getTypeArgs tm []
   css <- getTypeCss tmSig
   return (args, css)
   where
-    getTypeArgs :: Term -> [String] -> Maybe ([String], Term)
+    getTypeArgs :: Term -> [Name] -> Maybe ([Name], Term)
     getTypeArgs (Lam arg tm) args = getTypeArgs (tm (Var arg 0)) (args ++ [arg])
     getTypeArgs tm           args = Just (args, tm)
 
-    getTypeCss :: Term -> Maybe [(String, [String])]
+    getTypeCss :: Term -> Maybe [(Name, [Name])]
     getTypeCss (Sig (Enu _) (Lam "ctr" (subst "ctr" -> EnuM (Var "ctr" _) css (Lam "_" (subst "_" -> One))))) = do
       forM css (\(ctr, bod) -> do
         fds <- getTypeCsFds bod
         return (ctr, fds))
     getTypeCss _ = Nothing
 
-    getTypeCsFds :: Term -> Maybe [String]
+    getTypeCsFds :: Term -> Maybe [Name]
     getTypeCsFds (Sig _ (Lam fd (subst fd -> tm))) = do
       fds <- getTypeCsFds tm
       return $ fd : fds
@@ -79,7 +79,7 @@ extractTypeDef tm = do
     subst a f = f (Var a 0)
 
 
-termToHVM :: MS.Map String String -> Term -> HVM.Core
+termToHVM :: MS.Map Name HVM.Name -> Term -> HVM.Core
 termToHVM ctx tm = go tm where
   subst a f = f (Var a 0)
 
@@ -198,7 +198,7 @@ termToHVM ctx tm = go tm where
   go (Pri p)      = HVM.Era
   go (Pat x m c)  = HVM.Era
 
-hvmNam :: String -> String
+hvmNam :: Name -> HVM.Name
 hvmNam n = (replace '/' "__" n) ++ "$"
 
 replace :: Char -> String -> String -> String
