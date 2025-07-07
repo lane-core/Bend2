@@ -407,7 +407,8 @@ dup book l (Sup r a b)
   | otherwise           = (Sup r a0 b0, Sup r a1 b1)
   where (a0,a1)         = dup book l a
         (b0,b1)         = dup book l b
-dup book l (SupM x r f) = error "TODO"
+dup book l (SupM x r f) = dup book l (App (App f x0) x1)
+  where (x0,x1)         = dup book r x
 dup book l (Met k t c)  = (Met k t0 c0, Met k t1 c1)
   where (t0,t1)         = dup book l t
         (c0,c1)         = unzip (map (dup book l) c)
@@ -430,6 +431,10 @@ dup book l (Log s x)    = (Log s0 x0, Log s1 x1)
         (x0,x1)         = dup book l x
 dup book l (Frk _ _ _)  = error "unreachable"
 dup book l (Pat _ _ _)  = error "unreachable"
+
+
+
+
 
 -- Normalization
 -- =============
