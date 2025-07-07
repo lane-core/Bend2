@@ -89,7 +89,7 @@ termToHVM ctx tm = go tm where
       Nothing -> HVM.Var n
   go (Ref k)      = HVM.Ref (hvmNam k) 0 [] -- TODO: Ref arguments
   go (Sub t)      = termToHVM ctx t
-  go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam ("&"++hvmNam n) (termToHVM (MS.insert n (hvmNam n) ctx) (f (Var n 0)))]
+  go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))]
   go (Let v f)    = HVM.App (termToHVM ctx f) (termToHVM ctx v)
   go Set          = HVM.Era
   go (Chk v t)    = termToHVM ctx v
@@ -150,27 +150,32 @@ termToHVM ctx tm = go tm where
           _              -> Nothing
       extractCtr _ _ = Nothing
   go (SigM x f)  = case extractCtrM f of
-      Just (cs,(dk,df)) -> HVM.Let HVM.LAZY dk (termToHVM ctx x) (matToHVM ctx dk cs df) -- TODO: Default case should rewrite (ctrNam, ctrBod) to the default case var
-      Nothing           -> HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#P", [], termToHVM ctx f)]
+      Just (cs,t,b,d) -> HVM.Let HVM.LAZY t (termToHVM ctx x) (matToHVM ctx t b cs d) -- TODO: Default case should rewrite (ctrNam, ctrBod) to the default case var
+      Nothing         -> HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#P", [], termToHVM ctx f)]
     where
-      extractCtrM :: Term -> Maybe ([(String, ([String], Term))], (String, Term))
-      extractCtrM (Lam a (subst a -> Lam b (subst b -> EnuM (Var y _) cs (Lam dk (subst dk -> dv))))) =
-        if a == y
-          then Just ((map (\(k,f) -> (k, flattenCtrM f [])) cs), (dk, dv))
-          else Nothing
+      extractCtrM :: Term -> Maybe ([(Name, [Name], Term)], Name, Name, Term)
+      extractCtrM (Lam a (subst a -> Lam bodK (subst bodK -> EnuM (Var x _) cs (Lam tagK (subst tagK -> dflt))))) =
+        if x == a then do
+          csF <- forM cs (\(k,f) -> do
+              (fds, bod) <- flattenCtrM bodK f []
+              return (k, fds, bod)
+            )
+          return (csF, tagK, bodK, dflt)
+        else Nothing
       extractCtrM _ = Nothing
 
-      flattenCtrM :: Term -> [String] -> ([String], Term)
-      flattenCtrM (SigM _ (Lam a (subst a -> Lam b (subst b -> x)))) vars = flattenCtrM x (a : vars)
-      flattenCtrM (UniM _ f)                                         vars = (vars, f)
-      flattenCtrM _ _ = error "flattenCtrM: unreachable"
+      flattenCtrM :: Name -> Term -> [Name] -> Maybe ([Name], Term)
+      flattenCtrM x (SigM (Var k _) (Lam fd (subst fd -> Lam nxt (subst nxt -> f)))) fds = if (k == x) then flattenCtrM nxt f (fd : fds) else Nothing
+      flattenCtrM x (UniM (Var k _) f)                                               fds = if (k == x) then Just (fds, f) else Nothing
+      flattenCtrM _ _ _ = Nothing
 
-      matToHVM :: MS.Map String String -> String -> [(String, ([String], Term))] -> Term -> HVM.Core
-      matToHVM ctx x [(ctr,(fds,bod))]    d = mkIfl x ctr (termToHVM ctx bod) fds (termToHVM ctx d)
-      matToHVM ctx x ((ctr,(fds,bod)):cs) d = mkIfl x ctr (termToHVM ctx bod) fds (matToHVM ctx x cs d)
-      matToHVM _ _ _ _ = error "matToHVM: unreachable"
+      matToHVM :: MS.Map Name HVM.Name -> Name -> Name -> [(Name, [Name], Term)] -> Term -> HVM.Core
+      matToHVM ctx t b [(ctr,fds,bod)]    d = mkIfl t ctr (termToHVM ctx bod) fds d' -- Make dflt case match entire ctr, not just the tag
+                                     where d' = (rewriteHVM (HVM.Ctr "#P" [HVM.Var t, HVM.Var b]) (HVM.Var t) (termToHVM ctx d))
+      matToHVM ctx t b ((ctr,fds,bod):cs) d = mkIfl t ctr (termToHVM ctx bod) fds (matToHVM ctx t b cs d)
+      matToHVM _ _ _ _ _ = error "matToHVM: unreachable"
 
-      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam bod (reverse fds)), ("_", [], HVM.Lam x d)]
+      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam bod (map ('&':) (reverse fds))), ("_", [], HVM.Lam ('&':x) d)]
   go (All _ _)    = HVM.Era
   go (Lam n f)    = HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))
   go (App f x)    = HVM.App (termToHVM ctx f) (termToHVM ctx x)
@@ -204,7 +209,28 @@ hvmNam n = (replace '/' "__" n) ++ "$"
 replace :: Char -> String -> String -> String
 replace old new xs = foldr (\c acc -> if c == old then new ++ acc else c : acc) [] xs
 
-freeVars :: S.Set String -> Term -> S.Set Name
+rewriteHVM :: HVM.Core -> HVM.Core -> HVM.Core -> HVM.Core
+rewriteHVM old new tm =
+  if tm == old
+    then new
+    else case tm of
+      HVM.Var n         -> HVM.Var n
+      HVM.Ref n k xs    -> HVM.Ref n k (map (rewriteHVM old new) xs)
+      HVM.Era           -> HVM.Era
+      HVM.Lam n f       -> HVM.Lam n (rewriteHVM old new f)
+      HVM.App f x       -> HVM.App (rewriteHVM old new f) (rewriteHVM old new x)
+      HVM.Sup l a b     -> HVM.Sup l (rewriteHVM old new a) (rewriteHVM old new b)
+      HVM.Dup l a b v x -> HVM.Dup l a b (rewriteHVM old new v) (rewriteHVM old new x)
+      HVM.Ctr n xs      -> HVM.Ctr n (map (rewriteHVM old new) xs)
+      HVM.U32 n         -> HVM.U32 n
+      HVM.Chr c         -> HVM.Chr c
+      HVM.Op2 o a b     -> HVM.Op2 o (rewriteHVM old new a) (rewriteHVM old new b)
+      HVM.Let t n v f   -> HVM.Let t n (rewriteHVM old new v) (rewriteHVM old new f)
+      HVM.Mat t x mv cs -> HVM.Mat t (rewriteHVM old new x) (map (\(n,v) -> (n,rewriteHVM old new v)) mv) (map (\(c,f,b) -> (c,f,rewriteHVM old new b)) cs)
+      HVM.Inc a         -> HVM.Inc (rewriteHVM old new a)
+      HVM.Dec a         -> HVM.Dec (rewriteHVM old new a)
+
+freeVars :: S.Set Name -> Term -> S.Set Name
 freeVars ctx tm = case tm of
   Var n _    -> if n `S.member` ctx then S.empty else S.singleton n
   Ref n      -> S.empty
