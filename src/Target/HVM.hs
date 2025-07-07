@@ -6,6 +6,7 @@ module Target.HVM where
 
 import Control.Monad (forM)
 import Core.Type
+import Data.Either (partitionEithers)
 import Data.List (isInfixOf, unsnoc)
 import Debug.Trace
 import qualified Data.Map as M
@@ -14,8 +15,9 @@ import qualified HVM.Type as HVM
 
 compile :: Book -> String
 compile (Book defs) =
-  let fns = map compileDef (M.toList defs)
-  in prelude ++ unlines fns
+  let ds       = map compileDef (M.toList defs)
+      (ts, fs) = partitionEithers ds
+  in prelude ++ unlines ts ++ unlines fs
 
 prelude :: String
 prelude = unlines [
@@ -34,12 +36,12 @@ prelude = unlines [
   ]
 
 -- Compile a Bend function to an HVM definition
-compileDef :: (String, Defn) -> String
+compileDef :: (String, Defn) -> Either String String
 compileDef (nam, (_, tm, ty)) 
   -- TODO: Remove proof fields?
-  | (Just (_, ctrs)) <- extractTypeDef tm = compileType nam ctrs
+  | (Just (_, ctrs)) <- extractTypeDef tm = Left (compileType nam ctrs)
   -- TODO: Function arguments
-  | otherwise = compileFn nam tm
+  | otherwise = Right (compileFn nam tm)
 
 compileType :: String -> [(String, [String])] -> String
 compileType nam ctrs = "data " ++ (hvmNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }" where
