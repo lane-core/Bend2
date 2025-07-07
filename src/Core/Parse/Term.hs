@@ -41,6 +41,7 @@ parseTermIni = choice
   , parseRewrite
   , parseAbsurd
   , parseFrk
+  , parseLog
   , parseAll
   , parseSig
   , parseTildeExpr
@@ -373,6 +374,14 @@ parseFrk = label "fork" $ do
   _ <- symbol ":"
   b <- parseTerm
   return $ Frk l a b
+
+-- | Syntax: log string expr
+parseLog :: Parser Term
+parseLog = label "log" $ do
+  _ <- try $ keyword "log"
+  s <- parseTerm
+  x <- parseTerm
+  return $ Log s x
 
 -- | Syntax: view(functionName)
 parseView :: Parser Term

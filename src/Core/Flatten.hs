@@ -100,6 +100,7 @@ flatten d book (Val v)      = Val v
 flatten d book (Op2 o a b)  = Op2 o (flatten d book a) (flatten d book b)
 flatten d book (Op1 o a)    = Op1 o (flatten d book a)
 flatten d book (Pri p)      = Pri p
+flatten d book (Log s x)    = Log (flatten d book s) (flatten d book x)
 flatten d book (Loc s t)    = Loc s (flatten d book t)
 flatten d book (Rwt a b x)  = Rwt (flatten d book a) (flatten d book b) (flatten d book x)
 flatten d book (Pat s m c)  = simplify d $ flattenPat d book (Pat s m c)
@@ -296,6 +297,7 @@ unpat d (Val v)         = Val v
 unpat d (Op2 o a b)     = Op2 o (unpat d a) (unpat d b)
 unpat d (Op1 o a)       = Op1 o (unpat d a)
 unpat d (Pri p)         = Pri p
+unpat d (Log s x)       = Log (unpat d s) (unpat d x)
 unpat d (Loc s t)       = Loc s (unpat d t)
 unpat d (Rwt a b f)     = Rwt (unpat d a) (unpat d b) (unpat d f)
 unpat d (Pat [s] ms cs) = desugarWiths ms (match d s ms cs)
@@ -542,6 +544,7 @@ unfrkGo d ctx (Val v)      = Val v
 unfrkGo d ctx (Op2 o a b)  = Op2 o (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx (Op1 o a)    = Op1 o (unfrkGo d ctx a)
 unfrkGo d ctx (Pri p)      = Pri p
+unfrkGo d ctx (Log s x)    = Log (unfrkGo d ctx s) (unfrkGo d ctx x)
 unfrkGo d ctx (Loc s t)    = Loc s (unfrkGo d ctx t)
 unfrkGo d ctx (Rwt a b x)  = Rwt (unfrkGo d ctx a) (unfrkGo d ctx b) (unfrkGo d ctx x)
 unfrkGo d ctx (Pat s m c)  = Pat (map (unfrkGo d ctx) s) m [(ps, unfrkGo d ctx rhs) | (ps, rhs) <- c]
@@ -658,6 +661,7 @@ subst name val term = go name val term where
     Op2 o a b  -> Op2 o (go name val a) (go name val b)
     Op1 o a    -> Op1 o (go name val a)
     Pri p      -> Pri p
+    Log s x    -> Log (go name val s) (go name val x)
     Loc s t    -> Loc s (go name val t)
     Rwt a b x  -> Rwt (go name val a) (go name val b) (go name val x)
     Pat s m c  -> Pat (map (go name val) s) m (map cse c)

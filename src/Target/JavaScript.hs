@@ -108,6 +108,7 @@ termToCT book term dep = case term of
   EqlM x f   -> CApp (CEql (termToCT book f dep)) (termToCT book x dep)
   Op2 o a b  -> COp2 o (termToCT book a dep) (termToCT book b dep)
   Op1 o a    -> COp1 o (termToCT book a dep)
+  Log s x    -> termToCT book x dep  -- For JavaScript, just return the result expression
   Pri p      -> CPri p
   Rfl        -> CEra
   Era        -> CEra

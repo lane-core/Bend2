@@ -186,6 +186,9 @@ infer d span book@(Book defs) ctx term =
       inferOp1Type d span book ctx op a ta
     Pri U64_TO_CHAR -> do
       Done (All (Num U64_T) (Lam "x" (\_ -> Num CHR_T)))
+    Log s x -> do
+      check d span book ctx s (Lst (Num CHR_T))
+      infer d span book ctx x
     Pat _ _ _ -> do
       error "Pat not supported in infer"
 

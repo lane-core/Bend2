@@ -52,6 +52,7 @@ whnfGo lv book term =
     SigM x f   -> whnfSigM lv book x f
     EqlM x f   -> whnfEqlM lv book x f
     SupM x l f -> whnfSupM lv book x l f
+    Log s x    -> whnfLog lv book s x
     _          -> term
 
 -- Normalizes a let binding
@@ -170,6 +171,20 @@ whnfEqlM lv book x f =
 whnfSupM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
 whnfSupM lv book x l f = whnf lv book (App (App f x0) x1) where
     (x0, x1) = dup book l (whnf lv book x)
+
+-- Normalizes a log operation
+whnfLog :: EvalLevel -> Book -> Term -> Term -> Term
+whnfLog lv book s x =
+  let extractString :: Term -> Maybe String
+      extractString Nil = Just ""
+      extractString (Con (Val (CHR_V c)) rest) = do
+        restStr <- extractString (whnf lv book rest)
+        return (c : restStr)
+      extractString (Loc _ t) = extractString t
+      extractString _ = Nothing
+  in case extractString (whnf lv book s) of
+       Just str -> trace str (whnf lv book x)
+       Nothing  -> whnf lv book x
 
 -- Normalizes a primitive application
 whnfAppPri :: EvalLevel -> Book -> PriF -> Term -> Term
@@ -410,6 +425,9 @@ dup book l (Op2 o a b)  = (Op2 o a0 b0, Op2 o a1 b1)
 dup book l (Op1 o a)    = (Op1 o a0, Op1 o a1)
   where (a0,a1)         = dup book l a
 dup book l (Pri p)      = (Pri p, Pri p)
+dup book l (Log s x)    = (Log s0 x0, Log s1 x1)
+  where (s0,s1)         = dup book l s
+        (x0,x1)         = dup book l x
 dup book l (Frk _ _ _)  = error "unreachable"
 dup book l (Pat _ _ _)  = error "unreachable"
 
@@ -461,6 +479,7 @@ normal d book term =
     Frz t      -> Frz (normal d book t)
     Loc l t    -> Loc l (normal d book t)
     Rwt a b x  -> Rwt (normal d book a) (normal d book b) (normal d book x)
+    Log s x    -> Log (normal d book s) (normal d book x)
     Era        -> Era
     Sup l a b  -> Sup l (normal d book a) (normal d book b)
     SupM x l f -> SupM (normal d book x) (normal d book l) (normal d book f)

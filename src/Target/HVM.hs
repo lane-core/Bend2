@@ -116,6 +116,7 @@ termToHVM ctx tm = go tm where
   go (Enu s)      = HVM.Era
   go (Sym s)      = error "TODO: bare Sym toHVM"
   go (EnuM x c e) = error "TODO: bare EnuM toHVM"
+  go (Log s x)    = termToHVM ctx x  -- For HVM, just return the result expression
   go (Num _)      = HVM.Era
   go (Val (U64_V v)) = HVM.U32 (fromIntegral v)
   go (Val (I64_V v)) = HVM.Era
@@ -281,6 +282,7 @@ freeVars ctx tm = case tm of
   Era        -> S.empty
   Sup _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
   Frk l a b  -> S.unions [freeVars ctx l, freeVars ctx a, freeVars ctx b]
+  Log s x    -> S.union (freeVars ctx s) (freeVars ctx x)
   Loc _ t    -> freeVars ctx t
   Rwt a b x  -> S.unions [freeVars ctx a, freeVars ctx b, freeVars ctx x]
   Pri _      -> S.empty
