@@ -476,6 +476,92 @@ lamsTerm d ks (EqlM x r)   = EqlM x (lams d ks r)
 lamsTerm d ks (EmpM x)     = EmpM x
 lamsTerm d ks other        = error $ "lamsTerm: unexpected term: " ++ show other
 
+-- UnFrk
+-- =====
+-- Removes all Frks from a Term, as follows:
+--   fork L: A else: B (with ctx=[a,b,...])
+--   --------------------------------------
+--   &L{a0,a1} = a
+--   &L{b0,b1} = b
+--   ...
+--   &L{A[a<-a0, b<-b0, ...], B[a<-a1,b<-b1, ...]}
+-- That is, whenever a 'Frk L a b' constructor is found, we:
+-- 1. Superpose each variable of the context (using a SupM with label L)
+-- 2. Return a Sup of a and b, where the context on each side is entirely
+--    replaced by the corresponding side of the forked variable
+
+unfrk :: Int -> Term -> Term
+unfrk d term = unfrkGo d [] term
+
+unfrkGo :: Int -> [(Name, Int)] -> Term -> Term
+unfrkGo d ctx (Var n i)    = Var n i
+unfrkGo d ctx (Ref n)      = Ref n
+unfrkGo d ctx (Sub t)      = Sub (unfrkGo d ctx t)
+unfrkGo d ctx (Fix n f)    = Fix n (\x -> unfrkGo (d+1) ((n,d):ctx) (f x))
+unfrkGo d ctx (Let v f)    = Let (unfrkGo d ctx v) (unfrkGo d ctx f)
+unfrkGo d ctx Set          = Set
+unfrkGo d ctx (Chk x t)    = Chk (unfrkGo d ctx x) (unfrkGo d ctx t)
+unfrkGo d ctx Emp          = Emp
+unfrkGo d ctx (EmpM x)     = EmpM (unfrkGo d ctx x)
+unfrkGo d ctx Uni          = Uni
+unfrkGo d ctx One          = One
+unfrkGo d ctx (UniM x f)   = UniM (unfrkGo d ctx x) (unfrkGo d ctx f)
+unfrkGo d ctx Bit          = Bit
+unfrkGo d ctx Bt0          = Bt0
+unfrkGo d ctx Bt1          = Bt1
+unfrkGo d ctx (BitM x f t) = BitM (unfrkGo d ctx x) (unfrkGo d ctx f) (unfrkGo d ctx t)
+unfrkGo d ctx Nat          = Nat
+unfrkGo d ctx Zer          = Zer
+unfrkGo d ctx (Suc n)      = Suc (unfrkGo d ctx n)
+unfrkGo d ctx (NatM x z s) = NatM (unfrkGo d ctx x) (unfrkGo d ctx z) (unfrkGo d ctx s)
+unfrkGo d ctx (Lst t)      = Lst (unfrkGo d ctx t)
+unfrkGo d ctx Nil          = Nil
+unfrkGo d ctx (Con h t)    = Con (unfrkGo d ctx h) (unfrkGo d ctx t)
+unfrkGo d ctx (LstM x n c) = LstM (unfrkGo d ctx x) (unfrkGo d ctx n) (unfrkGo d ctx c)
+unfrkGo d ctx (Enu s)      = Enu s
+unfrkGo d ctx (Sym s)      = Sym s
+unfrkGo d ctx (EnuM x c e) = EnuM (unfrkGo d ctx x) [(s, unfrkGo d ctx t) | (s, t) <- c] (unfrkGo d ctx e)
+unfrkGo d ctx (Sig a b)    = Sig (unfrkGo d ctx a) (unfrkGo d ctx b)
+unfrkGo d ctx (Tup a b)    = Tup (unfrkGo d ctx a) (unfrkGo d ctx b)
+unfrkGo d ctx (SigM x f)   = SigM (unfrkGo d ctx x) (unfrkGo d ctx f)
+unfrkGo d ctx (All a b)    = All (unfrkGo d ctx a) (unfrkGo d ctx b)
+unfrkGo d ctx (Lam n f)    = Lam n (\x -> unfrkGo (d+1) ((n,d):ctx) (f x))
+unfrkGo d ctx (App f x)    = App (unfrkGo d ctx f) (unfrkGo d ctx x)
+unfrkGo d ctx (Eql t a b)  = Eql (unfrkGo d ctx t) (unfrkGo d ctx a) (unfrkGo d ctx b)
+unfrkGo d ctx Rfl          = Rfl
+unfrkGo d ctx (EqlM x f)   = EqlM (unfrkGo d ctx x) (unfrkGo d ctx f)
+unfrkGo d ctx (Met i t x)  = Met i (unfrkGo d ctx t) (map (unfrkGo d ctx) x)
+unfrkGo d ctx (Ind t)      = Ind (unfrkGo d ctx t)
+unfrkGo d ctx (Frz t)      = Frz (unfrkGo d ctx t)
+unfrkGo d ctx Era          = Era
+unfrkGo d ctx (Sup l a b)  = Sup (unfrkGo d ctx l) (unfrkGo d ctx a) (unfrkGo d ctx b)
+unfrkGo d ctx (SupM x l f) = SupM (unfrkGo d ctx x) (unfrkGo d ctx l) (unfrkGo d ctx f)
+unfrkGo d ctx (Frk l a b)  = unfrkFrk d ctx l a b
+unfrkGo d ctx (Num t)      = Num t
+unfrkGo d ctx (Val v)      = Val v
+unfrkGo d ctx (Op2 o a b)  = Op2 o (unfrkGo d ctx a) (unfrkGo d ctx b)
+unfrkGo d ctx (Op1 o a)    = Op1 o (unfrkGo d ctx a)
+unfrkGo d ctx (Pri p)      = Pri p
+unfrkGo d ctx (Loc s t)    = Loc s (unfrkGo d ctx t)
+unfrkGo d ctx (Rwt a b x)  = Rwt (unfrkGo d ctx a) (unfrkGo d ctx b) (unfrkGo d ctx x)
+unfrkGo d ctx (Pat s m c)  = Pat (map (unfrkGo d ctx) s) m [(ps, unfrkGo d ctx rhs) | (ps, rhs) <- c]
+
+unfrkFrk :: Int -> [(Name, Int)] -> Term -> Term -> Term -> Term
+unfrkFrk d ctx l a b = buildSupMs (reverse ctx) where
+  -- Build nested SupM matches for each context variable
+  buildSupMs :: [(Name, Int)] -> Term
+  buildSupMs [] = Sup l a' b' where
+    ls = [(n, Var (n++"0") 0) | (n, _) <- ctx]
+    rs = [(n, Var (n++"1") 0) | (n, _) <- ctx]
+    a' = substMany ls (unfrkGo d ctx a)
+    b' = substMany rs (unfrkGo d ctx b)
+  -- For each variable, create a SupM that binds the superposed versions
+  buildSupMs ((n, depth):rest) = 
+    SupM (Var n depth) l $
+    Lam (n++"0") $ \_ ->
+    Lam (n++"1") $ \_ ->
+    buildSupMs rest
+
 -- Helpers
 -- -------
 
@@ -576,6 +662,15 @@ subst name val term = go name val term where
     Rwt a b x  -> Rwt (go name val a) (go name val b) (go name val x)
     Pat s m c  -> Pat (map (go name val) s) m (map cse c)
       where cse (pats, rhs) = (map (go name val) pats, go name val rhs)
+
+-- Helper to substitute multiple variables at once
+substMany :: [(Name, Term)] -> Term -> Term
+substMany subs term = foldr (\ (n,v) t -> subst n v t) term subs
+
+-- -- Substitutes multiple variables in a term
+-- substCtx :: [(Name, Term)] -> Term -> Term
+-- substCtx []         term = term
+-- substCtx ((n,v):xs) term = substCtx xs (subst n v term)
 
 unsupported :: a
 unsupported = unsafePerformIO $ do

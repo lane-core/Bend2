@@ -76,7 +76,7 @@ whnfApp lv book f x =
     Lam _ f'  -> whnfAppLam lv book f' x
     Pri p     -> whnfAppPri lv book p x
     Sup l a b -> whnfAppSup lv book l a b x
-    Frk _ _ _ -> error "Fork interactions unsupported in Haskell"
+    Frk _ _ _ -> error "unrechable"
     f'        -> App f' x
 
 -- Normalizes a lambda application
@@ -393,9 +393,6 @@ dup book l (Sup r a b)
   where (a0,a1)         = dup book l a
         (b0,b1)         = dup book l b
 dup book l (SupM x r f) = error "TODO"
-dup book l (Frk r a b)  = (Frk r a0 b0, Frk r a1 b1)
-  where (a0,a1)         = dup book l a
-        (b0,b1)         = dup book l b
 dup book l (Met k t c)  = (Met k t0 c0, Met k t1 c1)
   where (t0,t1)         = dup book l t
         (c0,c1)         = unzip (map (dup book l) c)
@@ -413,7 +410,8 @@ dup book l (Op2 o a b)  = (Op2 o a0 b0, Op2 o a1 b1)
 dup book l (Op1 o a)    = (Op1 o a0, Op1 o a1)
   where (a0,a1)         = dup book l a
 dup book l (Pri p)      = (Pri p, Pri p)
-dup book l (Pat t m c)  = error "Pattern duplication not supported"
+dup book l (Frk _ _ _)  = error "unreachable"
+dup book l (Pat _ _ _)  = error "unreachable"
 
 -- Normalization
 -- =============
