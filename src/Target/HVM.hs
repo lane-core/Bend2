@@ -191,17 +191,7 @@ termToHVM ctx tm = go tm where
   go Era          = HVM.Era
   go (Sup l a b)  = HVM.Ref "SUP" 0 [termToHVM ctx l, termToHVM ctx a, termToHVM ctx b]
   go (SupM x l f) = HVM.Ref "DUP" 0 [termToHVM ctx l, termToHVM ctx x, termToHVM ctx f]
-  go (Frk l a b)  = tmLab where
-    -- Only fork variables free in the bodies of a and b
-    tmLab             = HVM.Let HVM.STRI "&L$" (termToHVM ctx l) tmDup 
-    tmDup             = foldr dup tmSup vars
-    tmSup             = HVM.Ref "SUP" 0 [HVM.Var "L$", termToHVM ctxA a, termToHVM ctxB b]
-    dup (_,v,(a,b)) x = HVM.Ref "DUP" 0 [HVM.Var "L$", HVM.Var v, HVM.Lam ('&':a) (HVM.Lam ('&':b) x)]
-    vars              = [(k, v, (suff v "0", suff v "1")) | (k, v) <- MS.toList ctx, k `S.member` free]
-    free              = freeVars S.empty a `S.union` freeVars S.empty b
-    suff v s          = if "$$" `isInfixOf` v then v ++ s else v ++ "$$" ++ s
-    ctxA              = MS.fromList [(k, a) | (k, _, (a, _)) <- vars]
-    ctxB              = MS.fromList [(k, b) | (k, _, (_, b)) <- vars]
+  go (Frk l a b)  = HVM.Era
   go (Loc s t)    = termToHVM ctx t
   go (Rwt _ _ x)  = termToHVM ctx x
   go (Pri p)      = HVM.Era
@@ -233,58 +223,3 @@ rewriteHVM old new tm =
       HVM.Mat t x mv cs -> HVM.Mat t (rewriteHVM old new x) (map (\(n,v) -> (n,rewriteHVM old new v)) mv) (map (\(c,f,b) -> (c,f,rewriteHVM old new b)) cs)
       HVM.Inc a         -> HVM.Inc (rewriteHVM old new a)
       HVM.Dec a         -> HVM.Dec (rewriteHVM old new a)
-
-freeVars :: S.Set Name -> Term -> S.Set Name
-freeVars ctx tm = case tm of
-  Var n _    -> if n `S.member` ctx then S.empty else S.singleton n
-  Ref n      -> S.empty
-  Sub t      -> freeVars ctx t
-  Fix n f    -> freeVars (S.insert n ctx) (f (Var n 0))
-  Let v f    -> S.union (freeVars ctx v) (freeVars ctx f)
-  Set        -> S.empty
-  Chk v t    -> S.union (freeVars ctx v) (freeVars ctx t)
-  Emp        -> S.empty
-  EmpM x     -> freeVars ctx x
-  Uni        -> S.empty
-  One        -> S.empty
-  UniM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
-  Bit        -> S.empty
-  Bt0        -> S.empty
-  Bt1        -> S.empty
-  BitM x f t -> S.unions [freeVars ctx x, freeVars ctx f, freeVars ctx t]
-  Nat        -> S.empty
-  Zer        -> S.empty
-  Suc n      -> freeVars ctx n
-  NatM x z s -> S.unions [freeVars ctx x, freeVars ctx z, freeVars ctx s]
-  Lst t      -> freeVars ctx t
-  Nil        -> S.empty
-  Con h t    -> S.union (freeVars ctx h) (freeVars ctx t)
-  LstM x n c -> S.unions [freeVars ctx x, freeVars ctx n, freeVars ctx c]
-  Enu s      -> S.empty
-  Sym s      -> S.empty
-  EnuM x c e -> S.unions [freeVars ctx x, S.unions (map (freeVars ctx . snd) c), freeVars ctx e]
-  Num _      -> S.empty
-  Val _      -> S.empty
-  Op2 _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
-  Op1 _ a    -> freeVars ctx a
-  Sig a b    -> S.union (freeVars ctx a) (freeVars ctx b)
-  Tup a b    -> S.union (freeVars ctx a) (freeVars ctx b)
-  SigM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
-  All a b    -> S.union (freeVars ctx a) (freeVars ctx b)
-  Lam n f    -> freeVars (S.insert n ctx) (f (Var n 0))
-  App f x    -> S.union (freeVars ctx f) (freeVars ctx x)
-  Eql t a b  -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
-  Rfl        -> S.empty
-  EqlM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
-  Met _ t c  -> S.unions (freeVars ctx t : map (freeVars ctx) c)
-  Ind t      -> freeVars ctx t
-  Frz t      -> freeVars ctx t
-  Era        -> S.empty
-  Sup _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
-  SupM x l f -> S.unions [freeVars ctx x, freeVars ctx l, freeVars ctx f]
-  Frk l a b  -> S.unions [freeVars ctx l, freeVars ctx a, freeVars ctx b]
-  Log s x    -> S.union (freeVars ctx s) (freeVars ctx x)
-  Loc _ t    -> freeVars ctx t
-  Rwt a b x  -> S.unions [freeVars ctx a, freeVars ctx b, freeVars ctx x]
-  Pri _      -> S.empty
-  Pat s m c  -> error "TODO: Pat"

@@ -33,6 +33,7 @@ module Core.Flatten where
 
 import Data.List (nub, find)
 import qualified Data.Map as M
+import qualified Data.Set as S
 import System.IO.Unsafe (unsafePerformIO)
 import System.Exit
 
@@ -550,7 +551,9 @@ unfrkGo d ctx (Rwt a b x)  = Rwt (unfrkGo d ctx a) (unfrkGo d ctx b) (unfrkGo d 
 unfrkGo d ctx (Pat s m c)  = Pat (map (unfrkGo d ctx) s) m [(ps, unfrkGo d ctx rhs) | (ps, rhs) <- c]
 
 unfrkFrk :: Int -> [(Name, Int)] -> Term -> Term -> Term -> Term
-unfrkFrk d ctx l a b = buildSupMs (reverse ctx) where
+unfrkFrk d ctx l a b = buildSupMs (filter (\x -> fst x `S.member` free) (reverse ctx)) where
+  free = freeVars S.empty a `S.union` freeVars S.empty b
+
   -- Build nested SupM matches for each context variable
   buildSupMs :: [(Name, Int)] -> Term
   buildSupMs [] = Sup l a' b' where
@@ -681,3 +684,58 @@ unsupported = unsafePerformIO $ do
   putStrLn $ "Unsupported pattern-match shape."
   putStrLn $ "Support for it will be added in a future update."
   exitFailure
+
+freeVars :: S.Set Name -> Term -> S.Set Name
+freeVars ctx tm = case tm of
+  Var n _    -> if n `S.member` ctx then S.empty else S.singleton n
+  Ref n      -> S.empty
+  Sub t      -> freeVars ctx t
+  Fix n f    -> freeVars (S.insert n ctx) (f (Var n 0))
+  Let v f    -> S.union (freeVars ctx v) (freeVars ctx f)
+  Set        -> S.empty
+  Chk v t    -> S.union (freeVars ctx v) (freeVars ctx t)
+  Emp        -> S.empty
+  EmpM x     -> freeVars ctx x
+  Uni        -> S.empty
+  One        -> S.empty
+  UniM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
+  Bit        -> S.empty
+  Bt0        -> S.empty
+  Bt1        -> S.empty
+  BitM x f t -> S.unions [freeVars ctx x, freeVars ctx f, freeVars ctx t]
+  Nat        -> S.empty
+  Zer        -> S.empty
+  Suc n      -> freeVars ctx n
+  NatM x z s -> S.unions [freeVars ctx x, freeVars ctx z, freeVars ctx s]
+  Lst t      -> freeVars ctx t
+  Nil        -> S.empty
+  Con h t    -> S.union (freeVars ctx h) (freeVars ctx t)
+  LstM x n c -> S.unions [freeVars ctx x, freeVars ctx n, freeVars ctx c]
+  Enu s      -> S.empty
+  Sym s      -> S.empty
+  EnuM x c e -> S.unions [freeVars ctx x, S.unions (map (freeVars ctx . snd) c), freeVars ctx e]
+  Num _      -> S.empty
+  Val _      -> S.empty
+  Op2 _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
+  Op1 _ a    -> freeVars ctx a
+  Sig a b    -> S.union (freeVars ctx a) (freeVars ctx b)
+  Tup a b    -> S.union (freeVars ctx a) (freeVars ctx b)
+  SigM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
+  All a b    -> S.union (freeVars ctx a) (freeVars ctx b)
+  Lam n f    -> freeVars (S.insert n ctx) (f (Var n 0))
+  App f x    -> S.union (freeVars ctx f) (freeVars ctx x)
+  Eql t a b  -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
+  Rfl        -> S.empty
+  EqlM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
+  Met _ t c  -> S.unions (freeVars ctx t : map (freeVars ctx) c)
+  Ind t      -> freeVars ctx t
+  Frz t      -> freeVars ctx t
+  Era        -> S.empty
+  Sup _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
+  SupM x l f -> S.unions [freeVars ctx x, freeVars ctx l, freeVars ctx f]
+  Frk l a b  -> S.unions [freeVars ctx l, freeVars ctx a, freeVars ctx b]
+  Log s x    -> S.union (freeVars ctx s) (freeVars ctx x)
+  Loc _ t    -> freeVars ctx t
+  Rwt a b x  -> S.unions [freeVars ctx a, freeVars ctx b, freeVars ctx x]
+  Pri _      -> S.empty
+  Pat s m c  -> S.unions ((map (freeVars ctx) s) ++ (map (\(_,m) -> freeVars ctx m) m) ++ (map (\(_,c) -> freeVars ctx c) c))
