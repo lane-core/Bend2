@@ -77,6 +77,7 @@ rewriteGo lv d book old neo val = case val of
   Frk l a b  -> Frk (rewrite lv d book old neo l) (rewrite lv d book old neo a) (rewrite lv d book old neo b)
   Loc s t    -> Loc s (rewrite lv d book old neo t)
   Rwt a b x  -> Rwt (rewrite lv d book old neo a) (rewrite lv d book old neo b) (rewrite lv d book old neo x)
+  Log s x    -> Log (rewrite lv d book old neo s) (rewrite lv d book old neo x)
   Pri p      -> Pri p
   Pat t m c  -> Pat (map (rewrite lv d book old neo) t) (map (\(k,v) -> (k, rewrite lv d book old neo v)) m) (map (\(ps,v) -> (map (rewrite lv d book old neo) ps, rewrite lv d book old neo v)) c)
 

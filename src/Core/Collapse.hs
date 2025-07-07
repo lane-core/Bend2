@@ -8,6 +8,8 @@ module Core.Collapse where
 import Control.Monad (ap)
 import qualified Data.IntMap.Strict as IM
 
+import Debug.Trace
+
 import Core.Type hiding (Bits(..))
 import Core.WHNF (termToInt)
 
@@ -255,6 +257,12 @@ collapse dep book term = case term of
     b' <- collapse dep book b
     x' <- collapse dep book x
     return $ Rwt a' b' x'
+
+  -- Logging
+  Log s x -> do
+    s' <- collapse dep book s
+    x' <- collapse dep book x
+    return $ Log s' x'
 
   -- Primitive
   Pri p       -> return $ Pri p
