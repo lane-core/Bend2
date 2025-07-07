@@ -26,6 +26,7 @@ prelude = unlines [
     "data Nat { #Z #S{n} }",
     "data Pair { #P{fst snd} }",
     "@fix(&f) = (f @fix(f))",
+    "@main = @main$f",
     "",
     "// Bend to HVM Compiler Output",
     "// ---------------------------",
@@ -34,18 +35,18 @@ prelude = unlines [
 
 -- Compile a Bend function to an HVM definition
 compileDef :: (String, Defn) -> String
-compileDef (name, (_, tm, ty)) 
+compileDef (nam, (_, tm, ty)) 
   -- TODO: Remove proof fields?
-  | (Just (_, ctrs)) <- extractTypeDef tm = compileType name ctrs
+  | (Just (_, ctrs)) <- extractTypeDef tm = compileType nam ctrs
   -- TODO: Function arguments
-  | otherwise = compileFn name tm
+  | otherwise = compileFn nam tm
 
 compileType :: String -> [(String, [String])] -> String
-compileType name ctrs = "data " ++ name ++ "$" ++ " { " ++ unwords (map compileCtr ctrs) ++ " }" where
-  compileCtr (nam, fds) = "#" ++ nam ++ "$" ++ "{" ++ unwords fds ++ "}"
+compileType nam ctrs = "data " ++ (hvmNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }" where
+  compileCtr (nam, fds) = "#" ++ (hvmNam nam) ++ "{" ++ unwords fds ++ "}"
 
 compileFn :: String -> Term -> String
-compileFn name tm = "@" ++ name ++ "$" ++ " = " ++ HVM.showCore (termToHVM MS.empty tm)
+compileFn nam tm = "@" ++ (hvmNam nam) ++ " = " ++ HVM.showCore (termToHVM MS.empty tm)
 
 -- Extract constructor definition info from type definitions
 extractTypeDef :: Term -> Maybe ([String], [(String, [String])])
@@ -82,10 +83,10 @@ termToHVM ctx tm = go tm where
   go (Var n i) =
     case MS.lookup n ctx of
       Just n  -> HVM.Var n
-      Nothing -> HVM.Var (n++"$") 
-  go (Ref k)      = HVM.Ref (k++"$") 0 [] -- TODO: Ref arguments
+      Nothing -> HVM.Var n
+  go (Ref k)      = HVM.Ref (hvmNam k) 0 [] -- TODO: Ref arguments
   go (Sub t)      = termToHVM ctx t
-  go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam ("&"++n++"$") (termToHVM (MS.insert n (n++"$") ctx) (f (Var n 0)))]
+  go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam ("&"++hvmNam n) (termToHVM (MS.insert n (hvmNam n) ctx) (f (Var n 0)))]
   go (Let v f)    = HVM.App (termToHVM ctx f) (termToHVM ctx v)
   go Set          = HVM.Era
   go (Chk v t)    = termToHVM ctx v
@@ -137,7 +138,7 @@ termToHVM ctx tm = go tm where
     op1ToHVM NEG = error "TODO"
   go (Sig _ _)    = HVM.Era
   go (Tup x y) = case extractCtr x y of
-      Just (k, x) -> HVM.Ctr k (map (termToHVM ctx) x)
+      Just (k, x) -> HVM.Ctr ('#':hvmNam k) (map (termToHVM ctx) x)
       Nothing     -> HVM.Ctr "#P" [termToHVM ctx x, termToHVM ctx y]
     where 
       extractCtr (Sym k) y = 
@@ -162,8 +163,8 @@ termToHVM ctx tm = go tm where
       flattenCtrM _ _ = error "flattenCtrM: unreachable"
 
       matToHVM :: MS.Map String String -> String -> [(String, ([String], Term))] -> Term -> HVM.Core
-      matToHVM ctx x [(ctr,(fds,bod))]    d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [(ctr, [], foldr HVM.Lam (termToHVM ctx bod) fds), ("_", [], HVM.Lam x (termToHVM ctx d))]
-      matToHVM ctx x ((ctr,(fds,bod)):cs) d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [(ctr, [], foldr HVM.Lam (termToHVM ctx bod) fds), ("_", [], HVM.Lam x (matToHVM ctx x cs d))]
+      matToHVM ctx x [(ctr,(fds,bod))]    d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam (termToHVM ctx bod) fds), ("_", [], HVM.Lam x (termToHVM ctx d))]
+      matToHVM ctx x ((ctr,(fds,bod)):cs) d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam (termToHVM ctx bod) fds), ("_", [], HVM.Lam x (matToHVM ctx x cs d))]
       matToHVM _ _ _ _ = error "matToHVM: unreachable"
   go (All _ _)    = HVM.Era
   go (Lam n f)    = HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))
@@ -178,10 +179,10 @@ termToHVM ctx tm = go tm where
   go (Sup l a b)  = HVM.Ref "SUP" 0 [termToHVM ctx l, termToHVM ctx a, termToHVM ctx b]
   go (Frk l a b)  = tmLab where
     -- Only fork variables free in the bodies of a and b
-    tmLab             = HVM.Let HVM.STRI "&_L" (termToHVM ctx l) tmDup 
+    tmLab             = HVM.Let HVM.STRI "&L$" (termToHVM ctx l) tmDup 
     tmDup             = foldr dup tmSup vars
-    tmSup             = HVM.Ref "SUP" 0 [HVM.Var "_L", termToHVM ctxA a, termToHVM ctxB b]
-    dup (_,v,(a,b)) x = HVM.Ref "DUP" 0 [HVM.Var "_L", HVM.Var v, HVM.Lam ('&':a) (HVM.Lam ('&':b) x)]
+    tmSup             = HVM.Ref "SUP" 0 [HVM.Var "L$", termToHVM ctxA a, termToHVM ctxB b]
+    dup (_,v,(a,b)) x = HVM.Ref "DUP" 0 [HVM.Var "L$", HVM.Var v, HVM.Lam ('&':a) (HVM.Lam ('&':b) x)]
     vars              = [(k, v, (suff v "0", suff v "1")) | (k, v) <- MS.toList ctx]
     suff v s          = if "$$" `isInfixOf` v then v ++ s else v ++ "$$" ++ s
     ctxA              = MS.fromList [(k, a) | (k, _, (a, _)) <- vars]
@@ -190,3 +191,9 @@ termToHVM ctx tm = go tm where
   go (Rwt _ _ x)  = termToHVM ctx x
   go (Pri p)      = HVM.Era
   go (Pat x m c)  = HVM.Era
+
+hvmNam :: String -> String
+hvmNam n = (replace '/' "__" n) ++ "$"
+
+replace :: Char -> String -> String -> String
+replace old new xs = foldr (\c acc -> if c == old then new ++ acc else c : acc) [] xs
