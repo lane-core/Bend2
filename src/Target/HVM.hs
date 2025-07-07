@@ -166,9 +166,11 @@ termToHVM ctx tm = go tm where
       flattenCtrM _ _ = error "flattenCtrM: unreachable"
 
       matToHVM :: MS.Map String String -> String -> [(String, ([String], Term))] -> Term -> HVM.Core
-      matToHVM ctx x [(ctr,(fds,bod))]    d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam (termToHVM ctx bod) fds), ("_", [], HVM.Lam x (termToHVM ctx d))]
-      matToHVM ctx x ((ctr,(fds,bod)):cs) d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam (termToHVM ctx bod) fds), ("_", [], HVM.Lam x (matToHVM ctx x cs d))]
+      matToHVM ctx x [(ctr,(fds,bod))]    d = mkIfl x ctr (termToHVM ctx bod) fds (termToHVM ctx d)
+      matToHVM ctx x ((ctr,(fds,bod)):cs) d = mkIfl x ctr (termToHVM ctx bod) fds (matToHVM ctx x cs d)
       matToHVM _ _ _ _ = error "matToHVM: unreachable"
+
+      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam bod (reverse fds)), ("_", [], HVM.Lam x d)]
   go (All _ _)    = HVM.Era
   go (Lam n f)    = HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))
   go (App f x)    = HVM.App (termToHVM ctx f) (termToHVM ctx x)
@@ -186,7 +188,8 @@ termToHVM ctx tm = go tm where
     tmDup             = foldr dup tmSup vars
     tmSup             = HVM.Ref "SUP" 0 [HVM.Var "L$", termToHVM ctxA a, termToHVM ctxB b]
     dup (_,v,(a,b)) x = HVM.Ref "DUP" 0 [HVM.Var "L$", HVM.Var v, HVM.Lam ('&':a) (HVM.Lam ('&':b) x)]
-    vars              = [(k, v, (suff v "0", suff v "1")) | (k, v) <- MS.toList ctx]
+    vars              = [(k, v, (suff v "0", suff v "1")) | (k, v) <- MS.toList ctx, k `S.member` free]
+    free              = freeVars S.empty a `S.union` freeVars S.empty b
     suff v s          = if "$$" `isInfixOf` v then v ++ s else v ++ "$$" ++ s
     ctxA              = MS.fromList [(k, a) | (k, _, (a, _)) <- vars]
     ctxB              = MS.fromList [(k, b) | (k, _, (_, b)) <- vars]
