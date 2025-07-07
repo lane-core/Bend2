@@ -8,7 +8,7 @@ module Core.CLI
   , listDependencies
   ) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, forM_)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import System.Environment (getArgs)
@@ -19,6 +19,7 @@ import Control.Exception (catch, IOException)
 
 import Core.Bind
 import Core.Check
+import Core.Collapse
 import Core.Deps
 import Core.Import (autoImport)
 import Core.Parse.Book (doParseBook)
@@ -79,9 +80,10 @@ runMain book = do
           putStrLn $ show e
           exitFailure
         Done typ -> do
-          let result = normal 0 book mainCall
+          let results = flatten $ collapse 0 book $ normal 0 book mainCall
           putStrLn ""
-          putStrLn $ show result
+          forM_ results $ \ term -> do
+            print term
 
 -- | Process a Bend file: parse, check, and run
 processFile :: FilePath -> IO ()

@@ -25,6 +25,7 @@ library
                       Core.Bind,
                       Core.CLI,
                       Core.Check,
+                      Core.Collapse,
                       Core.Deps,
                       Core.Equal,
                       Core.Flatten,

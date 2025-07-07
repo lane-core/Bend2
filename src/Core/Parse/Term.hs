@@ -1,11 +1,11 @@
 {-./../Type.hs-}
-{-/../Parse.hs-}
+{-./../Parse.hs-}
 
 {-# LANGUAGE ViewPatterns #-}
 
 module Core.Parse.Term 
   ( parseTerm
-  , parseExpr
+  , parseTermBefore
   , doParseTerm
   , doReadTerm
   ) where
@@ -46,6 +46,7 @@ parseTermIni = choice
   , parseTildeExpr
   , parseOne
   , parseEra
+  , parseSup
   , parseReturn
   , parseNat
   , parseNatLit
@@ -88,19 +89,60 @@ parseTermOpr t = choice
   , parseAss t   -- =
   , return t ]
 
--- | Parses a core term and a tight posfix (no operators)
-parseExpr :: Parser Term
-parseExpr = do
-  ini <- parseTermIni
-  val <- parseTermArg ini
-  return $ val
+-- -- | Top‐level entry point
+-- parseTerm :: Parser Term
+-- parseTerm = located $ do
+  -- t0 <- parseTermIni
+  -- t1 <- parseTermArg t0
+  -- t2 <- parseTermOpr t1
+  -- return t2
+
+-- TODO: refactor 'parseTerm' so that, for each string on the blocked list of
+-- the Parser state, if the term is followed by that string, then, we'll just
+-- return t0, without parsing the arg and the opr. if the term is NOT followed
+-- by a string in the blocked list, then, we parse the arg/opr as usual.
+-- moreover, implement a parseTermBlocking function, which adds a string to the
+-- blocked list (if it isn't present), parses the term, then removes it (if it
+-- wasn't added). don't use monadic operators like <$>, stick to a more readable
+-- do-notation whenever possible. implement all that below:
 
 -- | Top‐level entry point
 parseTerm :: Parser Term
 parseTerm = located $ do
-  exp <- parseExpr
-  val <- parseTermOpr exp
-  return val
+  t0 <- parseTermIni
+  st <- get
+  is_blocked <- if null (blocked st)
+    then return False
+    else do
+      next_is_blocked <-
+        lookAhead
+        $ optional
+        $ choice (map (try.symbol) (blocked st))
+      case next_is_blocked of
+        Just _  -> return True
+        Nothing -> return False
+  if is_blocked
+    then do
+      return t0
+    else do
+      t1 <- parseTermArg t0
+      t2 <- parseTermOpr t1
+      return t2
+
+-- | Parses a term, temporarily blocking a given operator.
+-- This is useful for parsing expressions where an operator might be ambiguous
+-- in the grammar, e.g., `~ term { ... }` where `term` should not be an
+-- infix expression that includes `{`.
+parseTermBefore :: String -> Parser Term
+parseTermBefore op = do
+  st <- get
+  let wasBlocked = blocked st
+  let newBlocked = op : wasBlocked
+  put st { blocked = newBlocked }
+  term <- parseTerm
+  st'  <- get
+  put st' { blocked = wasBlocked }
+  return term
 
 -- atomic terms
 
@@ -131,6 +173,19 @@ parseOne = label "unit value (())" $ symbol "()" >> return One
 parseEra :: Parser Term
 parseEra = label "Eraser" $ symbol "*" >> return Era
 
+-- | Syntax: &L{a,b}
+parseSup :: Parser Term
+parseSup = label "superposition" $ do
+  l <- try $ do
+    _ <- symbol "&"
+    l <- parseTermBefore "{"
+    _ <- symbol "{"
+    return $ l
+  a <- parseTerm
+  _ <- symbol ","
+  b <- parseTerm
+  _ <- symbol "}"
+  return $ Sup l a b
 
 -- | Syntax: if condition: trueCase else: falseCase
 parseBifIf :: Parser Term
@@ -153,7 +208,7 @@ parseSig = label "dependent pair type" $ do
     [] -> parseSigSimple
     _  -> do
       _ <- symbol "."
-      b <- parseExpr
+      b <- parseTerm
       return $ foldr (\(x, t) acc -> Sig t (Lam x (\v -> acc))) b bindings
   where
     parseBinding = try $ do
@@ -168,7 +223,7 @@ parseSigSimple :: Parser Term
 parseSigSimple = do
   a <- parseTerm
   _ <- symbol "."
-  b <- parseExpr
+  b <- parseTerm
   return (Sig a b)
 
 -- | Syntax: ∀ x: Type. body | all x: Type. body | ∀ Type. Type | all Type. Type
@@ -180,7 +235,7 @@ parseAll = label "dependent function type" $ do
     [] -> parseAllSimple
     _  -> do
       _ <- symbol "."
-      b <- parseExpr
+      b <- parseTerm
       return $ foldr (\(x, t) acc -> All t (Lam x (\v -> acc))) b bindings
   where
     parseBinding = try $ do
@@ -195,7 +250,7 @@ parseAllSimple :: Parser Term
 parseAllSimple = do
   a <- parseTerm
   _ <- symbol "."
-  b <- parseExpr
+  b <- parseTerm
   return (All a b)
 
 -- Enum Type Parsers
@@ -554,7 +609,7 @@ parsePol f = label "polymorphic application" $ try $ do
   _ <- try $ do
     _ <- symbol "<"
     notFollowedBy (char '>')
-  args <- sepEndBy parseExpr (symbol ",")
+  args <- sepEndBy parseTerm (symbol ",")
   _    <- symbol ">"
   return $ foldl App f args
 
@@ -622,12 +677,12 @@ parseLst t = label "list type" $ do
 parseEql :: Term -> Parser Term
 parseEql t = label "equality type" $ do
   _ <- try $ symbol "{"
-  a <- parseExpr
+  a <- parseTerm
   op <- choice
     [ symbol "==" >> return True
     , symbol "!=" >> return False
     ]
-  b <- parseExpr
+  b <- parseTerm
   _ <- symbol "}"
   let eql = Eql t a b
   return $ if op then eql else App (Ref "Not") eql
@@ -788,7 +843,7 @@ parseTildeExpr = label "tilde expression (induction or match)" $ do
         return (Ind t)
     , -- ~ term [{...}]
       do
-        scrut <- parseExpr
+        scrut <- parseTermBefore "{"
         is_match <- optional (lookAhead (symbol "{"))
         case is_match of
           Just _ -> do -- It's a match expression
@@ -927,7 +982,7 @@ parseContext = braces $ sepEndBy parseTerm (symbol ",")
 -- | Parse a term from a string, returning an error message on failure
 doParseTerm :: FilePath -> String -> Either String Term
 doParseTerm file input =
-  case evalState (runParserT p file input) (ParserState True input M.empty) of
+  case evalState (runParserT p file input) (ParserState True input [] M.empty) of
     Left err  -> Left (formatError input err)
     Right res -> Right (adjust (Book M.empty) res)
   where

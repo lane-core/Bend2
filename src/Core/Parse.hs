@@ -60,8 +60,9 @@ import qualified Core.Parse.WithSpan as WithSpan
 
 -- Parser state
 data ParserState = ParserState
-  { tight  :: Bool                   -- ^ tracks whether previous token ended with no trailing space
-  , source :: String                 -- ^ original file source, for error reporting
+  { tight   :: Bool                  -- ^ tracks whether previous token ended with no trailing space
+  , source  :: String                -- ^ original file source, for error reporting
+  , blocked :: [String]              -- ^ list of blocked operators
   , imports :: M.Map String String   -- ^ import mappings: "Lib/" => "Path/To/Lib/"
   }
 

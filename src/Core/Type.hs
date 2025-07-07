@@ -126,9 +126,10 @@ data Term
   | Frz Type -- ∅T
 
   -- Supperpositions
-  | Era               -- *
-  | Sup Term Term Term -- &L{a,b}
-  | Frk Term Term Term -- fork L:a else:b
+  | Era                         -- *
+  | Sup Term Term Term          -- &L{a,b}
+  | Frk Term Term Term          -- fork L:a else:b
+  -- | Dup Int Name Name Term Term -- !&L{a,b}=v; f
 
   -- Errors
   | Loc Span Term -- x
@@ -358,12 +359,6 @@ collectArgs = go [] where
 collectApps :: Term -> [Term] -> (Term, [Term])
 collectApps (cut -> App f x) args = collectApps f (x:args)
 collectApps f                args = (f, args)
-
-natToInt :: Term -> Maybe Int
-natToInt Zer       = Just 0
-natToInt (Suc n)   = fmap (+1) (natToInt n)
-natToInt (Loc _ t) = natToInt t
-natToInt _         = Nothing
 
 noSpan :: Span
 noSpan = Span (0,0) (0,0) ""
