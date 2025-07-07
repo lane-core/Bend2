@@ -29,7 +29,7 @@ prelude = unlines [
     "data Nat { #Z #S{n} }",
     "data Pair { #P{fst snd} }",
     "@fix(&f) = (f @fix(f))",
-    "@main = @main$f",
+    "@main = @main$",
     "",
     "// Bend to HVM Compiler Output",
     "// ---------------------------",
@@ -45,8 +45,11 @@ compileDef (nam, (_, tm, ty))
   | otherwise = Right (compileFn nam tm)
 
 compileType :: Name -> [(Name, [Name])] -> String
-compileType nam ctrs = "data " ++ (hvmNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }" where
-  compileCtr (nam, fds) = "#" ++ (hvmNam nam) ++ "{" ++ unwords fds ++ "}"
+compileType nam ctrs = unlines $
+  [ ("data " ++ (hvmNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }")
+  , ("@" ++ (hvmNam nam) ++ " = *")
+  ]
+  where compileCtr (nam, fds) = "#" ++ (hvmNam nam) ++ "{" ++ unwords fds ++ "}"
 
 compileFn :: Name -> Term -> String
 compileFn nam tm = "@" ++ (hvmNam nam) ++ " = " ++ HVM.showCore (termToHVM MS.empty tm)
