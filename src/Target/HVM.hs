@@ -25,7 +25,6 @@ prelude = unlines [
     "// Prelude",
     "// -------",
     "data List { #Nil #Cons{head tail} }",
-    "data Bit { #B0 #B1 }",
     "data Nat { #Z #S{n} }",
     "data Pair { #P{fst snd} }",
     "@fix(&f) = (f @fix(f))",
@@ -102,9 +101,9 @@ termToHVM ctx tm = go tm where
   go One          = HVM.U32 1
   go (UniM x f)   = termToHVM ctx f
   go Bit          = HVM.Era
-  go Bt0          = HVM.Ctr "#B0" []
-  go Bt1          = HVM.Ctr "#B1" []
-  go (BitM x f t) = HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#B0", [], termToHVM ctx f), ("#B1", [], termToHVM ctx t)]
+  go Bt0          = HVM.U32 0
+  go Bt1          = HVM.U32 1
+  go (BitM x f t) = HVM.Mat HVM.SWI (termToHVM ctx x) [] [("0", [], termToHVM ctx f), ("_", [], termToHVM ctx t)]
   go Nat          = HVM.Era
   go Zer          = HVM.Ctr "#Z" []
   go (Suc p)      = HVM.Ctr "#S" [termToHVM ctx p]
