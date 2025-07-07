@@ -93,6 +93,7 @@ flatten d book (Ind t)      = Ind (flatten d book t)
 flatten d book (Frz t)      = Frz (flatten d book t)
 flatten d book Era          = Era
 flatten d book (Sup l a b)  = Sup (flatten d book l) (flatten d book a) (flatten d book b)
+flatten d book (SupM x l f) = SupM (flatten d book x) (flatten d book l) (flatten d book f)
 flatten d book (Frk l a b)  = Frk (flatten d book l) (flatten d book a) (flatten d book b)
 flatten d book (Num t)      = Num t
 flatten d book (Val v)      = Val v
@@ -162,30 +163,32 @@ peelCtrCol :: Int -> Book -> Term -> [Case] -> ([Case],[Case])
 peelCtrCol d book (cut->k) ((((cut->p):ps),rhs):cs) = 
   -- trace (">> peel " ++ show k ++ " ~ " ++ show p) $
   case (k,p) of
-    (Zer    , Zer    ) -> ((ps, rhs) : picks , drops)
-    (Zer    , Var k _) -> ((ps, subst k Zer rhs) : picks , ((p:ps),rhs) : drops)
-    (Suc _  , Suc x  ) -> (((x:ps), rhs) : picks , drops)
-    (Suc _  , Var k _) -> (((Var k 0:ps), subst k (Suc (Var k 0)) rhs) : picks , ((p:ps),rhs) : drops)
-    (Bt0    , Bt0    ) -> ((ps, rhs) : picks , drops)
-    (Bt0    , Var k _) -> ((ps, subst k Bt0 rhs) : picks , ((p:ps),rhs) : drops)
-    (Bt1    , Bt1    ) -> ((ps, rhs) : picks , drops)
-    (Bt1    , Var k _) -> ((ps, subst k Bt1 rhs) : picks , ((p:ps),rhs) : drops)
-    (Nil    , Nil    ) -> ((ps, rhs) : picks , drops)
-    (Nil    , Var k _) -> ((ps, subst k Nil rhs) : picks , ((p:ps),rhs) : drops)
-    (Con _ _, Con h t) -> (((h:t:ps), rhs) : picks , drops)
-    (Con _ _, Var k _) -> (((Var (k++"h") 0:Var (k++"t") 0:ps), subst k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
-    (One    , One    ) -> ((ps, rhs) : picks , drops)
-    (One    , Var k _) -> ((ps, subst k One rhs) : picks , ((p:ps),rhs) : drops)
-    (Tup _ _, Tup a b) -> (((a:b:ps), rhs) : picks , drops)
-    (Tup _ _, Var k _) -> (((Var (k++"x") 0:Var (k++"y") 0:ps), subst k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
-    (Sym s  , Sym s' )
-             | s == s' -> ((ps, rhs) : picks , drops)
-    (Sym s  , Var k _) -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
-    (Rfl    , Rfl    ) -> ((ps, rhs) : picks , drops)
-    (Rfl    , Var k _) -> ((ps, subst k Rfl rhs) : picks , ((p:ps),rhs) : drops)
-    (Var _ _, p      ) -> unsupported
-    (k      , App f x) -> callPatternSugar d book k f x p ps rhs cs
-    x                  -> (picks , ((p:ps),rhs) : drops)
+    (Zer      , Zer    )   -> ((ps, rhs) : picks , drops)
+    (Zer      , Var k _)   -> ((ps, subst k Zer rhs) : picks , ((p:ps),rhs) : drops)
+    (Suc _    , Suc x  )   -> (((x:ps), rhs) : picks , drops)
+    (Suc _    , Var k _)   -> (((Var k 0:ps), subst k (Suc (Var k 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Bt0      , Bt0    )   -> ((ps, rhs) : picks , drops)
+    (Bt0      , Var k _)   -> ((ps, subst k Bt0 rhs) : picks , ((p:ps),rhs) : drops)
+    (Bt1      , Bt1    )   -> ((ps, rhs) : picks , drops)
+    (Bt1      , Var k _)   -> ((ps, subst k Bt1 rhs) : picks , ((p:ps),rhs) : drops)
+    (Nil      , Nil    )   -> ((ps, rhs) : picks , drops)
+    (Nil      , Var k _)   -> ((ps, subst k Nil rhs) : picks , ((p:ps),rhs) : drops)
+    (Con _ _  , Con h t)   -> (((h:t:ps), rhs) : picks , drops)
+    (Con _ _  , Var k _)   -> (((Var (k++"h") 0:Var (k++"t") 0:ps), subst k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (One      , One    )   -> ((ps, rhs) : picks , drops)
+    (One      , Var k _)   -> ((ps, subst k One rhs) : picks , ((p:ps),rhs) : drops)
+    (Tup _ _  , Tup a b)   -> (((a:b:ps), rhs) : picks , drops)
+    (Tup _ _  , Var k _)   -> (((Var (k++"x") 0:Var (k++"y") 0:ps), subst k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Sym s    , Sym s' )
+               | s == s'   -> ((ps, rhs) : picks , drops)
+    (Sym s    , Var k _)   -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
+    (Rfl      , Rfl    )   -> ((ps, rhs) : picks , drops)
+    (Rfl      , Var k _)   -> ((ps, subst k Rfl rhs) : picks , ((p:ps),rhs) : drops)
+    (Sup l _ _, Sup r a b) -> (((a:b:ps), rhs) : picks , drops)
+    (Sup l _ _, Var k _)   -> (((Var (k++"a") 0:Var (k++"b") 0:ps), subst k (Sup l (Var (k++"a") 0) (Var (k++"b") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Var _ _  , p      )   -> unsupported
+    (k        , App f x)   -> callPatternSugar d book k f x p ps rhs cs
+    x                      -> (picks , ((p:ps),rhs) : drops)
   where (picks, drops) = peelCtrCol d book k cs
 peelCtrCol d book k cs = (cs,cs)
 
@@ -211,7 +214,6 @@ callPatternSugar d book k f x p ps rhs cs =
 -- Substitutes a move list into an expression
 shove :: Int -> [Move] -> Term -> Term
 shove d ms term = foldr (\ (k,v) x -> subst k v x) term ms 
-
 
 simplify :: Int -> Term -> Term
 simplify d (Pat ss ms cs) =
@@ -287,6 +289,7 @@ unpat d (Ind t)         = Ind (unpat d t)
 unpat d (Frz t)         = Frz (unpat d t)
 unpat d Era             = Era
 unpat d (Sup l a b)     = Sup (unpat d l) (unpat d a) (unpat d b)
+unpat d (SupM x l f)    = SupM (unpat d x) (unpat d l) (unpat d f)
 unpat d (Frk l a b)     = Frk (unpat d l) (unpat d a) (unpat d b)
 unpat d (Num t)         = Num t
 unpat d (Val v)         = Val v
@@ -429,6 +432,16 @@ match d x ms cs@(([(cut -> Sym _)], _) : _) =
 match d x ms (([(cut -> Rfl)], r) : _) =
   wrap d ms $ EqlM x (unpat d r)
 
+-- match x { &L{a,b}: s }
+-- ---------------------------
+-- ~ x { &L{,}: λa. λb. s }
+-- match x { &L{a,b}: s }
+-- ---------------------------
+-- ~ x { &L{,}: λa. λb. s }
+match d x ms (([(cut -> Sup l a b)], s) : _) =
+  wrap d ms $ SupM x l if_sup
+  where if_sup = Lam (patOf d a) $ \_ -> Lam (patOf (d+1) b) $ \_ -> unpat (d+2) s
+
 -- match x { k: body }
 -- -------------------
 -- body[k := x]
@@ -494,17 +507,18 @@ patOf d p              = nam d
 
 -- Returns a single-layer constructor, replacing fields by pattern variables
 ctrOf :: Int -> Term -> (Term, [Term])
-ctrOf d Zer       = (Zer , [])
-ctrOf d (Suc p)   = (Suc (pat d p), [pat d p])
-ctrOf d Bt0       = (Bt0 , [])
-ctrOf d Bt1       = (Bt1 , [])
-ctrOf d Nil       = (Nil , [])
-ctrOf d (Con h t) = (Con (pat d h) (pat (d+1) t), [pat d h, pat (d+1) t])
-ctrOf d One       = (One , [])
-ctrOf d (Tup a b) = (Tup (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
-ctrOf d (Sym s)   = (Sym s, [])
-ctrOf d Rfl       = (Rfl , [])
-ctrOf d x         = (var d , [var d])
+ctrOf d Zer         = (Zer , [])
+ctrOf d (Suc p)     = (Suc (pat d p), [pat d p])
+ctrOf d Bt0         = (Bt0 , [])
+ctrOf d Bt1         = (Bt1 , [])
+ctrOf d Nil         = (Nil , [])
+ctrOf d (Con h t)   = (Con (pat d h) (pat (d+1) t), [pat d h, pat (d+1) t])
+ctrOf d One         = (One , [])
+ctrOf d (Tup a b)   = (Tup (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
+ctrOf d (Sym s)     = (Sym s, [])
+ctrOf d Rfl         = (Rfl , [])
+ctrOf d (Sup l a b) = (Sup l (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
+ctrOf d x           = (var d , [var d])
 
 -- Subst a var for a value in a term
 subst :: Name -> Term -> Term -> Term
@@ -551,6 +565,7 @@ subst name val term = go name val term where
     Frz t      -> Frz (go name val t)
     Era        -> Era
     Sup l a b  -> Sup (go name val l) (go name val a) (go name val b)
+    SupM x l f -> SupM (go name val x) (go name val l) (go name val f)
     Frk l a b  -> Frk (go name val l) (go name val a) (go name val b)
     Num t      -> Num t
     Val v      -> Val v

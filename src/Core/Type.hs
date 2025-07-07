@@ -126,10 +126,9 @@ data Term
   | Frz Type -- ∅T
 
   -- Supperpositions
-  | Era                         -- *
-  | Sup Term Term Term          -- &L{a,b}
-  | Frk Term Term Term          -- fork L:a else:b
-  -- | Dup Int Name Name Term Term -- !&L{a,b}=v; f
+  | Era                 -- *
+  | Sup Term Term Term  -- &L{a,b}
+  | SupM Term Term Term -- ~x{&L{,}:f}
 
   -- Errors
   | Loc Span Term -- x
@@ -138,8 +137,9 @@ data Term
   -- Primitive
   | Pri PriF -- SOME_FUNC
 
-  -- Pattern-Match
+  -- Sugars
   | Pat [Term] [Move] [Case] -- match x ... { with k=v ... ; case @A ...: F ; ... }
+  | Frk Term Term Term       -- fork L:a else:b
 
 -- Book of Definitions
 type Inj  = Bool -- "is injective" flag. improves pretty printing
@@ -244,6 +244,7 @@ instance Show Term where
   show (Rwt a b x)     = show a ++ " ⇒ " ++ show b ++ "; " ++ show x
   show (Era)           = "*"
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
+  show (SupM x l f)    = "~ " ++ show x ++ " { &" ++ show l ++ "{,}:" ++ show f ++ " }"
   show (Frk l a b)     = "fork " ++ show l ++ ":" ++ show a ++ " else:" ++ show b
   show (Met _ _ _)     = "?"
   show (Pri p)         = pri p where

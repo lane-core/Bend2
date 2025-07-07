@@ -863,6 +863,7 @@ parseTildeExpr = label "tilde expression (induction or match)" $ do
                   , parseSigMCases scrut
                   , parseEqlMCases scrut
                   , parseEnuMCases scrut
+                  , parseSupMCases scrut
                   ]
                 _ <- symbol "}"
                 return term
@@ -971,6 +972,21 @@ parseEnuMCases scrut = do
     _ <- parseSemi
     return term
   return (EnuM scrut cases def)
+
+-- | Syntax: &L{,}: term;
+parseSupMCases :: Term -> Parser Term
+parseSupMCases scrut = do
+  l <- try $ do
+    _ <- symbol "&"
+    l <- parseTermBefore "{"
+    _ <- symbol "{"
+    _ <- symbol ","
+    _ <- symbol "}"
+    _ <- symbol ":"
+    return l
+  f <- parseTerm
+  _ <- parseSemi
+  return (SupM scrut l f)
 
 -- | Syntax: {term1, term2, term3}
 -- Helper for parsing context in gen statements

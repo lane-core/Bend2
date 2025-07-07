@@ -51,6 +51,7 @@ whnfGo lv book term =
     EnuM x c f -> whnfEnuM lv book x c f
     SigM x f   -> whnfSigM lv book x f
     EqlM x f   -> whnfEqlM lv book x f
+    SupM x l f -> whnfSupM lv book x l f
     _          -> term
 
 -- Normalizes a let binding
@@ -88,7 +89,7 @@ whnfAppLam lv book f x = whnf lv book (f x)
 -- &L{(a x0) (b x1)}
 whnfAppSup :: EvalLevel -> Book -> Term -> Term -> Term -> Term -> Term
 whnfAppSup lv book l a b x = whnf lv book $ Sup l (App a x0) (App b x1)
-  where (x0,x1) = dup l x
+  where (x0,x1) = dup book l x
 
 -- Eliminator normalizers
 -- ----------------------
@@ -99,7 +100,7 @@ whnfUniM lv book x f =
   case whnf lv book x of
     One -> whnf lv book f
     Sup l a b -> whnf lv book $ Sup l (UniM a f0) (UniM b f1)
-      where (f0, f1) = dup l f
+      where (f0, f1) = dup book l f
     x'  -> UniM x' f
 
 -- Normalizes a boolean match
@@ -109,8 +110,8 @@ whnfBitM lv book x f t =
     Bt0 -> whnf lv book f
     Bt1 -> whnf lv book t
     Sup l a b -> whnf lv book $ Sup l (BitM a f0 t0) (BitM b f1 t1)
-      where (f0, f1) = dup l f
-            (t0, t1) = dup l t
+      where (f0, f1) = dup book l f
+            (t0, t1) = dup book l t
     x'  -> BitM x' f t
 
 -- Normalizes a natural number match
@@ -120,8 +121,8 @@ whnfNatM lv book x z s =
     Zer   -> whnf lv book z
     Suc n -> whnf lv book (App s (whnf lv book n))
     Sup l a b -> whnf lv book $ Sup l (NatM a z0 s0) (NatM b z1 s1)
-      where (z0,z1) = dup l z
-            (s0,s1) = dup l s
+      where (z0,z1) = dup book l z
+            (s0,s1) = dup book l s
     x'    -> NatM x' z s
 
 -- Normalizes a list match
@@ -131,8 +132,8 @@ whnfLstM lv book x n c =
     Nil     -> whnf lv book n
     Con h t -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
     Sup l a b -> whnf lv book $ Sup l (LstM a n0 c0) (LstM b n1 c1)
-      where (n0,n1) = dup l n
-            (c0,c1) = dup l c
+      where (n0,n1) = dup book l n
+            (c0,c1) = dup book l c
     x'      -> LstM x' n c
 
 -- Normalizes a pair match
@@ -141,7 +142,7 @@ whnfSigM lv book x f =
   case whnf lv book x of
     Tup a b -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
     Sup l a b -> whnf lv book $ Sup l (SigM a f0) (SigM b f1)
-      where (f0, f1) = dup l f
+      where (f0, f1) = dup book l f
     x'      -> SigM x' f
 
 -- Normalizes an enum match
@@ -152,8 +153,8 @@ whnfEnuM lv book x c f =
       Just t  -> whnf lv book t
       Nothing -> whnf lv book (App f (Sym s))
     Sup l a b -> whnf lv book $ Sup l (EnuM a c0 f0) (EnuM b c1 f1)
-      where (c0, c1) = unzip (map (\(s,t) -> let (t0,t1) = dup l t in ((s,t0),(s,t1))) c)
-            (f0, f1) = dup l f
+      where (c0, c1) = unzip (map (\(s,t) -> let (t0,t1) = dup book l t in ((s,t0),(s,t1))) c)
+            (f0, f1) = dup book l f
     x' -> EnuM x' c f
 
 -- Normalizes an equality match
@@ -162,8 +163,13 @@ whnfEqlM lv book x f =
   case whnf lv book x of
     Rfl -> whnf lv book f
     Sup l a b -> whnf lv book $ Sup l (EqlM a f0) (EqlM b f1)
-      where (f0, f1) = dup l f
+      where (f0, f1) = dup book l f
     x' -> EqlM x' f
+
+-- Normalizes a superposition match
+whnfSupM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
+whnfSupM lv book x l f = whnf lv book (App (App f x0) x1) where
+    (x0, x1) = dup book l (whnf lv book x)
 
 -- Normalizes a primitive application
 whnfAppPri :: EvalLevel -> Book -> PriF -> Term -> Term
@@ -182,11 +188,11 @@ whnfOp2 lv book op a b =
   let a' = whnf lv book a in
   case a' of
     Sup l a0 a1 -> whnf lv book $ Sup l (Op2 op a0 b0) (Op2 op a1 b1)
-      where (b0, b1) = dup l b
+      where (b0, b1) = dup book l b
     _ -> let b' = whnf lv book b in
       case b' of
         Sup l b0 b1 -> whnf lv book $ Sup l (Op2 op a'0 b0) (Op2 op a'1 b1)
-          where (a'0, a'1) = dup l a'
+          where (a'0, a'1) = dup book l a'
         _ -> case (a', b') of
           -- Bool operations
           (Bt0, Bt0) -> case op of
@@ -299,117 +305,115 @@ whnfOp1 lv book op a =
 -- Duplication
 -- -----------
 
-termEq :: Term -> Term -> Bool
-termEq a b = show a == show b
-
-dup :: Term -> Term -> (Term,Term)
-dup l (Var k i)   = (Var k i , Var k i)
-dup l (Ref k)     = (Ref k, Ref k)
-dup l (Sub x)     = (Sub x, Sub x)
-dup l (Fix k f)   = dup l (f (Fix k f))
-dup l (Let v f)   = (Let v0 f0 , Let v1 f1)
-  where (v0,v1)   = dup l v
-        (f0,f1)   = dup l f
-dup l Set         = (Set, Set)
-dup l (Chk x t)   = (Chk x0 t0, Chk x1 t1)
-  where (x0,x1)   = dup l x
-        (t0,t1)   = dup l t
-dup l Emp         = (Emp, Emp)
-dup l (EmpM x)    = (EmpM x0, EmpM x1)
-  where (x0,x1)   = dup l x
-dup l Uni         = (Uni, Uni)
-dup l One         = (One, One)
-dup l (UniM x f)  = (UniM x0 f0, UniM x1 f1)
-  where (x0,x1)   = dup l x
-        (f0,f1)   = dup l f
-dup l Bit         = (Bit, Bit)
-dup l Bt0         = (Bt0, Bt0)
-dup l Bt1         = (Bt1, Bt1)
-dup l (BitM x f t) = (BitM x0 f0 t0, BitM x1 f1 t1)
-  where (x0,x1)   = dup l x
-        (f0,f1)   = dup l f
-        (t0,t1)   = dup l t
-dup l Nat         = (Nat, Nat)
-dup l Zer         = (Zer, Zer)
-dup l (Suc n)     = (Suc n0, Suc n1)
-  where (n0,n1)   = dup l n
-dup l (NatM x z s) = (NatM x0 z0 s0, NatM x1 z1 s1)
-  where (x0,x1)   = dup l x
-        (z0,z1)   = dup l z
-        (s0,s1)   = dup l s
-dup l (Lst t)     = (Lst t0, Lst t1)
-  where (t0,t1)   = dup l t
-dup l Nil         = (Nil, Nil)
-dup l (Con h t)   = (Con h0 t0, Con h1 t1)
-  where (h0,h1)   = dup l h
-        (t0,t1)   = dup l t
-dup l (LstM x n c) = (LstM x0 n0 c0, LstM x1 n1 c1)
-  where (x0,x1)   = dup l x
-        (n0,n1)   = dup l n
-        (c0,c1)   = dup l c
-dup l (Enu s)     = (Enu s, Enu s)
-dup l (Sym s)     = (Sym s, Sym s)
-dup l (EnuM x c e) = (EnuM x0 c0 e0, EnuM x1 c1 e1)
-  where (x0,x1)   = dup l x
-        (c0,c1)   = unzip (map (\(s,t) -> let (t0,t1) = dup l t in ((s,t0),(s,t1))) c)
-        (e0,e1)   = dup l e
-dup l (Sig a b)   = (Sig a0 b0, Sig a1 b1)
-  where (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-dup l (Tup a b)   = (Tup a0 b0, Tup a1 b1)
-  where (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-dup l (SigM x f)  = (SigM x0 f0, SigM x1 f1)
-  where (x0,x1)   = dup l x
-        (f0,f1)   = dup l f
-dup l (All a b)   = (All a0 b0, All a1 b1)
-  where (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-dup l (Lam k f)   = (lam0, lam1)
-  where lam0      = Lam k $ \x -> fst (dup l (f x))
-        lam1      = Lam k $ \x -> snd (dup l (f x))
-dup l (App f x)   = (App f0 x0, App f1 x1)
-  where (f0,f1)   = dup l f
-        (x0,x1)   = dup l x
-dup l (Eql t a b) = (Eql t0 a0 b0, Eql t1 a1 b1)
-  where (t0,t1)   = dup l t
-        (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-dup l Rfl         = (Rfl, Rfl)
-dup l (EqlM x f)  = (EqlM x0 f0, EqlM x1 f1)
-  where (x0,x1)   = dup l x
-        (f0,f1)   = dup l f
-dup l (Ind t)     = (Ind t0, Ind t1)
-  where (t0,t1)   = dup l t
-dup l (Frz t)     = (Frz t0, Frz t1)
-  where (t0,t1)   = dup l t
-dup l Era         = (Era, Era)
-dup l (Sup r a b)
-  | termEq l r    = (a, b)
-  | otherwise     = (Sup r a0 b0, Sup r a1 b1)
-  where (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-dup l (Frk r a b) = (Frk r a0 b0, Frk r a1 b1)
-  where (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-dup l (Met k t c) = (Met k t0 c0, Met k t1 c1)
-  where (t0,t1)   = dup l t
-        (c0,c1)   = unzip (map (dup l) c)
-dup l (Loc s t)   = (Loc s t0, Loc s t1)
-  where (t0,t1)   = dup l t
-dup l (Rwt a b x) = (Rwt a0 b0 x0, Rwt a1 b1 x1)
-  where (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-        (x0,x1)   = dup l x
-dup l (Num t)     = (Num t, Num t)
-dup l (Val v)     = (Val v, Val v)
-dup l (Op2 o a b) = (Op2 o a0 b0, Op2 o a1 b1)
-  where (a0,a1)   = dup l a
-        (b0,b1)   = dup l b
-dup l (Op1 o a)   = (Op1 o a0, Op1 o a1)
-  where (a0,a1)   = dup l a
-dup l (Pri p)     = (Pri p, Pri p)
-dup l (Pat t m c) = error "Pattern duplication not supported"
+dup :: Book -> Term -> Term -> (Term, Term)
+dup book l (Var k i)    = (Var k i, Var k i)
+dup book l (Ref k)      = (Ref k, Ref k)
+dup book l (Sub x)      = (Sub x, Sub x)
+dup book l (Fix k f)    = dup book l (f (Fix k f))
+dup book l (Let v f)    = (Let v0 f0, Let v1 f1)
+  where (v0,v1)         = dup book l v
+        (f0,f1)         = dup book l f
+dup book l Set          = (Set, Set)
+dup book l (Chk x t)    = (Chk x0 t0, Chk x1 t1)
+  where (x0,x1)         = dup book l x
+        (t0,t1)         = dup book l t
+dup book l Emp          = (Emp, Emp)
+dup book l (EmpM x)     = (EmpM x0, EmpM x1)
+  where (x0,x1)         = dup book l x
+dup book l Uni          = (Uni, Uni)
+dup book l One          = (One, One)
+dup book l (UniM x f)   = (UniM x0 f0, UniM x1 f1)
+  where (x0,x1)         = dup book l x
+        (f0,f1)         = dup book l f
+dup book l Bit          = (Bit, Bit)
+dup book l Bt0          = (Bt0, Bt0)
+dup book l Bt1          = (Bt1, Bt1)
+dup book l (BitM x f t) = (BitM x0 f0 t0, BitM x1 f1 t1)
+  where (x0,x1)         = dup book l x
+        (f0,f1)         = dup book l f
+        (t0,t1)         = dup book l t
+dup book l Nat          = (Nat, Nat)
+dup book l Zer          = (Zer, Zer)
+dup book l (Suc n)      = (Suc n0, Suc n1)
+  where (n0,n1)         = dup book l n
+dup book l (NatM x z s) = (NatM x0 z0 s0, NatM x1 z1 s1)
+  where (x0,x1)         = dup book l x
+        (z0,z1)         = dup book l z
+        (s0,s1)         = dup book l s
+dup book l (Lst t)      = (Lst t0, Lst t1)
+  where (t0,t1)         = dup book l t
+dup book l Nil          = (Nil, Nil)
+dup book l (Con h t)    = (Con h0 t0, Con h1 t1)
+  where (h0,h1)         = dup book l h
+        (t0,t1)         = dup book l t
+dup book l (LstM x n c) = (LstM x0 n0 c0, LstM x1 n1 c1)
+  where (x0,x1)         = dup book l x
+        (n0,n1)         = dup book l n
+        (c0,c1)         = dup book l c
+dup book l (Enu s)      = (Enu s, Enu s)
+dup book l (Sym s)      = (Sym s, Sym s)
+dup book l (EnuM x c e) = (EnuM x0 c0 e0, EnuM x1 c1 e1)
+  where (x0,x1)         = dup book l x
+        (c0,c1)         = unzip (map (\(s,t) -> let (t0,t1) = dup book l t in ((s,t0),(s,t1))) c)
+        (e0,e1)         = dup book l e
+dup book l (Sig a b)    = (Sig a0 b0, Sig a1 b1)
+  where (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+dup book l (Tup a b)    = (Tup a0 b0, Tup a1 b1)
+  where (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+dup book l (SigM x f)   = (SigM x0 f0, SigM x1 f1)
+  where (x0,x1)         = dup book l x
+        (f0,f1)         = dup book l f
+dup book l (All a b)    = (All a0 b0, All a1 b1)
+  where (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+dup book l (Lam k f)    = (lam0, lam1)
+  where lam0            = Lam k $ \x -> fst (dup book l (f x))
+        lam1            = Lam k $ \x -> snd (dup book l (f x))
+dup book l (App f x)    = (App f0 x0, App f1 x1)
+  where (f0,f1)         = dup book l f
+        (x0,x1)         = dup book l x
+dup book l (Eql t a b)  = (Eql t0 a0 b0, Eql t1 a1 b1)
+  where (t0,t1)         = dup book l t
+        (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+dup book l Rfl          = (Rfl, Rfl)
+dup book l (EqlM x f)   = (EqlM x0 f0, EqlM x1 f1)
+  where (x0,x1)         = dup book l x
+        (f0,f1)         = dup book l f
+dup book l (Ind t)      = (Ind t0, Ind t1)
+  where (t0,t1)         = dup book l t
+dup book l (Frz t)      = (Frz t0, Frz t1)
+  where (t0,t1)         = dup book l t
+dup book l Era          = (Era, Era)
+dup book l (Sup r a b)
+  | ieql book l r       = (a, b)
+  | otherwise           = (Sup r a0 b0, Sup r a1 b1)
+  where (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+dup book l (SupM x r f) = error "TODO"
+dup book l (Frk r a b)  = (Frk r a0 b0, Frk r a1 b1)
+  where (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+dup book l (Met k t c)  = (Met k t0 c0, Met k t1 c1)
+  where (t0,t1)         = dup book l t
+        (c0,c1)         = unzip (map (dup book l) c)
+dup book l (Loc s t)    = (Loc s t0, Loc s t1)
+  where (t0,t1)         = dup book l t
+dup book l (Rwt a b x)  = (Rwt a0 b0 x0, Rwt a1 b1 x1)
+  where (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+        (x0,x1)         = dup book l x
+dup book l (Num t)      = (Num t, Num t)
+dup book l (Val v)      = (Val v, Val v)
+dup book l (Op2 o a b)  = (Op2 o a0 b0, Op2 o a1 b1)
+  where (a0,a1)         = dup book l a
+        (b0,b1)         = dup book l b
+dup book l (Op1 o a)    = (Op1 o a0, Op1 o a1)
+  where (a0,a1)         = dup book l a
+dup book l (Pri p)      = (Pri p, Pri p)
+dup book l (Pat t m c)  = error "Pattern duplication not supported"
 
 -- Normalization
 -- =============
@@ -461,6 +465,7 @@ normal d book term =
     Rwt a b x  -> Rwt (normal d book a) (normal d book b) (normal d book x)
     Era        -> Era
     Sup l a b  -> Sup l (normal d book a) (normal d book b)
+    SupM x l f -> SupM (normal d book x) (normal d book l) (normal d book f)
     Frk l a b  -> error "Fork interactions unsupported in Haskell"
     Num t      -> Num t
     Val v      -> Val v
@@ -505,14 +510,6 @@ force book term =
       where (fn,xs) = collectApps term' []
 
 -- Converts a term to an Int
--- termToInt :: Term -> Maybe Int
--- termToInt (whnf -> Zer)   = Just 0
--- termToInt (whnf -> Suc n) = fmap (+1) (termToInt n)
--- termToInt _               = Nothing
-
--- TODO: refactor the fn above to also include the numeric types
--- KEEP THE SAME TYPE SIGNATIRE
-
 termToInt :: Book -> Term -> Maybe Int
 termToInt book term = go term where
     go (whnf Full book -> Zer)           = Just 0
@@ -522,3 +519,9 @@ termToInt book term = go term where
     go (whnf Full book -> Val (F64_V d)) = Just (truncate d)
     go (whnf Full book -> Val (CHR_V c)) = Just (fromEnum c)
     go _                                 = Nothing
+
+-- Compares the Int value of two terms
+ieql :: Book -> Term -> Term -> Bool
+ieql book a b = case (termToInt book a, termToInt book b) of
+  (Just x, Just y) -> x == y
+  _                -> False

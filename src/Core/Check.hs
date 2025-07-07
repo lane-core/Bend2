@@ -161,6 +161,8 @@ infer d span book@(Book defs) ctx term =
       Fail $ CantInfer span (formatCtx d book ctx)
     Sup l a b -> do
       Fail $ CantInfer span (formatCtx d book ctx)
+    SupM x l f -> do
+      Fail $ CantInfer span (formatCtx d book ctx)
     Frk l a b -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Met _ _ _ -> do
@@ -400,6 +402,10 @@ check d span book ctx term goal =
     (Sup l a b, _) -> do
       check d span book ctx a goal
       check d span book ctx b goal
+    (SupM x l f, _) -> do
+      check d span book ctx l (Num U64_T)
+      xT <- infer d span book ctx x
+      check d span book ctx f (All xT (Lam "p" (\p -> All xT (Lam "q" (\q -> Rwt x (Sup l p q) goal)))))
     (Frk l a b, _) -> do
       check d span book ctx l (Num U64_T)
       check d span book ctx a goal

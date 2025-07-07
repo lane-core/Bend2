@@ -245,9 +245,8 @@ collapse dep book term = case term of
         Just k  -> CSup k (collapse dep book a) (collapse dep book b)
         Nothing -> CEra -- Invalid superposition label
 
-  -- Forks
-  Frk l a b ->
-    error "unreachable"
+  SupM x l f ->
+    error "TODO"
 
   -- Errors
   Loc _ t     -> collapse dep book t
@@ -260,9 +259,9 @@ collapse dep book term = case term of
   -- Primitive
   Pri p       -> return $ Pri p
 
-  -- Pattern-Match
-  Pat ts ms cs -> do
-    error "unreachable"
+  -- Sugars
+  Pat ts ms cs -> error "unreachable"
+  Frk l a b    -> error "unreachable"
 
 -- doCollapse
 -- ----------

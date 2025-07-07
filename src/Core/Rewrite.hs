@@ -1,3 +1,5 @@
+{-./Type.hs-}
+
 module Core.Rewrite where
 
 import System.IO.Unsafe
@@ -71,6 +73,7 @@ rewriteGo lv d book old neo val = case val of
   Frz t      -> Frz (rewrite lv d book old neo t)
   Era        -> Era
   Sup l a b  -> Sup l (rewrite lv d book old neo a) (rewrite lv d book old neo b)
+  SupM x l f -> SupM (rewrite lv d book old neo x) (rewrite lv d book old neo l) (rewrite lv d book old neo f)
   Frk l a b  -> Frk (rewrite lv d book old neo l) (rewrite lv d book old neo a) (rewrite lv d book old neo b)
   Loc s t    -> Loc s (rewrite lv d book old neo t)
   Rwt a b x  -> Rwt (rewrite lv d book old neo a) (rewrite lv d book old neo b) (rewrite lv d book old neo x)
