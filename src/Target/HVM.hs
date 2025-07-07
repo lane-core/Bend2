@@ -190,6 +190,7 @@ termToHVM ctx tm = go tm where
   go (Frz t)      = termToHVM ctx t
   go Era          = HVM.Era
   go (Sup l a b)  = HVM.Ref "SUP" 0 [termToHVM ctx l, termToHVM ctx a, termToHVM ctx b]
+  go (SupM x l f) = HVM.Ref "DUP" 0 [termToHVM ctx l, termToHVM ctx x, termToHVM ctx f]
   go (Frk l a b)  = tmLab where
     -- Only fork variables free in the bodies of a and b
     tmLab             = HVM.Let HVM.STRI "&L$" (termToHVM ctx l) tmDup 
@@ -280,6 +281,7 @@ freeVars ctx tm = case tm of
   Frz t      -> freeVars ctx t
   Era        -> S.empty
   Sup _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
+  SupM x l f -> S.unions [freeVars ctx x, freeVars ctx l, freeVars ctx f]
   Frk l a b  -> S.unions [freeVars ctx l, freeVars ctx a, freeVars ctx b]
   Log s x    -> S.union (freeVars ctx s) (freeVars ctx x)
   Loc _ t    -> freeVars ctx t
