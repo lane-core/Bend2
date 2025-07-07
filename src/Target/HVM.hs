@@ -178,7 +178,7 @@ termToHVM ctx tm = go tm where
       matToHVM ctx t b ((ctr,fds,bod):cs) d = mkIfl t ctr (termToHVM ctx bod) fds (matToHVM ctx t b cs d)
       matToHVM _ _ _ _ _ = error "matToHVM: unreachable"
 
-      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam bod (map ('&':) (reverse fds))), ("_", [], HVM.Lam ('&':x) d)]
+      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam bod (map ('&':) (reverse fds))), (('&':x), [], d)]
   go (All _ _)    = HVM.Era
   go (Lam n f)    = HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))
   go (App f x)    = HVM.App (termToHVM ctx f) (termToHVM ctx x)
