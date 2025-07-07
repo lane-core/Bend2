@@ -429,6 +429,9 @@ check d span book ctx term goal =
               check d span book ctx f $ All xt $ Lam "_" $ \v -> goal
         else do
           verify d span book ctx term goal
+    (Log s x, _) -> do
+      check d span book ctx s (Lst (Num CHR_T))
+      check d span book ctx x goal
     (_, _) -> do
       verify d span book ctx term goal
 
