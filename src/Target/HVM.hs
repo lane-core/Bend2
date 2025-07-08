@@ -51,7 +51,7 @@ compileType nam ctrs = unlines $
   where compileCtr (nam, fds) = "#" ++ (hvmNam nam) ++ "{" ++ unwords fds ++ "}"
 
 compileFn :: Name -> Term -> String
-compileFn nam tm = "@" ++ (hvmNam nam) ++ " = " ++ HVM.showCore (termToHVM MS.empty tm)
+compileFn nam tm = "@" ++ (hvmNam nam) ++ " = " ++ showHVM (termToHVM MS.empty tm)
 
 -- Extract constructor definition info from type definitions
 extractTypeDef :: Term -> Maybe ([Name], [(Name, [Name])])
@@ -110,11 +110,21 @@ termToHVM ctx tm = go tm where
   go Nat          = HVM.Era
   go Zer          = HVM.Ctr "#Z" []
   go (Suc p)      = HVM.Ctr "#S" [termToHVM ctx p]
-  go (NatM x z s) = HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Z", [], termToHVM ctx z), ("#S", [], termToHVM ctx s)]
+  go (NatM x z s) =
+    case s of
+      (Lam n (subst n -> s)) ->
+        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Z", [], termToHVM ctx z), ("#S", [n], termToHVM ctx s)]
+      _ ->
+        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Z", [], termToHVM ctx z), ("#S", ["x$p"], HVM.App (termToHVM ctx s) (HVM.Var "x$p"))]
   go (Lst t)      = HVM.Era
   go Nil          = HVM.Ctr "#Nil" []
   go (Con h t)    = HVM.Ctr "#Cons" [termToHVM ctx h, termToHVM ctx t]
-  go (LstM x n c) = HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Nil", [], termToHVM ctx n), ("#Cons", [], termToHVM ctx c)]
+  go (LstM x n c) =
+    case c of
+      (Lam h (subst h -> (Lam t (subst t -> c)))) ->
+        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Nil", [], termToHVM ctx n), ("#Cons", [h, t], termToHVM ctx c)]
+      _ ->
+        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Nil", [], termToHVM ctx n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM ctx c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
   go (Enu s)      = HVM.Era
   go (Sym s)      = error "TODO: bare Sym toHVM"
   go (EnuM x c e) = error "TODO: bare EnuM toHVM"
@@ -150,14 +160,18 @@ termToHVM ctx tm = go tm where
       Just (k, x) -> HVM.Ctr ('#':hvmNam k) (map (termToHVM ctx) x)
       Nothing     -> HVM.Ctr "#P" [termToHVM ctx x, termToHVM ctx y]
     where 
-      extractCtr (Sym k) y = 
+      extractCtr (Sym k) y =
         case unsnoc (flattenTup y) of
           Just (xs, One) -> Just (k, xs)
           _              -> Nothing
       extractCtr _ _ = Nothing
   go (SigM x f)  = case extractCtrM f of
-      Just (cs,t,b,d) -> HVM.Let HVM.LAZY t (termToHVM ctx x) (matToHVM ctx t b cs d) -- TODO: Default case should rewrite (ctrNam, ctrBod) to the default case var
-      Nothing         -> HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#P", [], termToHVM ctx f)]
+      Just (cs,t,b,d) -> HVM.Let HVM.LAZY t (termToHVM ctx x) (matToHVM ctx t b cs d)
+      Nothing         -> case f of
+        (Lam l (subst l -> (Lam r (subst r -> f)))) ->
+          HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#P", [l, r], termToHVM ctx f)]
+        _ ->
+          HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#P", ["x$l", "x$r"], HVM.App (HVM.App (termToHVM ctx f) (HVM.Var "x$l")) (HVM.Var "x$r"))]
     where
       extractCtrM :: Term -> Maybe ([(Name, [Name], Term)], Name, Name, Term)
       extractCtrM (Lam a (subst a -> Lam bodK (subst bodK -> EnuM (Var x _) cs (Lam tagK (subst tagK -> dflt))))) =
@@ -181,7 +195,7 @@ termToHVM ctx tm = go tm where
       matToHVM ctx t b ((ctr,fds,bod):cs) d = mkIfl t ctr (termToHVM ctx bod) fds (matToHVM ctx t b cs d)
       matToHVM _ _ _ _ _ = error "matToHVM: unreachable"
 
-      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, [], foldr HVM.Lam bod (map ('&':) (reverse fds))), (('&':x), [], d)]
+      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, map ('&':) (reverse fds), bod), (('&':x), [], d)]
   go (All _ _)    = HVM.Era
   go (Lam n f)    = HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))
   go (App f x)    = HVM.App (termToHVM ctx f) (termToHVM ctx x)
@@ -206,6 +220,7 @@ hvmNam n = (replace '/' "__" n) ++ "$"
 replace :: Char -> String -> String -> String
 replace old new xs = foldr (\c acc -> if c == old then new ++ acc else c : acc) [] xs
 
+-- Rewrite structurally identical HVM terms
 rewriteHVM :: HVM.Core -> HVM.Core -> HVM.Core -> HVM.Core
 rewriteHVM old new tm =
   if tm == old
@@ -226,3 +241,24 @@ rewriteHVM old new tm =
       HVM.Mat t x mv cs -> HVM.Mat t (rewriteHVM old new x) (map (\(n,v) -> (n,rewriteHVM old new v)) mv) (map (\(c,f,b) -> (c,f,rewriteHVM old new b)) cs)
       HVM.Inc a         -> HVM.Inc (rewriteHVM old new a)
       HVM.Dec a         -> HVM.Dec (rewriteHVM old new a)
+
+-- Alternative HVM show function suitable for compiler output
+showHVM :: HVM.Core -> String
+showHVM (HVM.Var k)         = k
+showHVM (HVM.Ref k i xs)    = "@" ++ k ++ "(" ++ unwords (map showHVM xs) ++ ")"
+showHVM HVM.Era             = "*"
+showHVM (HVM.Lam x f)       = "λ" ++ x ++ " " ++ showHVM f
+showHVM (HVM.App f x)       = "(" ++ showHVM f ++ " " ++ showHVM x ++ ")"
+showHVM (HVM.Sup l a b)     = "&" ++ show l ++ "{" ++ showHVM a ++ " " ++ showHVM b ++ "}"
+showHVM (HVM.Dup l x y v f) = "! &" ++ show l ++ "{" ++ x ++ " " ++ y ++ "} = " ++ showHVM v ++ "\n" ++ showHVM f
+showHVM (HVM.Ctr k xs)      = k ++ "{" ++ unwords (map showHVM xs) ++ "}"
+showHVM (HVM.U32 v)         = show v
+showHVM (HVM.Chr v)         = "'" ++ [v] ++ "'"
+showHVM (HVM.Op2 o a b)     = "(" ++ show o ++ " " ++ showHVM a ++ " " ++ showHVM b ++ ")"
+showHVM (HVM.Let m k v f)   = "! " ++ show m ++ k ++ " = " ++ showHVM v ++ "\n" ++ showHVM f
+showHVM (HVM.Mat k v m ks)  = "~ " ++ showHVM v ++ " " ++ concatMap showMov m ++ " {" ++ unwords (map showCase ks) ++ "}"
+    where showMov (k,v)     = " !" ++ k ++ "=" ++ showHVM v
+          showCase (c,[],b) = c ++ ": " ++ showHVM b
+          showCase (c, f,b) = c ++ "{" ++ unwords f ++ "}" ++ ": " ++ showHVM b
+showHVM (HVM.Inc x)         = "↑" ++ showHVM x
+showHVM (HVM.Dec x)         = "↓" ++ showHVM x
