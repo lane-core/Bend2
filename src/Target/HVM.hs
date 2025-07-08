@@ -47,7 +47,7 @@ compileType nam ctrs =
 
 compileFn :: Book -> Name -> Term -> Term -> String
 compileFn book nam tm ty =
-  "@" ++ (hvmNam nam) ++ "(" ++ unwords (argsStri args body) ++ ") = " ++ showHVM (termToHVM book MS.empty body)
+  "!@" ++ (hvmNam nam) ++ "(" ++ unwords (argsStri args body) ++ ") = " ++ showHVM (termToHVM book MS.empty body)
   where
     (args, body) = collectLamArgs tm ty []
     argsStri args bod = map (\k -> if (Just k) == fstMat bod then "!&"++k else "&"++k) args
@@ -72,7 +72,7 @@ extractTypeDef tm = do
     getTypeArgs tm           args = Just (args, tm)
 
     getTypeCss :: Term -> Maybe [(Name, [Name])]
-    getTypeCss (Sig (Enu _) (Lam "ctr" (subst "ctr" -> EnuM (Var "ctr" _) css (Lam "_" (subst "_" -> One))))) = do
+    getTypeCss (Sig (Enu _) (Lam "ctr" (subst "ctr" -> EnuM (Var "ctr" _) css (Lam d (subst d -> One))))) = do
       forM css (\(ctr, bod) -> do
         fds <- getTypeCsFds bod
         return (ctr, fds))
