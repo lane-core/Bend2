@@ -551,7 +551,7 @@ unfrkGo d ctx (Rwt a b x)  = Rwt (unfrkGo d ctx a) (unfrkGo d ctx b) (unfrkGo d 
 unfrkGo d ctx (Pat s m c)  = Pat (map (unfrkGo d ctx) s) m [(ps, unfrkGo d ctx rhs) | (ps, rhs) <- c]
 
 unfrkFrk :: Int -> [(Name, Int)] -> Term -> Term -> Term -> Term
-unfrkFrk d ctx l a b = buildSupMs (filter (\x -> fst x `S.member` free) (reverse ctx)) where
+unfrkFrk d ctx l a b = buildSupMs (shadowCtx (filter (\x -> fst x `S.member` free) (reverse ctx))) where
   free = freeVars S.empty a `S.union` freeVars S.empty b
 
   -- Build nested SupM matches for each context variable
@@ -562,11 +562,17 @@ unfrkFrk d ctx l a b = buildSupMs (filter (\x -> fst x `S.member` free) (reverse
     a' = substMany ls (unfrkGo d ctx a)
     b' = substMany rs (unfrkGo d ctx b)
   -- For each variable, create a SupM that binds the superposed versions
-  buildSupMs ((n, depth):rest) = 
-    SupM (Var n depth) l $
+  buildSupMs ((n, dep):rest) = 
+    SupM (Var n dep) l $
     Lam (n++"0") $ \_ ->
     Lam (n++"1") $ \_ ->
     buildSupMs rest
+  -- Removes repeated (shadowed) vars from the context
+  shadowCtx ((n,d):ctx) =
+    if n `elem` (map fst ctx)
+      then shadowCtx ctx
+      else (n,d) : shadowCtx ctx
+  shadowCtx [] = []
 
 -- Helpers
 -- -------
