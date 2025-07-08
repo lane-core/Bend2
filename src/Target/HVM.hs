@@ -92,7 +92,10 @@ termToHVM ctx tm = go tm where
   go (Ref k)      = HVM.Ref (hvmNam k) 0 [] -- TODO: Ref arguments
   go (Sub t)      = termToHVM ctx t
   go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))]
-  go (Let v f)    = HVM.App (termToHVM ctx f) (termToHVM ctx v)
+  go (Let v f)    =
+    case f of
+      (Lam n (subst n -> f)) -> HVM.Let HVM.LAZY n (termToHVM ctx v) (termToHVM ctx f)
+      _                      -> HVM.App (termToHVM ctx f) (termToHVM ctx v)
   go Set          = HVM.Era
   go (Chk v t)    = termToHVM ctx v
   go Emp          = HVM.Era
