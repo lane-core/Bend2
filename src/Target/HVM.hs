@@ -19,7 +19,7 @@ compile :: Book -> String
 compile book@(Book defs) =
   let ds       = map (compileDef book) (M.toList defs)
       (ts, fs) = partitionEithers ds
-      main     = "@main = " ++ HVM.showCore (termToHVM book MS.empty (Ref "main")) ++ "\n"
+      main     = "@main = " ++ showHVM (termToHVM book MS.empty (Ref "main")) ++ "\n"
   in prelude ++ main ++ unlines ts ++ unlines fs
 
 prelude :: String
@@ -47,9 +47,18 @@ compileType nam ctrs =
 
 compileFn :: Book -> Name -> Term -> Term -> String
 compileFn book nam tm ty =
-  "@" ++ (hvmNam nam) ++ "(" ++ unwords (map ('&':) args) ++ ") = " ++ showHVM (termToHVM book MS.empty body)
+  "@" ++ (hvmNam nam) ++ "(" ++ unwords (argsStri args body) ++ ") = " ++ showHVM (termToHVM book MS.empty body)
   where
     (args, body) = collectLamArgs tm ty []
+    argsStri args bod = map (\k -> if (Just k) == fstMat bod then "!&"++k else "&"++k) args
+    fstMat bod  = case cut bod of
+      BitM (cut -> Var k _) _ _ -> Just k
+      NatM (cut -> Var k _) _ _ -> Just k
+      LstM (cut -> Var k _) _ _ -> Just k
+      SigM (cut -> Var k _) _   -> Just k
+      Let _ (Lam k (subst k -> f)) -> fstMat f
+      SupM _ _ (Lam a (subst a -> Lam b (subst b -> f))) -> fstMat f
+      _ -> Nothing
 
 -- Extract constructor definition info from type definitions
 extractTypeDef :: Term -> Maybe ([Name], [(Name, [Name])])
@@ -167,34 +176,42 @@ ctrToHVM book ctx x y = case (x, (unsnoc (flattenTup y))) of
 
 ctrMToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Term -> Maybe HVM.Core
 ctrMToHVM book ctx x f = case f of
-  (Lam k0 (subst k0 -> Lam kb (subst kb -> EnuM (Var k2 _) cs (Lam kt (subst kt -> dflt))))) ->
+  (Lam k0 (subst k0 -> Lam kb (subst kb -> EnuM (Var k2 _) cs (Lam kt (subst kt -> d))))) ->
     if k0 == k2 then do
       cs <- forM cs (\(ctr, f) -> do
           (fds, bod) <- flattenCase kb f []
           return (ctr, fds, bod)
         )
-      return $ HVM.Let HVM.LAZY kt (termToHVM book ctx x) (mkMat book ctx kt kb cs dflt)
+      case d of
+        -- TODO: Should look at type instead of looking for One, will bug if default should actually return One.
+        (Lam k (subst k -> One)) -> return $ mkMat x cs
+        _                        -> return $ (mkIfl x kt kb cs d)
     else Nothing
   _ -> Nothing
   where
     -- Flatten the matches that form a ctr match case into (fds, bod)
     flattenCase :: Name -> Term -> [Name] -> Maybe ([Name], Term)
     flattenCase k0 f fds = case f of
-      (SigM (Var k1 _) (Lam fd (subst fd -> Lam k2 (subst k2 -> f)))) -> if (k0 == k1) then flattenCase k2 f (fd : fds) else Nothing
+      (SigM (Var k1 _) (Lam fd (subst fd -> Lam k2 (subst k2 -> f)))) -> if (k0 == k1) then flattenCase k2 f (fds++[fd]) else Nothing
       (UniM (Var k1 _) f)                                             -> if (k0 == k1) then Just (fds, f) else Nothing
       _ -> Nothing
 
-    mkMat :: Book -> MS.Map Name HVM.Name -> Name -> Name -> [(Name, [Name], Term)] -> Term -> HVM.Core
-    mkMat book ctx kt kb [(ctr,fds,bod)]    d = mkIfl kt ctr (termToHVM book ctx bod) fds d2
-                                     -- Converted EnuM + SigM to single Mat, rewrite (kt,kb) to just kt since we now use only 1 var.
-                                     where d2 = (rewriteHVM (HVM.Ctr "#P" [HVM.Var kt, HVM.Var kb]) (HVM.Var kt) (termToHVM book ctx d))
-    mkMat book ctx kt kb ((ctr,fds,bod):cs) d = mkIfl kt ctr (termToHVM book ctx bod) fds (mkMat book ctx kt kb cs d)
-    mkMat _ _ _ _ _ _ = error "mkMat: unreachable"
+    mkMat :: Term -> [(Name, [Name], Term)] -> HVM.Core
+    mkMat x cs =
+      HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] csToHVM
+      where csToHVM = map (\(ctr,fds,bod) -> ('#':hvmNam ctr, (map ('&':) fds), termToHVM book ctx bod)) cs
 
-    mkIfl x ctr bod fds d = 
-      HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [
-          ('#':hvmNam ctr, [], foldr HVM.Lam bod (map ('&':) (reverse fds))),
-          (('&':x), [], d)
+    mkIfl :: Term -> Name -> Name -> [(Name, [Name], Term)] -> Term -> HVM.Core
+    mkIfl x kt kb [(ctr,fds,bod)]    d = mkIflCase x kt ctr (termToHVM book ctx bod) fds d2
+                            -- Converted EnuM + SigM to single Mat, rewrite (kt,kb) to just kt since we now use only 1 var.
+                            where d2 = (rewriteHVM (HVM.Ctr "#P" [HVM.Var kt, HVM.Var kb]) (HVM.Var kt) (termToHVM book ctx d))
+    mkIfl x kt kb ((ctr,fds,bod):cs) d = mkIflCase x kt ctr (termToHVM book ctx bod) fds (mkIfl (Var kt 0) kt kb cs d)
+    mkIfl _ _ _ _ _ = error "mkIfl: unreachable"
+
+    mkIflCase x kt ctr bod fds d = 
+      HVM.Mat (HVM.IFL 0) (termToHVM book ctx x) [] [
+          ('#':hvmNam ctr, (map ('&':) fds), bod),
+          (('&':kt), [], d)
         ]
 
 valToHVM :: Book -> MS.Map Name HVM.Name -> NVal -> HVM.Core
@@ -301,7 +318,7 @@ showHVM (HVM.Ctr k xs)      = k ++ "{" ++ unwords (map showHVM xs) ++ "}"
 showHVM (HVM.U32 v)         = show v
 showHVM (HVM.Chr v)         = "'" ++ [v] ++ "'"
 showHVM (HVM.Op2 o a b)     = "(" ++ show o ++ " " ++ showHVM a ++ " " ++ showHVM b ++ ")"
-showHVM (HVM.Let m k v f)   = "! " ++ show m ++ k ++ " = " ++ showHVM v ++ "\n" ++ showHVM f
+showHVM (HVM.Let m k v f)   = "! " ++ show m ++ k ++ " = " ++ showHVM v ++ "; " ++ showHVM f
 showHVM (HVM.Mat k v m ks)  = "~ " ++ showHVM v ++ " " ++ concatMap showMov m ++ " {" ++ unwords (map showCase ks) ++ "}"
     where showMov (k,v)     = " !" ++ k ++ "=" ++ showHVM v
           showCase (c,[],b) = c ++ ": " ++ showHVM b
