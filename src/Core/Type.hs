@@ -222,10 +222,18 @@ instance Show Term where
   show (Enu s)        = "&{" ++ intercalate "," (map (\x -> "&" ++ x) s) ++ "}"
   show (Sym s)        = "&" ++ s
   show (EnuM x c e)   = "~ " ++ show x ++ " { " ++ intercalate " ; " (map (\(s,t) -> "&" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
-  show (Sig a b)      = sig a b where
-    sig a (Lam "_" f) = show a ++ "&" ++ show (f (Var "_" 0))
-    sig a (Lam k f)   = "Σ" ++ k ++ ":" ++ show a ++ ". " ++ (show (f (Var k 0)))
-    sig a b           = "Σ" ++ show a ++ ". " ++ (show b)
+  show (Sig a b) = case b of
+      Lam "_" f -> showArg a ++ " & " ++ showCodomain (f (Var "_" 0))
+      Lam k   f -> "Σ" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
+      _         -> "Σ" ++ showArg a ++ ". " ++ show b
+    where
+      showArg t = case t of
+          All{} -> "(" ++ show t ++ ")"
+          Sig{} -> "(" ++ show t ++ ")"
+          _     -> show t
+      showCodomain t = case t of
+          Sig _ (Lam k _) | k /= "_" -> "(" ++ show t ++ ")"
+          _                           -> show t
   show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
   show (SigM x f)     = "~ " ++ show x ++ " { (,):" ++ show f ++ " }"
   show (All a b) = case b of
@@ -235,6 +243,7 @@ instance Show Term where
     where
       showArg t = case t of
           All{} -> "(" ++ show t ++ ")"
+          Sig{} -> "(" ++ show t ++ ")"
           _     -> show t
       showCodomain t = case t of
           All _ (Lam k _) | k /= "_"  -> "(" ++ show t ++ ")"
