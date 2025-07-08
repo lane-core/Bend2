@@ -8,6 +8,7 @@ import Control.Monad (forM)
 import Core.Type
 import Data.Either (partitionEithers)
 import Data.List (isInfixOf, unsnoc)
+import Data.Maybe (fromJust, fromMaybe)
 import Debug.Trace
 import qualified Data.Map as M
 import qualified Data.Map.Strict as MS
@@ -15,43 +16,40 @@ import qualified Data.Set as S
 import qualified HVM.Type as HVM
 
 compile :: Book -> String
-compile (Book defs) =
-  let ds       = map compileDef (M.toList defs)
+compile book@(Book defs) =
+  let ds       = map (compileDef book) (M.toList defs)
       (ts, fs) = partitionEithers ds
-  in prelude ++ unlines ts ++ unlines fs
+      main     = "@main = " ++ HVM.showCore (termToHVM book MS.empty (Ref "main")) ++ "\n"
+  in prelude ++ main ++ unlines ts ++ unlines fs
 
 prelude :: String
 prelude = unlines [
     "// Prelude",
-    "// -------",
     "data List { #Nil #Cons{head tail} }",
     "data Nat { #Z #S{n} }",
     "data Pair { #P{fst snd} }",
     "@fix(&f) = (f @fix(f))",
-    "@main = @main$",
     "",
-    "// Bend to HVM Compiler Output",
-    "// ---------------------------",
-    ""
+    "// Bend to HVM Compiler Output"
   ]
 
 -- Compile a Bend function to an HVM definition
-compileDef :: (Name, Defn) -> Either String String
-compileDef (nam, (_, tm, ty)) 
-  -- TODO: Remove proof fields?
-  | (Just (_, ctrs)) <- extractTypeDef tm = Left (compileType nam ctrs)
-  -- TODO: Function arguments
-  | otherwise = Right (compileFn nam tm)
+compileDef :: Book -> (Name, Defn) -> Either String String
+compileDef book (nam, (_, tm, ty)) = case extractTypeDef tm of
+  Just (_, ctrs) -> Left (compileType nam ctrs ++ "\n" ++ compileFn book nam tm ty)
+  Nothing        -> Right (compileFn book nam tm ty)
 
 compileType :: Name -> [(Name, [Name])] -> String
-compileType nam ctrs = unlines $
-  [ ("data " ++ (hvmNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }")
-  , ("@" ++ (hvmNam nam) ++ " = *")
-  ]
-  where compileCtr (nam, fds) = "#" ++ (hvmNam nam) ++ "{" ++ unwords fds ++ "}"
+compileType nam ctrs =
+  "data " ++ (hvmNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }"
+  where
+    compileCtr (nam, fds) = "#" ++ (hvmNam nam) ++ "{" ++ unwords fds ++ "}"
 
-compileFn :: Name -> Term -> String
-compileFn nam tm = "@" ++ (hvmNam nam) ++ " = " ++ showHVM (termToHVM MS.empty tm)
+compileFn :: Book -> Name -> Term -> Term -> String
+compileFn book nam tm ty =
+  "@" ++ (hvmNam nam) ++ "(" ++ unwords (map ('&':) args) ++ ") = " ++ showHVM (termToHVM book MS.empty body)
+  where
+    (args, body) = collectLamArgs tm ty []
 
 -- Extract constructor definition info from type definitions
 extractTypeDef :: Term -> Maybe ([Name], [(Name, [Name])])
@@ -78,147 +76,195 @@ extractTypeDef tm = do
     getTypeCsFds Uni = Just []
     getTypeCsFds _   = Nothing
 
-    subst a f = f (Var a 0)
-
-
-termToHVM :: MS.Map Name HVM.Name -> Term -> HVM.Core
-termToHVM ctx tm = go tm where
-  subst a f = f (Var a 0)
-
+termToHVM :: Book -> MS.Map Name HVM.Name -> Term -> HVM.Core
+termToHVM book ctx term = go term where
   go (Var n i) =
     case MS.lookup n ctx of
       Just n  -> HVM.Var n
       Nothing -> HVM.Var n
-  go (Ref k)      = HVM.Ref (hvmNam k) 0 [] -- TODO: Ref arguments
-  go (Sub t)      = termToHVM ctx t
-  go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))]
+  go (Ref k)      = fromJust (refAppToHVM book ctx term)
+  go (Sub t)      = termToHVM book ctx t
+  go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam ('&':n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))]
   go (Let v f)    =
     case f of
-      (Lam n (subst n -> f)) -> HVM.Let HVM.LAZY n (termToHVM ctx v) (termToHVM ctx f)
-      _                      -> HVM.App (termToHVM ctx f) (termToHVM ctx v)
+      (Lam n (subst n -> f)) -> HVM.Let HVM.LAZY n (termToHVM book ctx v) (termToHVM book ctx f)
+      _                      -> HVM.App (termToHVM book ctx f) (termToHVM book ctx v)
   go Set          = HVM.Era
-  go (Chk v t)    = termToHVM ctx v
+  go (Chk v t)    = termToHVM book ctx v
   go Emp          = HVM.Era
   go (EmpM x)     = HVM.Era
   go Uni          = HVM.Era
   go One          = HVM.U32 1
-  go (UniM x f)   = termToHVM ctx f
+  go (UniM x f)   = termToHVM book ctx f
   go Bit          = HVM.Era
   go Bt0          = HVM.U32 0
   go Bt1          = HVM.U32 1
-  go (BitM x f t) = HVM.Mat HVM.SWI (termToHVM ctx x) [] [("0", [], termToHVM ctx f), ("_", [], termToHVM ctx t)]
+  go (BitM x f t) = HVM.Mat HVM.SWI (termToHVM book ctx x) [] [("0", [], termToHVM book ctx f), ("_", [], termToHVM book ctx t)]
   go Nat          = HVM.Era
   go Zer          = HVM.Ctr "#Z" []
-  go (Suc p)      = HVM.Ctr "#S" [termToHVM ctx p]
+  go (Suc p)      = HVM.Ctr "#S" [termToHVM book ctx p]
   go (NatM x z s) =
     case s of
       (Lam n (subst n -> s)) ->
-        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Z", [], termToHVM ctx z), ("#S", [n], termToHVM ctx s)]
+        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Z", [], termToHVM book ctx z), ("#S", [n], termToHVM book ctx s)]
       _ ->
-        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Z", [], termToHVM ctx z), ("#S", ["x$p"], HVM.App (termToHVM ctx s) (HVM.Var "x$p"))]
+        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Z", [], termToHVM book ctx z), ("#S", ["x$p"], HVM.App (termToHVM book ctx s) (HVM.Var "x$p"))]
   go (Lst t)      = HVM.Era
   go Nil          = HVM.Ctr "#Nil" []
-  go (Con h t)    = HVM.Ctr "#Cons" [termToHVM ctx h, termToHVM ctx t]
+  go (Con h t)    = HVM.Ctr "#Cons" [termToHVM book ctx h, termToHVM book ctx t]
   go (LstM x n c) =
     case c of
       (Lam h (subst h -> (Lam t (subst t -> c)))) ->
-        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Nil", [], termToHVM ctx n), ("#Cons", [h, t], termToHVM ctx c)]
+        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Nil", [], termToHVM book ctx n), ("#Cons", [h, t], termToHVM book ctx c)]
       _ ->
-        HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#Nil", [], termToHVM ctx n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM ctx c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
+        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Nil", [], termToHVM book ctx n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM book ctx c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
   go (Enu s)      = HVM.Era
   go (Sym s)      = error "TODO: bare Sym toHVM"
   go (EnuM x c e) = error "TODO: bare EnuM toHVM"
-  go (Log s x)    = termToHVM ctx x  -- For HVM, just return the result expression
+  go (Log s x)    = termToHVM book ctx x  -- For HVM, just return the result expression
   go (Num _)      = HVM.Era
-  go (Val (U64_V v)) = HVM.U32 (fromIntegral v)
-  go (Val (I64_V v)) = HVM.Era
-  go (Val (F64_V v)) = HVM.Era
-  go (Val (CHR_V c)) = HVM.Chr c
-  go (Op2 o a b)  = op2ToHVM o a b where
-    op2ToHVM ADD a b = HVM.Op2 HVM.OP_ADD (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM SUB a b = HVM.Op2 HVM.OP_SUB (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM MUL a b = HVM.Op2 HVM.OP_MUL (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM DIV a b = HVM.Op2 HVM.OP_DIV (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM MOD a b = HVM.Op2 HVM.OP_MOD (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM POW a b = error "TODO"
-    op2ToHVM EQL a b = HVM.Op2 HVM.OP_EQ  (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM NEQ a b = HVM.Op2 HVM.OP_NE  (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM LST a b = HVM.Op2 HVM.OP_LT  (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM GRT a b = HVM.Op2 HVM.OP_GT  (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM LEQ a b = HVM.Op2 HVM.OP_LTE (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM GEQ a b = HVM.Op2 HVM.OP_GTE (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM AND a b = HVM.Op2 HVM.OP_AND (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM OR  a b = HVM.Op2 HVM.OP_OR  (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM XOR a b = HVM.Op2 HVM.OP_XOR (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM SHL a b = HVM.Op2 HVM.OP_LSH (termToHVM ctx a) (termToHVM ctx b)
-    op2ToHVM SHR a b = HVM.Op2 HVM.OP_RSH (termToHVM ctx a) (termToHVM ctx b)
-  go (Op1 o a)    = op1ToHVM o a where
-    op1ToHVM NOT = error "TODO"
-    op1ToHVM NEG = error "TODO"
+  go (Val v)      = valToHVM book ctx v
+  go (Op2 o a b)  = op2ToHVM book ctx o a b
+  go (Op1 o a)    = op1ToHVM book ctx o a
   go (Sig _ _)    = HVM.Era
-  go (Tup x y) = case extractCtr x y of
-      Just (k, x) -> HVM.Ctr ('#':hvmNam k) (map (termToHVM ctx) x)
-      Nothing     -> HVM.Ctr "#P" [termToHVM ctx x, termToHVM ctx y]
-    where 
-      extractCtr (Sym k) y =
-        case unsnoc (flattenTup y) of
-          Just (xs, One) -> Just (k, xs)
-          _              -> Nothing
-      extractCtr _ _ = Nothing
-  go (SigM x f)  = case extractCtrM f of
-      Just (cs,t,b,d) -> HVM.Let HVM.LAZY t (termToHVM ctx x) (matToHVM ctx t b cs d)
-      Nothing         -> case f of
+  go (Tup x y)    =
+    case ctrToHVM book ctx x y of
+      Just hvm -> hvm
+      Nothing -> HVM.Ctr "#P" [termToHVM book ctx x, termToHVM book ctx y]
+  go (SigM x f)   =
+    case ctrMToHVM book ctx x f of
+      Just hvm -> hvm
+      Nothing -> case f of
         (Lam l (subst l -> (Lam r (subst r -> f)))) ->
-          HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#P", [l, r], termToHVM ctx f)]
+          HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#P", [l, r], termToHVM book ctx f)]
         _ ->
-          HVM.Mat (HVM.MAT 0) (termToHVM ctx x) [] [("#P", ["x$l", "x$r"], HVM.App (HVM.App (termToHVM ctx f) (HVM.Var "x$l")) (HVM.Var "x$r"))]
-    where
-      extractCtrM :: Term -> Maybe ([(Name, [Name], Term)], Name, Name, Term)
-      extractCtrM (Lam a (subst a -> Lam bodK (subst bodK -> EnuM (Var x _) cs (Lam tagK (subst tagK -> dflt))))) =
-        if x == a then do
-          csF <- forM cs (\(k,f) -> do
-              (fds, bod) <- flattenCtrM bodK f []
-              return (k, fds, bod)
-            )
-          return (csF, tagK, bodK, dflt)
-        else Nothing
-      extractCtrM _ = Nothing
-
-      flattenCtrM :: Name -> Term -> [Name] -> Maybe ([Name], Term)
-      flattenCtrM x (SigM (Var k _) (Lam fd (subst fd -> Lam nxt (subst nxt -> f)))) fds = if (k == x) then flattenCtrM nxt f (fd : fds) else Nothing
-      flattenCtrM x (UniM (Var k _) f)                                               fds = if (k == x) then Just (fds, f) else Nothing
-      flattenCtrM _ _ _ = Nothing
-
-      matToHVM :: MS.Map Name HVM.Name -> Name -> Name -> [(Name, [Name], Term)] -> Term -> HVM.Core
-      matToHVM ctx t b [(ctr,fds,bod)]    d = mkIfl t ctr (termToHVM ctx bod) fds d' -- Make dflt case match entire ctr, not just the tag
-                                     where d' = (rewriteHVM (HVM.Ctr "#P" [HVM.Var t, HVM.Var b]) (HVM.Var t) (termToHVM ctx d))
-      matToHVM ctx t b ((ctr,fds,bod):cs) d = mkIfl t ctr (termToHVM ctx bod) fds (matToHVM ctx t b cs d)
-      matToHVM _ _ _ _ _ = error "matToHVM: unreachable"
-
-      mkIfl x ctr bod fds d = HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [('#':hvmNam ctr, map ('&':) (reverse fds), bod), (('&':x), [], d)]
+          HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#P", ["x$l", "x$r"], HVM.App (HVM.App (termToHVM book ctx f) (HVM.Var "x$l")) (HVM.Var "x$r"))]
   go (All _ _)    = HVM.Era
-  go (Lam n f)    = HVM.Lam ('&':n) (termToHVM (MS.insert n n ctx) (f (Var n 0)))
-  go (App f x)    = HVM.App (termToHVM ctx f) (termToHVM ctx x)
+  go (Lam n f)    = HVM.Lam ('&':n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))
+  go (App f x)    =
+    case refAppToHVM book ctx term of
+      Just hvm -> hvm
+      Nothing -> HVM.App (termToHVM book ctx f) (termToHVM book ctx x)
   go (Eql _ _ _)  = HVM.Era
   go Rfl          = HVM.Era
-  go (EqlM x f)   = termToHVM ctx f
+  go (EqlM x f)   = termToHVM book ctx f
   go (Met n t ts) = HVM.Era -- TODO: Met
-  go (Ind t)      = termToHVM ctx t
-  go (Frz t)      = termToHVM ctx t
+  go (Ind t)      = termToHVM book ctx t
+  go (Frz t)      = termToHVM book ctx t
   go Era          = HVM.Era
-  go (Sup l a b)  = HVM.Ref "SUP" 0 [termToHVM ctx l, termToHVM ctx a, termToHVM ctx b]
-  go (SupM x l f) = HVM.Ref "DUP" 0 [termToHVM ctx l, termToHVM ctx x, termToHVM ctx f]
+  go (Sup l a b)  = HVM.Ref "SUP" 0 [termToHVM book ctx l, termToHVM book ctx a, termToHVM book ctx b]
+  go (SupM x l f) = HVM.Ref "DUP" 0 [termToHVM book ctx l, termToHVM book ctx x, termToHVM book ctx f]
   go (Frk l a b)  = HVM.Era
-  go (Loc s t)    = termToHVM ctx t
-  go (Rwt _ _ x)  = termToHVM ctx x
+  go (Loc s t)    = termToHVM book ctx t
+  go (Rwt _ _ x)  = termToHVM book ctx x
   go (Pri p)      = HVM.Era
   go (Pat x m c)  = HVM.Era
+
+ctrToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Term -> Maybe HVM.Core
+ctrToHVM book ctx x y = case (x, (unsnoc (flattenTup y))) of
+  (Sym k, Just (xs, One)) -> Just (HVM.Ctr ('#':hvmNam k) (map (termToHVM book ctx) xs))
+  _ -> Nothing
+
+ctrMToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Term -> Maybe HVM.Core
+ctrMToHVM book ctx x f = case f of
+  (Lam k0 (subst k0 -> Lam kb (subst kb -> EnuM (Var k2 _) cs (Lam kt (subst kt -> dflt))))) ->
+    if k0 == k2 then do
+      cs <- forM cs (\(ctr, f) -> do
+          (fds, bod) <- flattenCase kb f []
+          return (ctr, fds, bod)
+        )
+      return $ HVM.Let HVM.LAZY kt (termToHVM book ctx x) (mkMat book ctx kt kb cs dflt)
+    else Nothing
+  _ -> Nothing
+  where
+    -- Flatten the matches that form a ctr match case into (fds, bod)
+    flattenCase :: Name -> Term -> [Name] -> Maybe ([Name], Term)
+    flattenCase k0 f fds = case f of
+      (SigM (Var k1 _) (Lam fd (subst fd -> Lam k2 (subst k2 -> f)))) -> if (k0 == k1) then flattenCase k2 f (fd : fds) else Nothing
+      (UniM (Var k1 _) f)                                             -> if (k0 == k1) then Just (fds, f) else Nothing
+      _ -> Nothing
+
+    mkMat :: Book -> MS.Map Name HVM.Name -> Name -> Name -> [(Name, [Name], Term)] -> Term -> HVM.Core
+    mkMat book ctx kt kb [(ctr,fds,bod)]    d = mkIfl kt ctr (termToHVM book ctx bod) fds d2
+                                     -- Converted EnuM + SigM to single Mat, rewrite (kt,kb) to just kt since we now use only 1 var.
+                                     where d2 = (rewriteHVM (HVM.Ctr "#P" [HVM.Var kt, HVM.Var kb]) (HVM.Var kt) (termToHVM book ctx d))
+    mkMat book ctx kt kb ((ctr,fds,bod):cs) d = mkIfl kt ctr (termToHVM book ctx bod) fds (mkMat book ctx kt kb cs d)
+    mkMat _ _ _ _ _ _ = error "mkMat: unreachable"
+
+    mkIfl x ctr bod fds d = 
+      HVM.Mat (HVM.IFL 0) (HVM.Var x) [] [
+          ('#':hvmNam ctr, [], foldr HVM.Lam bod (map ('&':) (reverse fds))),
+          (('&':x), [], d)
+        ]
+
+valToHVM :: Book -> MS.Map Name HVM.Name -> NVal -> HVM.Core
+valToHVM book ctx (U64_V v) = HVM.U32 (fromIntegral v)
+valToHVM book ctx (I64_V v) = HVM.Era
+valToHVM book ctx (F64_V v) = HVM.Era
+valToHVM book ctx (CHR_V c) = HVM.Chr c
+
+op2ToHVM :: Book -> MS.Map Name HVM.Name -> NOp2 -> Term -> Term -> HVM.Core
+op2ToHVM book ctx ADD a b = HVM.Op2 HVM.OP_ADD (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx SUB a b = HVM.Op2 HVM.OP_SUB (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx MUL a b = HVM.Op2 HVM.OP_MUL (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx DIV a b = HVM.Op2 HVM.OP_DIV (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx MOD a b = HVM.Op2 HVM.OP_MOD (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx POW a b = error "TODO"
+op2ToHVM book ctx EQL a b = HVM.Op2 HVM.OP_EQ  (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx NEQ a b = HVM.Op2 HVM.OP_NE  (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx LST a b = HVM.Op2 HVM.OP_LT  (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx GRT a b = HVM.Op2 HVM.OP_GT  (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx LEQ a b = HVM.Op2 HVM.OP_LTE (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx GEQ a b = HVM.Op2 HVM.OP_GTE (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx AND a b = HVM.Op2 HVM.OP_AND (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx OR  a b = HVM.Op2 HVM.OP_OR  (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx XOR a b = HVM.Op2 HVM.OP_XOR (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx SHL a b = HVM.Op2 HVM.OP_LSH (termToHVM book ctx a) (termToHVM book ctx b)
+op2ToHVM book ctx SHR a b = HVM.Op2 HVM.OP_RSH (termToHVM book ctx a) (termToHVM book ctx b)
+
+op1ToHVM :: Book -> MS.Map Name HVM.Name -> NOp1 -> Term -> HVM.Core
+op1ToHVM book ctx NOT = error "TODO"
+op1ToHVM book ctx NEG = error "TODO"
+
+refAppToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Maybe HVM.Core
+refAppToHVM book ctx term =
+  case collectApps term [] of
+    (Ref k, args) ->
+      let (_,tm,ty) = fromJust (deref book k)
+          args'    = map (termToHVM book ctx) args
+          len      = length args
+          ari      = length (fst (collectLamArgs tm ty []))
+      in wrapRef ctx k args' len ari
+    _ -> Nothing
+  where
+    wrapRef ctx k args len ari
+      | len <  ari = do
+        let var = "_a" ++ show len
+        bod <- wrapRef (MS.insert var var ctx) k (args ++ [HVM.Var var]) (len+1) ari
+        return $ HVM.Lam ('&':var) bod
+      | len == ari = do
+        return $ HVM.Ref (hvmNam k) 0 args
+      | len >  ari = do
+        let (refArgs, appArgs) = splitAt ari args
+        let call = HVM.Ref (hvmNam k) 0 refArgs
+        return $ foldl HVM.App call appArgs
+      | otherwise = undefined
+
+-- Utils
+--------
 
 hvmNam :: Name -> HVM.Name
 hvmNam n = (replace '/' "__" n) ++ "$"
 
+subst :: Name -> Body -> Term
+subst a f = f (Var a 0)
+
 replace :: Char -> String -> String -> String
 replace old new xs = foldr (\c acc -> if c == old then new ++ acc else c : acc) [] xs
+
+collectLamArgs :: Term -> Term -> [Name] -> ([Name], Term)
+collectLamArgs (Lam arg (subst arg -> bod)) (All _ (Lam x (subst x -> ty))) args = collectLamArgs bod ty (args ++ [arg])
+collectLamArgs bod ty args = (args, bod)
 
 -- Rewrite structurally identical HVM terms
 rewriteHVM :: HVM.Core -> HVM.Core -> HVM.Core -> HVM.Core
