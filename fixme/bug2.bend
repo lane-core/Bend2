@@ -26,8 +26,9 @@
 def f(a : Set) -> Set:
   Bool
 
-def g : ∀A: Set . f(A) =
+def g: ∀A: Set. f(A) =
   ()
+
 # def g : ∀A: Set . (f(A)) =
 #   ()
 

@@ -90,45 +90,40 @@ parseTermOpr t = choice
   , parseAss t   -- =
   , return t ]
 
--- -- | Top‐level entry point
--- parseTerm :: Parser Term
--- parseTerm = located $ do
-  -- t0 <- parseTermIni
-  -- t1 <- parseTermArg t0
-  -- t2 <- parseTermOpr t1
-  -- return t2
+-- | A helper that conditionally applies a postfix/infix parser to a term.
+-- The parser is only applied if the next token is not in the 'blocked' list.
+-- This is the core of the operator-blocking mechanism that allows for context-
+-- sensitive parsing, preventing ambiguity in expressions like `~ term { ... }`.
+withOperatorParsing :: Term -> (Term -> Parser Term) -> Parser Term
+withOperatorParsing term operatorParser = do
+  st <- get
+  -- If the blocked list is empty, we can always parse the operator.
+  if null (blocked st)
+    then operatorParser term
+    else do
+      -- Peek ahead to see if the next token is a blocked operator.
+      -- `lookAhead` does this without consuming input. `symbol` handles whitespace.
+      isBlocked <- optional . lookAhead . choice . map (try . symbol) $ blocked st
+      case isBlocked of
+        -- The next token is blocked, so we must not parse it as an operator.
+        -- We return the term as-is, without applying the operator parser.
+        Just _  -> return term
+        -- The next token is not blocked, so we proceed with the operator parser.
+        Nothing -> operatorParser term
 
--- TODO: refactor 'parseTerm' so that, for each string on the blocked list of
--- the Parser state, if the term is followed by that string, then, we'll just
--- return t0, without parsing the arg and the opr. if the term is NOT followed
--- by a string in the blocked list, then, we parse the arg/opr as usual.
--- moreover, implement a parseTermBlocking function, which adds a string to the
--- blocked list (if it isn't present), parses the term, then removes it (if it
--- wasn't added). don't use monadic operators like <$>, stick to a more readable
--- do-notation whenever possible. implement all that below:
-
--- | Top‐level entry point
+-- | Top-level entry point for parsing a term.
+-- It parses in three stages:
+-- 1. An initial, "atomic" term (`parseTermIni`).
+-- 2. A chain of "tight" postfix operators like application `f(x)` (`parseTermArg`).
+-- 3. A "loose" infix operator like `+` or `->` (`parseTermOpr`).
+-- The `withOperatorParsing` helper ensures that stages 2 and 3 are skipped
+-- if a "blocked" operator is encountered, resolving grammatical ambiguities.
 parseTerm :: Parser Term
 parseTerm = located $ do
   t0 <- parseTermIni
-  st <- get
-  is_blocked <- if null (blocked st)
-    then return False
-    else do
-      next_is_blocked <-
-        lookAhead
-        $ optional
-        $ choice (map (try.symbol) (blocked st))
-      case next_is_blocked of
-        Just _  -> return True
-        Nothing -> return False
-  if is_blocked
-    then do
-      return t0
-    else do
-      t1 <- parseTermArg t0
-      t2 <- parseTermOpr t1
-      return t2
+  t1 <- withOperatorParsing t0 parseTermArg
+  t2 <- withOperatorParsing t1 parseTermOpr
+  return t2
 
 -- | Parses a term, temporarily blocking a given operator.
 -- This is useful for parsing expressions where an operator might be ambiguous
@@ -137,6 +132,8 @@ parseTerm = located $ do
 parseTermBefore :: String -> Parser Term
 parseTermBefore op = do
   st <- get
+  -- TODO: using trace, print the remaining tokens, removing all \n chars from it
+  -- also print the current blocked list
   let wasBlocked = blocked st
   let newBlocked = op : wasBlocked
   put st { blocked = newBlocked }
@@ -144,8 +141,6 @@ parseTermBefore op = do
   st'  <- get
   put st' { blocked = wasBlocked }
   return term
-
--- atomic terms
 
 -- | Syntax: x, foo, bar_123, Type<A,B>, Nat/add
 parseVar :: Parser Term
