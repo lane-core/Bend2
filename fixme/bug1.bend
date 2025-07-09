@@ -20,7 +20,8 @@
   #                     ^(marked here)
   # Expected a function body after the signature.
 
-def f() -> Unit:
+def f(x: Nat) -> Unit:
+
 
 def main() -> Unit:
   ()

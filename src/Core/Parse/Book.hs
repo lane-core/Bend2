@@ -46,7 +46,7 @@ parseDefSimple defName = do
   _ <- symbol ":"
   t <- parseTermBefore "="
   _ <- symbol "="
-  x <- parseTerm
+  x <- expectBody ("'=' for '" ++ defName ++ "'") parseTerm
   return (defName, (False, x, t))
 
 -- | Syntax: def name(x: Type1, y: Type2) -> ReturnType: body
@@ -64,7 +64,7 @@ parseDefFunction f = label "function definition" $ do
   _ <- symbol "->"
   returnType <- parseTerm
   _ <- symbol ":"
-  body <- parseTerm
+  body <- expectBody ("type signature for '" ++ f ++ "()'") parseTerm
   let (typ, bod) = foldr nestTypeBod (returnType, body) args
   return (f, (False, bod, typ))
   where

@@ -176,7 +176,7 @@ expectBody where' parser = do
     , void eof
     ]
   case tld of
-    Just _  -> fail $ "Expected expression after " ++ where' ++ "."
+    Just _  -> fail $ "Expected body after " ++ where' ++ "."
     Nothing -> parser
 
 -- | Main entry points
