@@ -90,7 +90,7 @@ processFile :: FilePath -> IO ()
 processFile file = do
   book <- parseFile file
   checkDefinitions book
-  putStrLn $ show book
+  -- putStrLn $ show book
   runMain book
 
 -- | Try to format JavaScript code using prettier if available

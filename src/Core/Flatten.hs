@@ -301,14 +301,9 @@ unpat d (Pri p)         = Pri p
 unpat d (Log s x)       = Log (unpat d s) (unpat d x)
 unpat d (Loc s t)       = Loc s (unpat d t)
 unpat d (Rwt a b f)     = Rwt (unpat d a) (unpat d b) (unpat d f)
-unpat d (Pat [s] ms cs) = desugarWiths ms (match d s ms cs)
+unpat d (Pat [s] ms cs) = match d s ms cs
 unpat d (Pat ss  ms []) = One
 unpat d (Pat ss  ms cs) = error "unpat: multiple scrutinees after flattening"
-
--- Desugars `with` statements into `let` bindings.
-desugarWiths :: [Move] -> Term -> Term
-desugarWiths []           term = term
-desugarWiths ((k,v) : ms) term = Let v (Lam k (\_ -> desugarWiths ms term))
 
 match :: Int -> Term -> [Move] -> [Case] -> Term
 
@@ -316,168 +311,151 @@ match :: Int -> Term -> [Move] -> [Case] -> Term
 -- ---------------------------
 -- ~x { 0n: z ; 1n+: λp. s }
 match d x ms (([(cut -> Zer)], z) : ([(cut -> Suc p)], s) : _) =
-  wrap d ms $ NatM x if_zer if_suc
-  where if_zer = unpat d z
-        if_suc = Lam (patOf d p) $ \x -> unpat (d+1) s
+  apps d (map snd ms) $ NatM x if_zer if_suc
+  where if_zer = lam d (map fst ms) $ unpat d z
+        if_suc = Lam (patOf d p) $ \x -> lam d (map fst ms) $ unpat (d+1) s
 
 -- match x { 1n+p: s ; 0n: z }
 -- ---------------------------
 -- ~x { 0n: z ; 1n+: λp. s }
 match d x ms (([(cut -> Suc p)], s) : ([(cut -> Zer)], z) : _) =
-  wrap d ms $ NatM x if_zer if_suc
-  where if_zer = unpat d z
-        if_suc = Lam (patOf d p) $ \x -> unpat (d+1) s
+  apps d (map snd ms) $ NatM x if_zer if_suc
+  where if_zer = lam d (map fst ms) $ unpat d z
+        if_suc = Lam (patOf d p) $ \x -> lam d (map fst ms) $ unpat (d+1) s
 
 -- match x { 0n: z ; k: v }
 -- --------------------------------------
 -- ~x { 0n: z ; 1n+: λk. v[k := 1n+k] }
 match d x ms (([(cut -> Zer)], z) : ([(cut -> Var k i)], v) : _) =
-  wrap d ms $ NatM x if_zer if_suc
-  where if_zer = unpat d z
-        if_suc = Lam k $ \x -> unpat (d+1) (subst k (Suc (Var k 0)) v)
+  apps d (map snd ms) $ NatM x if_zer if_suc
+  where if_zer = lam d (map fst ms) $ unpat d z
+        if_suc = Lam k $ \x -> lam d (map fst ms) $ unpat (d+1) (subst k (Suc (Var k 0)) v)
 
 -- match x { 1n+p: s ; k: v }
 -- ------------------------------------
 -- ~x { 0n: v[k := 0n] ; 1n+: λp. s }
 match d x ms (([(cut -> Suc p)], s) : ([(cut -> Var k i)], v) : _) =
-  wrap d ms $ NatM x if_zer if_suc
-  where if_zer = unpat d (subst k Zer v)
-        if_suc = Lam (patOf d p) $ \x -> unpat (d+1) s
+  apps d (map snd ms) $ NatM x if_zer if_suc
+  where if_zer = lam d (map fst ms) $ unpat d (subst k Zer v)
+        if_suc = Lam (patOf d p) $ \x -> lam d (map fst ms) $ unpat (d+1) s
 
 -- match x { False: f ; True: t }
 -- ------------------------------
 -- ~x { False: f ; True: t }
 match d x ms (([(cut -> Bt0)], f) : ([(cut -> Bt1)], t) : _) =
-  wrap d ms $ BitM x (unpat d f) (unpat d t)
+  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d t)
 
 -- match x { True: t ; False: f }
 -- ------------------------------
 -- ~x { False: f ; True: t }
 match d x ms (([(cut -> Bt1)], t) : ([(cut -> Bt0)], f) : _) =
-  wrap d ms $ BitM x (unpat d f) (unpat d t)
+  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d t)
 
 -- match x { False: f ; k: v }
 -- --------------------------------------
 -- ~x { False: f ; True: v[k := True] }
 match d x ms (([(cut -> Bt0)], f) : ([(cut -> Var k i)], v) : _) =
-  wrap d ms $ BitM x (unpat d f) (unpat d (subst k Bt1 v))
+  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d (subst k Bt1 v))
 
 -- match x { True: t ; k: v }
 -- ---------------------------------------
 -- ~x { False: v[k := False] ; True: t }
 match d x ms (([(cut -> Bt1)], t) : ([(cut -> Var k i)], v) : _) =
-  wrap d ms $ BitM x (unpat d (subst k Bt0 v)) (unpat d t)
+  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d (subst k Bt0 v)) (lam d (map fst ms) $ unpat d t)
 
 -- match x { []: n ; h<>t: c }
 -- ------------------------------
 -- ~x { []: n ; <>: λh. λt. c }
 match d x ms (([(cut -> Nil)], n) : ([(cut -> Con h t)], c) : _) =
-  wrap d ms $ LstM x if_nil if_con
-  where if_nil = unpat d n
-        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
+  apps d (map snd ms) $ LstM x if_nil if_con
+  where if_nil = lam d (map fst ms) $ unpat d n
+        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> lam d (map fst ms) $ unpat (d+2) c
 
 -- match x { h<>t: c ; []: n }
 -- ------------------------------
 -- ~x { []: n ; <>: λh. λt. c }
 match d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
-  wrap d ms $ LstM x if_nil if_con
-  where if_nil = unpat d n
-        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
+  apps d (map snd ms) $ LstM x if_nil if_con
+  where if_nil = lam d (map fst ms) $ unpat d n
+        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> lam d (map fst ms) $ unpat (d+2) c
 
 -- match x { []: n ; k: v }
 -- -----------------------------------------
 -- ~x { []: n ; <>: λh. λt. v[k := h<>t] }
 match d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
-  wrap d ms $ LstM x if_nil if_con
-  where if_nil = unpat d n
-        if_con = Lam (nam d) $ \_ -> Lam (nam (d+1)) $ \_ -> unpat (d+2) (subst k (Con (var d) (var (d+1))) v)
+  apps d (map snd ms) $ LstM x if_nil if_con
+  where if_nil = lam d (map fst ms) $ unpat d n
+        if_con = Lam (nam d) $ \_ -> Lam (nam (d+1)) $ \_ -> lam d (map fst ms) $ unpat (d+2) (subst k (Con (var d) (var (d+1))) v)
 
 -- match x { h<>t: c ; k: v }
 -- ---------------------------------------
 -- ~x { []: v[k := []] ; <>: λh. λt. c }
 match d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
-  wrap d ms $ LstM x if_nil if_con
-  where if_nil = unpat d (subst k Nil v)
-        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> unpat (d+2) c
+  apps d (map snd ms) $ LstM x if_nil if_con
+  where if_nil = lam d (map fst ms) $ unpat d (subst k Nil v)
+        if_con = Lam (patOf d h) $ \_ -> Lam (patOf (d+1) t) $ \_ -> lam d (map fst ms) $ unpat (d+2) c
 
 -- match x { (): u }
 -- -----------------
 -- ~x { (): u }
 match d x ms cs@(([(cut -> One)], u) : _) =
-  wrap d ms $ UniM x (unpat d u)
+  apps d (map snd ms) $ UniM x (lam d (map fst ms) $ unpat d u)
 
 -- match x { (a,b): p }
 -- --------------------
 -- ~x { (,): λa. λb. p }
 match d x ms (([(cut -> Tup a b)], p) : _) =
-  wrap d ms $ SigM x if_tup
-  where if_tup = Lam (patOf d a) $ \_ -> Lam (patOf (d+1) b) $ \_ -> unpat (d+2) p
+  apps d (map snd ms) $ SigM x if_tup
+  where if_tup = Lam (patOf d a) $ \_ -> Lam (patOf (d+1) b) $ \_ -> lam d (map fst ms) $ unpat (d+2) p
 
 -- match x { @S1: b1 ; @S2: b2 ; ... ; k: d }
 -- ------------------------------------------
 -- ~x { @S1:b1 ; @S2:b2 ; ... ; d }
 match d x ms cs@(([(cut -> Sym _)], _) : _) =
   let (cBranches, defBranch) = collect cs
-  in wrap d ms $ EnuM x cBranches defBranch
+  in apps d (map snd ms) $ EnuM x cBranches defBranch
   where
     collect :: [Case] -> ([(String, Term)], Term)
-    collect [] = ([], Lam "_" $ \_ -> One)
+    collect [] = ([], Lam "_" $ \_ -> lam d (map fst ms) $ One)
     collect (([(cut -> Sym s)], rhs) : rest) =
       let (cs, def) = collect rest
-      in ((s, unpat d rhs) : cs, def)
+      in ((s, lam d (map fst ms) $ unpat d rhs) : cs, def)
     collect (([(cut -> Var k _)], rhs) : _) =
-      ([], Lam k $ \_ -> unpat (d+1) rhs)
+      ([], Lam k $ \_ -> lam d (map fst ms) $ unpat (d+1) rhs)
     collect (c:_) = error $ "match:invalid-Sym-case:" ++ show c
 
 -- match x { {==}: r }
 -- --------------------
 -- ~x { {==}: r }
 match d x ms (([(cut -> Rfl)], r) : _) =
-  wrap d ms $ EqlM x (unpat d r)
+  apps d (map snd ms) $ EqlM x (lam d (map fst ms) $ unpat d r)
 
 -- match x { &L{a,b}: s }
 -- ---------------------------
 -- ~ x { &L{,}: λa. λb. s }
--- match x { &L{a,b}: s }
--- ---------------------------
--- ~ x { &L{,}: λa. λb. s }
 match d x ms (([(cut -> Sup l a b)], s) : _) =
-  wrap d ms $ SupM x l if_sup
-  where if_sup = Lam (patOf d a) $ \_ -> Lam (patOf (d+1) b) $ \_ -> unpat (d+2) s
+  apps d (map snd ms) $ SupM x l if_sup
+  where if_sup = Lam (patOf d a) $ \_ -> Lam (patOf (d+1) b) $ \_ -> lam d (map fst ms) $ unpat (d+2) s
 
 -- match x { k: body }
 -- -------------------
 -- body[k := x]
 match d x ms (([(cut -> Var k i)], body) : _) =
-  unpat d (shove d ((k, x) : ms) body)
+  lam d (map fst ms) $ unpat d (shove d ((k, x) : ms) body)
 
 -- match x { }
 -- -----------
 -- λ{}
 match d x ms [] =
-  wrap d ms (EmpM x)
+  apps d (map snd ms) (EmpM x)
 
 -- Invalid pattern
 match d s ms cs = error $ "match - invalid pattern: " ++ show (d, s, ms, cs)
 
--- FIXME: wrap is untested; flattening 'with' clauses may not work properly
-
--- Completes a pattern-match using expression-based matches
--- Injects moved vars inwards using extra lams/apps
-wrap :: Int -> [Move] -> Term -> Term
-wrap d [] term = term
-wrap d ms term = apps d (map snd ms) (lamsTerm d (map fst ms) term)
-
-lamsTerm :: Int -> [Name] -> Term -> Term
-lamsTerm d ks (NatM x z s) = NatM x (lams d ks z) (lams d ks s)
-lamsTerm d ks (BitM x f t) = BitM x (lams d ks f) (lams d ks t)
-lamsTerm d ks (LstM x n c) = LstM x (lams d ks n) (lams d ks c)
-lamsTerm d ks (UniM x u)   = UniM x (lams d ks u)
-lamsTerm d ks (SigM x p)   = SigM x (lams d ks p)
-lamsTerm d ks (EnuM x c e) = EnuM x [(s, lams d ks t) | (s,t) <- c] (lams d ks e)
-lamsTerm d ks (EqlM x r)   = EqlM x (lams d ks r)
-lamsTerm d ks (EmpM x)     = EmpM x
-lamsTerm d ks other        = error $ "lamsTerm: unexpected term: " ++ show other
+-- Helper function to create lambda abstractions
+lam :: Int -> [Name] -> Term -> Term
+lam d []     t = t
+lam d (k:ks) t = Lam k $ \_ -> lam (d+1) ks t
 
 -- UnFrk
 -- =====
