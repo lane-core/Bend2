@@ -219,11 +219,13 @@ inferOp2Type d span book ctx op a b ta tb = do
   where
     numericOp ta tb = case (force book ta, force book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done (Num t1)
+      (Nat, Nat) -> Done Nat  -- Allow Nat arithmetic operations
       _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)
     
     comparisonOp ta tb = case (force book ta, force book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done Bit
       (Bit, Bit) -> Done Bit  -- Allow Bool comparison
+      (Nat, Nat) -> Done Bit  -- Allow Nat comparison
       _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)
     
     integerOp ta tb = case (force book ta, force book tb) of

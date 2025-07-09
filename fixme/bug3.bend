@@ -1,3 +1,10 @@
+# won't fix:
+# def main(x: Nat) -> Nat: x def = 5n def
+# is the same situation, is correct, and '=' is the first invalid token
+# the situation below won't occur in practice as 'let' isn't used anymore
+
+###
+
 # this gives
 
   # PARSE_ERROR
@@ -9,6 +16,4 @@
 
 # but the first nonsensical token is "def", not "="
 
-def main() -> Nat:
-  let def = 5n
-  def
+def main() -> Nat: foo def = 5n def

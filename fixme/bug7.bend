@@ -1,3 +1,7 @@
+# FIXME
+
+###
+
 # Nat Op2 still missing, this gives error
 
   # ✗ f
@@ -12,3 +16,5 @@
 
 def f(a:Nat, b:Nat) -> Nat:
   a+b
+
+def main : Nat = f(1n,2n)

@@ -1,3 +1,7 @@
+# fixed
+
+###
+
 # this gives the error
 
   # PARSE_ERROR
@@ -27,7 +31,7 @@ def f(a : Set) -> Set:
   Bool
 
 def g: ∀A: Set. f(A) =
-  ()
+  50
 
 # def g : ∀A: Set . (f(A)) =
 #   ()
