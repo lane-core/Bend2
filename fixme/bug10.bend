@@ -16,4 +16,4 @@ def gen() -> Nat:
   0n
 
 def main() -> Nat:
-  gen()
+  123

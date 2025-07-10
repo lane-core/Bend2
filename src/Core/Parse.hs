@@ -111,7 +111,7 @@ isNameChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c ==
 
 reserved :: [Name]
 -- The 'lambda' keyword is removed as part of the refactoring to expression-based matches.
-reserved = ["match","case","else","if","end","all","any","finally","import","as","and","or","def","log"]
+reserved = ["match","case","else","if","end","all","any","finally","import","as","and","or","def","log","gen"]
 
 -- | Parse a raw name without import resolution
 parseRawName :: Parser Name
