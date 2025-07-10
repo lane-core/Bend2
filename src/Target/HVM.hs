@@ -101,7 +101,7 @@ termToHVM book ctx term = go term where
   go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))]
   go (Let v f)    =
     case f of
-      (Lam n (subst n -> f)) -> HVM.Let HVM.LAZY n (termToHVM book ctx v) (termToHVM book ctx f)
+      (Lam n (subst n -> f)) -> HVM.Let HVM.LAZY (bindNam n) (termToHVM book ctx v) (termToHVM book ctx f)
       _                      -> HVM.App (termToHVM book ctx f) (termToHVM book ctx v)
   go Set          = HVM.Era
   go (Chk v t)    = termToHVM book ctx v
