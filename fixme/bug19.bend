@@ -11,9 +11,24 @@
 # 
 # a+(b+c) = b+(a+c)
 #
-# then, look at the end to see how this proof works. we need first a
-# a small prelude so we can use commutativity and associativity:
 
+def sym(A:Set, a:A, b:A, eq: A{a==b}) -> A{b==a}:
+  rewrite eq finally
+def thm(a:Nat, b:Nat, c:Nat) -> Nat{add(a,add(b,c)) == add(b,add(a,c))}:
+  rewrite assoc(a,b,c)
+  rewrite comm(a,b)
+  rewrite sym(Nat, add(b,add(a,c)), add(add(b,a),c), assoc(b,a,c))
+  finally
+
+# the line
+#   rewrite sym(Nat, add(b,add(a,c)), add(add(b,a),c), assoc(b,a,c))
+#
+# could be just
+#   rewrite_inv assoc(b,a,c)
+
+
+# -------------------------------------------------------------------
+#
 # prelude (this can be ignored):
 def add_suc_right(a:Nat, b:Nat) -> Nat{add(a, 1n+b) == 1n + add(a,b)}:
   match a:
@@ -44,21 +59,3 @@ def assoc(a:Nat, b:Nat, c:Nat) -> Nat{add(a,add(b,c)) == add(add(a,b),c)}:
     case 0n: finally
     case 1n+pa: ind = assoc(pa,b,c) succ_eq(add(pa,add(b,c)), add(add(pa,b),c), ind)
 
-#
-# now the issue. the last line could be much simpler, and this is general:
-#
-
-def sym(A:Set, a:A, b:A, eq: A{a==b}) -> A{b==a}:
-  rewrite eq finally
-def thm(a:Nat, b:Nat, c:Nat) -> Nat{add(a,add(b,c)) == add(b,add(a,c))}:
-  rewrite assoc(a,b,c)
-  rewrite comm(a,b)
-  rewrite sym(Nat, add(b,add(a,c)), add(add(b,a),c), assoc(b,a,c))
-  finally
-
-# the line
-
-  # rewrite sym(Nat, add(b,add(a,c)), add(add(b,a),c), assoc(b,a,c))
-
-# could be just
-  # rewrite_inv assoc(b,a,c)
