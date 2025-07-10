@@ -133,8 +133,8 @@ termToHVM book ctx term = go term where
       _ ->
         HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Nil", [], termToHVM book ctx n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM book ctx c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
   go (Enu s)      = HVM.Era
-  go (Sym s)      = error "TODO: bare Sym toHVM"
-  go (EnuM x c e) = error "TODO: bare EnuM toHVM"
+  go (Sym s)      = error "TODO: termToHVM Sym"
+  go (EnuM x c e) = error "TODO: termToHVM EnuM"
   go (Log s x)    = termToHVM book ctx x  -- For HVM, just return the result expression
   go (Num _)      = HVM.Era
   go (Val v)      = valToHVM book ctx v
@@ -189,7 +189,7 @@ op2ToHVM book ctx SUB a b = HVM.Op2 HVM.OP_SUB (termToHVM book ctx a) (termToHVM
 op2ToHVM book ctx MUL a b = HVM.Op2 HVM.OP_MUL (termToHVM book ctx a) (termToHVM book ctx b)
 op2ToHVM book ctx DIV a b = HVM.Op2 HVM.OP_DIV (termToHVM book ctx a) (termToHVM book ctx b)
 op2ToHVM book ctx MOD a b = HVM.Op2 HVM.OP_MOD (termToHVM book ctx a) (termToHVM book ctx b)
-op2ToHVM book ctx POW a b = error "TODO"
+op2ToHVM book ctx POW a b = error "TODO: termToHVM POW"
 op2ToHVM book ctx EQL a b = HVM.Op2 HVM.OP_EQ  (termToHVM book ctx a) (termToHVM book ctx b)
 op2ToHVM book ctx NEQ a b = HVM.Op2 HVM.OP_NE  (termToHVM book ctx a) (termToHVM book ctx b)
 op2ToHVM book ctx LST a b = HVM.Op2 HVM.OP_LT  (termToHVM book ctx a) (termToHVM book ctx b)
@@ -203,20 +203,21 @@ op2ToHVM book ctx SHL a b = HVM.Op2 HVM.OP_LSH (termToHVM book ctx a) (termToHVM
 op2ToHVM book ctx SHR a b = HVM.Op2 HVM.OP_RSH (termToHVM book ctx a) (termToHVM book ctx b)
 
 op1ToHVM :: Book -> MS.Map Name HVM.Name -> NOp1 -> Term -> HVM.Core
-op1ToHVM book ctx NOT = error "TODO"
-op1ToHVM book ctx NEG = error "TODO"
+op1ToHVM book ctx NOT = error "TODO: termToHVM NOT"
+op1ToHVM book ctx NEG = error "TODO: termToHVM NEG"
 
 refAppToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Maybe HVM.Core
 refAppToHVM book ctx term =
   case collectApps term [] of
     (Ref k, args) ->
       let (_,tm,ty) = fromJust (deref book k)
-          args'    = map (termToHVM book ctx) args
-          len      = length args
-          ari      = length (fst (collectLamArgs tm ty []))
-      in wrapRef ctx k args' len ari
+          argsHVM   = map (termToHVM book ctx) args
+          len       = length args
+          ari       = length (fst (collectLamArgs tm ty []))
+      in wrapRef ctx k argsHVM len ari
     _ -> Nothing
   where
+    -- Eta expand the Ref if less args than needed and rebuild the Apps if more args than needed
     wrapRef ctx k args len ari
       | len <  ari = do
         let var = "_a" ++ show len
@@ -242,7 +243,7 @@ patToHVM book ctx [x] m c@(([p], f) : _) =
     (Suc _)      -> simpleMat
     (Nil)        -> simpleMat
     (Con _ _)    -> simpleMat
-    (Sym _)      -> error "TODO: bare Sym patToHVM"
+    (Sym _)      -> error "TODO: patToHVM Sym"
     (Tup _ _)    ->
       case ctrPatToHVM book ctx x m c of
         Just hvm -> hvm

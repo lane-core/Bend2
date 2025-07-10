@@ -526,22 +526,28 @@ unfrkGo d ctx (Pri p)      = Pri p
 unfrkGo d ctx (Log s x)    = Log (unfrkGo d ctx s) (unfrkGo d ctx x)
 unfrkGo d ctx (Loc s t)    = Loc s (unfrkGo d ctx t)
 unfrkGo d ctx (Rwt a b x)  = Rwt (unfrkGo d ctx a) (unfrkGo d ctx b) (unfrkGo d ctx x)
-unfrkGo d ctx (Pat s m c)  = Pat (map (unfrkGo d ctx) s) m [(ps, unfrkGo d ctx rhs) | (ps, rhs) <- c]
+unfrkGo d ctx (Pat s m c)  = Pat (map (unfrkGo d ctx) s) [(k, unfrkGo d ctx v) | (k,v) <- m] [(p, unfrkGo d (ctxCs p) f) | (p, f) <- c]
+  where
+    ctxCs  p = ctx ++ map (\(k,v) -> (k, d)) m ++ ctxPat p
+    ctxPat p = map (\k -> (k, d)) (S.toList (S.unions (map (freeVars S.empty) p)))
 
 unfrkFrk :: Int -> [(Name, Int)] -> Term -> Term -> Term -> Term
-unfrkFrk d ctx l a b = buildSupMs (shadowCtx (filter (\x -> fst x `S.member` free) (reverse ctx))) where
-  free = freeVars S.empty a `S.union` freeVars S.empty b
-
+unfrkFrk d ctx l a b = buildSupMs vars where
+  vars =  shadowCtx (filter (\x -> fst x `S.member` free) (reverse ctx))
+  free = case cut l of
+    -- 'l' must be a non-superposed U64 so we can remove it from the forked vars as a (reasonable) optimization.
+    Var n _ -> S.delete n (freeVars S.empty a `S.union` freeVars S.empty b)
+    _       -> freeVars S.empty a `S.union` freeVars S.empty b
   -- Build nested SupM matches for each context variable
   buildSupMs :: [(Name, Int)] -> Term
   buildSupMs [] = Sup l a' b' where
-    ls = [(n, Var (n++"0") 0) | (n, _) <- ctx]
-    rs = [(n, Var (n++"1") 0) | (n, _) <- ctx]
+    ls = [(n, Var (n++"0") 0) | (n, _) <- vars]
+    rs = [(n, Var (n++"1") 0) | (n, _) <- vars]
     a' = substMany ls (unfrkGo d ctx a)
     b' = substMany rs (unfrkGo d ctx b)
   -- For each variable, create a SupM that binds the superposed versions
-  buildSupMs ((n, dep):rest) = 
-    SupM (Var n dep) l $
+  buildSupMs ((n,d):rest) =
+    SupM (Var n d) l $
     Lam (n++"0") $ \_ ->
     Lam (n++"1") $ \_ ->
     buildSupMs rest
