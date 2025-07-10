@@ -51,8 +51,10 @@ compileFn book nam tm ty =
   "!@" ++ (defNam nam) ++ "(" ++ unwords (argsStri args body) ++ ") =\n  " ++ showHVM 1 (termToHVM book MS.empty body) ++ "\n"
   where
     (args, body) = collectLamArgs tm ty []
-    argsStri args bod = map (\k -> if alwaysMat k bod then "!&"++k else "&"++k) args
-    alwaysMat x bod  = case cut bod of
+    argsStri args bod = map (\(k,ty) -> if isStri k ty bod then "!&"++k else "&"++k) args
+    isStri k ty bod   = alwaysMat k bod || isNum ty
+    isNum ty = case ty of { Num _ -> True; _ -> False } -- We don't necessarily want to always do this, but most times it guarantees fast u32 duplication at no extra cost.
+    alwaysMat x bod   = case cut bod of
       -- Matches this var
       BitM (cut -> Var y _) _ _  | x == y -> True
       NatM (cut -> Var y _) _ _  | x == y -> True
@@ -320,8 +322,8 @@ subst a f = f (Var a 0)
 replace :: Char -> String -> String -> String
 replace old new xs = foldr (\c acc -> if c == old then new ++ acc else c : acc) [] xs
 
-collectLamArgs :: Term -> Term -> [Name] -> ([Name], Term)
-collectLamArgs (Lam arg (subst arg -> bod)) (All _ (Lam x (subst x -> ty))) args = collectLamArgs bod ty (args ++ [arg])
+collectLamArgs :: Term -> Term -> [(Name, Term)] -> ([(Name, Term)], Term)
+collectLamArgs (Lam xtm (subst xtm -> bod)) (All (cut -> xty) (Lam x (subst x -> ty))) args = collectLamArgs bod ty (args ++ [(xtm, xty)])
 collectLamArgs bod ty args = (args, bod)
 
 -- Rewrite structurally identical HVM terms
