@@ -1,5 +1,7 @@
 # FIXME
 
+# please implement a complete test program
+
 ###
 
 # unfrk is generating incorrect duplications on shadowed names
