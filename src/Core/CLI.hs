@@ -17,6 +17,7 @@ import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import Control.Exception (catch, IOException)
 
+import Core.Adjust (adjustBook, adjustBookWithPats)
 import Core.Bind
 import Core.Check
 import Core.Collapse
@@ -89,9 +90,10 @@ runMain book = do
 processFile :: FilePath -> IO ()
 processFile file = do
   book <- parseFile file
-  checkDefinitions book
-  -- putStrLn $ show book
-  runMain book
+  let bookAdj = adjustBook book
+  checkDefinitions bookAdj
+  -- putStrLn $ show bookAdj
+  runMain bookAdj
 
 -- | Try to format JavaScript code using prettier if available
 formatJavaScript :: String -> IO String
@@ -113,7 +115,8 @@ formatJavaScript jsCode = do
 processFileToJS :: FilePath -> IO ()
 processFileToJS file = do
   book <- parseFile file
-  let jsCode = JS.compile book
+  let bookAdj = adjustBook book
+  let jsCode = JS.compile bookAdj
   formattedJS <- formatJavaScript jsCode
   putStrLn formattedJS
 
@@ -121,7 +124,8 @@ processFileToJS file = do
 processFileToHVM :: FilePath -> IO ()
 processFileToHVM file = do
   book <- parseFile file
-  let hvmCode = HVM.compile book
+  let bookAdj = adjustBookWithPats book
+  let hvmCode = HVM.compile bookAdj
   putStrLn hvmCode
 
 -- | List all dependencies of a Bend file (including transitive dependencies)
@@ -129,8 +133,9 @@ listDependencies :: FilePath -> IO ()
 listDependencies file = do
   -- Parse and auto-import the file
   book <- parseFile file
+  let bookAdj = adjustBook book
   -- Collect all refs from the fully imported book
-  let allRefs = collectAllRefs book
+  let allRefs = collectAllRefs bookAdj
   -- Print all refs (these are all the dependencies)
   mapM_ putStrLn (S.toList allRefs)
 
