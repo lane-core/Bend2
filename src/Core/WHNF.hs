@@ -73,7 +73,7 @@ whnfFix lv book k f = whnf lv book (f (Fix k f))
 -- Normalizes an application
 whnfApp :: EvalLevel -> Book -> Term -> Term -> Term
 whnfApp lv book f x =
-  case whnf lv book f of
+  case whnf Full book f of
     Lam _ f'  -> whnfAppLam lv book f' x
     Pri p     -> whnfAppPri lv book p x
     Sup l a b -> whnfAppSup lv book l a b x
@@ -98,8 +98,8 @@ whnfAppSup lv book l a b x = whnf lv book $ Sup l (App a x0) (App b x1)
 -- Normalizes a unit match
 whnfUniM :: EvalLevel -> Book -> Term -> Term -> Term
 whnfUniM lv book x f =
-  case whnf lv book x of
-    One -> whnf lv book f
+  case whnf Full book x of
+    One       -> whnf lv book f
     Sup l a b -> whnf lv book $ Sup l (UniM a f0) (UniM b f1)
       where (f0, f1) = dup book l f
     x'  -> UniM x' f
@@ -107,9 +107,9 @@ whnfUniM lv book x f =
 -- Normalizes a boolean match
 whnfBitM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
 whnfBitM lv book x f t =
-  case whnf lv book x of
-    Bt0 -> whnf lv book f
-    Bt1 -> whnf lv book t
+  case whnf Full book x of
+    Bt0       -> whnf lv book f
+    Bt1       -> whnf lv book t
     Sup l a b -> whnf lv book $ Sup l (BitM a f0 t0) (BitM b f1 t1)
       where (f0, f1) = dup book l f
             (t0, t1) = dup book l t
@@ -118,9 +118,9 @@ whnfBitM lv book x f t =
 -- Normalizes a natural number match
 whnfNatM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
 whnfNatM lv book x z s =
-  case whnf lv book x of
-    Zer   -> whnf lv book z
-    Suc n -> whnf lv book (App s (whnf lv book n))
+  case whnf Full book x of
+    Zer       -> whnf lv book z
+    Suc n     -> whnf lv book (App s (whnf lv book n))
     Sup l a b -> whnf lv book $ Sup l (NatM a z0 s0) (NatM b z1 s1)
       where (z0,z1) = dup book l z
             (s0,s1) = dup book l s
@@ -129,9 +129,9 @@ whnfNatM lv book x z s =
 -- Normalizes a list match
 whnfLstM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
 whnfLstM lv book x n c =
-  case whnf lv book x of
-    Nil     -> whnf lv book n
-    Con h t -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
+  case whnf Full book x of
+    Nil       -> whnf lv book n
+    Con h t   -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
     Sup l a b -> whnf lv book $ Sup l (LstM a n0 c0) (LstM b n1 c1)
       where (n0,n1) = dup book l n
             (c0,c1) = dup book l c
@@ -140,8 +140,8 @@ whnfLstM lv book x n c =
 -- Normalizes a pair match
 whnfSigM :: EvalLevel -> Book -> Term -> Term -> Term
 whnfSigM lv book x f =
-  case whnf lv book x of
-    Tup a b -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
+  case whnf Full book x of
+    Tup a b   -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
     Sup l a b -> whnf lv book $ Sup l (SigM a f0) (SigM b f1)
       where (f0, f1) = dup book l f
     x'      -> SigM x' f
@@ -149,7 +149,7 @@ whnfSigM lv book x f =
 -- Normalizes an enum match
 whnfEnuM :: EvalLevel -> Book -> Term -> [(String,Term)] -> Term -> Term
 whnfEnuM lv book x c f =
-  case whnf lv book x of
+  case whnf Full book x of
     Sym s -> case lookup s c of
       Just t  -> whnf lv book t
       Nothing -> whnf lv book (App f (Sym s))
@@ -161,8 +161,8 @@ whnfEnuM lv book x c f =
 -- Normalizes an equality match
 whnfEqlM :: EvalLevel -> Book -> Term -> Term -> Term
 whnfEqlM lv book x f =
-  case whnf lv book x of
-    Rfl -> whnf lv book f
+  case whnf Full book x of
+    Rfl       -> whnf lv book f
     Sup l a b -> whnf lv book $ Sup l (EqlM a f0) (EqlM b f1)
       where (f0, f1) = dup book l f
     x' -> EqlM x' f
@@ -189,7 +189,7 @@ whnfLog lv book s x =
 -- Normalizes a primitive application
 whnfAppPri :: EvalLevel -> Book -> PriF -> Term -> Term
 whnfAppPri lv book p x =
-  case whnf lv book x of
+  case whnf Full book x of
     Sup l a b -> whnf lv book $ Sup l (App (Pri p) a) (App (Pri p) b)
     x' -> case (p, x') of
       (U64_TO_CHAR, Val (U64_V n)) -> Val (CHR_V (toEnum (fromIntegral n)))
@@ -200,7 +200,7 @@ whnfAppPri lv book p x =
 
 whnfOp2 :: EvalLevel -> Book -> NOp2 -> Term -> Term -> Term
 whnfOp2 lv book op a b =
-  let a' = whnf lv book a in
+  let a' = whnf Full book a in
   case a' of
     Sup l a0 a1 -> whnf lv book $ Sup l (Op2 op a0 b0) (Op2 op a1 b1)
       where (b0, b1) = dup book l b
@@ -352,7 +352,7 @@ whnfOp2 lv book op a b =
 
 whnfOp1 :: EvalLevel -> Book -> NOp1 -> Term -> Term
 whnfOp1 lv book op a =
-  case whnf lv book a of
+  case whnf Full book a of
     Sup l a0 a1 -> whnf lv book $ Sup l (Op1 op a0) (Op1 op a1)
     a' -> case a' of
       -- Bool operations
@@ -571,6 +571,8 @@ ugly (cut -> LstM _ _ _) = True
 ugly (cut -> EnuM _ _ _) = True
 ugly (cut -> SigM _ _  ) = True
 ugly (cut -> EqlM _ _  ) = True
+ugly (cut -> Lam _ _   ) = True
+ugly (cut -> App f x   ) = ugly f
 ugly _                   = False
 
 -- Evaluates terms that whnf won't, including:
