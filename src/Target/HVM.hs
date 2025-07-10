@@ -273,12 +273,12 @@ patToHVM book ctx x m c = HVM.Era
 
 ctrPatToHVM :: Book -> MS.Map Name HVM.Name -> Term -> [Move] -> [Case] -> Maybe HVM.Core
 ctrPatToHVM book ctx x m c = case c of
-  (([Tup (Var a _) (Var b _)], Pat [(Var k _)] _ c) : _) ->
+  (([Tup (Var a _) (Var kB _)], Pat [(Var k _)] _ c) : _) ->
     if a == k then do
       let mv = map (\(k,v) -> (bindNam k, termToHVM book ctx v)) m
       cs <- mapM (\(p, x) -> case head p of
-          Sym ctr -> caseToHVM ctr [] x
-          Var k _ -> return (bindNam k, [], termToHVM book ctx x)
+          Sym ctr  -> caseToHVM ctr [] x
+          Var kT _ -> return (bindNam kT, [], rewriteDflt kT kB (termToHVM book ctx x))
           _ -> Nothing
         ) (filter (not . badPatCase) c)
       return $ HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) mv cs
@@ -289,6 +289,8 @@ ctrPatToHVM book ctx x m c = case c of
     caseToHVM ctr fds (Pat [(Var k _)] _ (([(Tup (Var a _) (Var b _))], bod) : _)) = caseToHVM ctr (fds ++ [a]) bod
     caseToHVM ctr fds (Pat [(Var k _)] _ (([One], bod) : _)) = Just ('#':defNam ctr, map bindNam fds, termToHVM book ctx bod)
     caseToHVM _ _ _ = Nothing
+
+    rewriteDflt kT kB x = rewriteHVM (HVM.Ctr "#P" [HVM.Var kT, HVM.Var kB]) (HVM.Var kT) x
 
 -- Utils
 --------
