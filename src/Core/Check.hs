@@ -423,12 +423,8 @@ check d span book ctx term goal =
     (App f x, _) ->
       if isLamApp f
         then do
-          case f of
-            Lam k b -> do
-              check d span book ctx (b x) goal
-            f  -> do
-              xt <- infer d span book ctx x
-              check d span book ctx f $ All xt $ Lam "_" $ \v -> goal
+          xt <- infer d span book ctx x
+          check d span book ctx f $ All xt $ Lam "_" $ \v -> Rwt x v goal
         else do
           verify d span book ctx term goal
     (Log s x, _) -> do
