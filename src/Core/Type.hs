@@ -407,3 +407,42 @@ prettyStr = go [] where
   go acc (Con (Val (CHR_V c)) rest) = go (c:acc) rest
   go acc (Loc _ t)                  = go acc t
   go _   _                          = Nothing
+
+-- | Returns the free variables in a term by name.
+freeVars :: S.Set Name -> Term -> S.Set Name
+freeVars ctx tm = case tm of
+  Var n _    -> if n `S.member` ctx then S.empty else S.singleton n
+  Sub t      -> freeVars ctx t
+  Fix n f    -> freeVars (S.insert n ctx) (f (Var n 0))
+  Let v f    -> S.union (freeVars ctx v) (freeVars ctx f)
+  Chk v t    -> S.union (freeVars ctx v) (freeVars ctx t)
+  EmpM x     -> freeVars ctx x
+  UniM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
+  BitM x f t -> S.unions [freeVars ctx x, freeVars ctx f, freeVars ctx t]
+  Suc n      -> freeVars ctx n
+  NatM x z s -> S.unions [freeVars ctx x, freeVars ctx z, freeVars ctx s]
+  Lst t      -> freeVars ctx t
+  Con h t    -> S.union (freeVars ctx h) (freeVars ctx t)
+  LstM x n c -> S.unions [freeVars ctx x, freeVars ctx n, freeVars ctx c]
+  EnuM x c e -> S.unions [freeVars ctx x, S.unions (map (freeVars ctx . snd) c), freeVars ctx e]
+  Op2 _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
+  Op1 _ a    -> freeVars ctx a
+  Sig a b    -> S.union (freeVars ctx a) (freeVars ctx b)
+  Tup a b    -> S.union (freeVars ctx a) (freeVars ctx b)
+  SigM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
+  All a b    -> S.union (freeVars ctx a) (freeVars ctx b)
+  Lam n f    -> freeVars (S.insert n ctx) (f (Var n 0))
+  App f x    -> S.union (freeVars ctx f) (freeVars ctx x)
+  Eql t a b  -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
+  EqlM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
+  Met _ t c  -> S.unions (freeVars ctx t : map (freeVars ctx) c)
+  Ind t      -> freeVars ctx t
+  Frz t      -> freeVars ctx t
+  Sup _ a b  -> S.union (freeVars ctx a) (freeVars ctx b)
+  SupM x l f -> S.unions [freeVars ctx x, freeVars ctx l, freeVars ctx f]
+  Frk l a b  -> S.unions [freeVars ctx l, freeVars ctx a, freeVars ctx b]
+  Log s x    -> S.union (freeVars ctx s) (freeVars ctx x)
+  Loc _ t    -> freeVars ctx t
+  Rwt a b x  -> S.unions [freeVars ctx a, freeVars ctx b, freeVars ctx x]
+  Pat s m c  -> S.unions ((map (freeVars ctx) s) ++ (map (\(_,m) -> freeVars ctx m) m) ++ (map (\(_,c) -> freeVars ctx c) c))
+  _          -> S.empty

@@ -170,7 +170,7 @@ doParseBook :: FilePath -> String -> Either String Book
 doParseBook file input =
   case evalState (runParserT p file input) (ParserState True input [] M.empty) of
     Left err  -> Left (formatError input err)
-    Right res -> Right (adjustBook res)
+    Right res -> Right res
       -- in Right (trace (show book) book)
   where
     p = do
