@@ -42,7 +42,7 @@ compileDef book (nam, (_, tm, ty)) = case extractTypeDef tm of
 
 compileType :: Name -> [(Name, [Name])] -> String
 compileType nam ctrs =
-  "data " ++ (defNam nam) ++ " { " ++ unwords (map compileCtr ctrs) ++ " }"
+  "data " ++ (defNam nam) ++ " {\n" ++ unlines (map (\c -> "  "++ compileCtr c) ctrs) ++ "}"
   where
     compileCtr (nam, fds) = "#" ++ (defNam nam) ++ "{" ++ unwords fds ++ "}"
 
