@@ -174,7 +174,10 @@ termToHVM book ctx term = go term where
   go (Ind t)      = termToHVM book ctx t
   go (Frz t)      = termToHVM book ctx t
   go Era          = HVM.Era
-  go (Sup l a b)  = HVM.Ref "SUP" 0 [termToHVM book ctx l, termToHVM book ctx a, termToHVM book ctx b]
+  go (Sup l a b)  =
+    HVM.Let HVM.LAZY "sup0$" (termToHVM book ctx a) $
+    HVM.Let HVM.LAZY "sup1$" (termToHVM book ctx b) $
+    HVM.Ref "SUP" 0 [termToHVM book ctx l, HVM.Var "sup0$", HVM.Var "sup1$"]
   go (SupM x l f) = HVM.Ref "DUP" 0 [termToHVM book ctx l, termToHVM book ctx x, termToHVM book ctx f]
   go (Frk l a b)  = HVM.Era
   go (Loc s t)    = termToHVM book ctx t
@@ -368,7 +371,7 @@ showHVM lv tm =
     go (HVM.U32 v)         = show v
     go (HVM.Chr v)         = "'" ++ [v] ++ "'"
     go (HVM.Op2 o a b)     = "(" ++ show o ++ " " ++ showHVM lv a ++ " " ++ showHVM lv b ++ ")"
-    go (HVM.Let m k v f)   = "! " ++ show m ++ k ++ " = " ++ showHVM lv v ++ "\n" ++ indent lv ++ showHVM lv f
+    go (HVM.Let m k v f)   = "! " ++ show m ++ k ++ " = " ++ showHVM (lv+1) v ++ "\n" ++ indent lv ++ showHVM lv f
     go (HVM.Mat k v m ks)  = "~ " ++ showHVM lv v ++ concatMap showMov m ++ " {\n" ++ unlines (map showCase ks) ++ indent lv ++ "}"
         where showMov (k,v)     = " !" ++ k ++ "=" ++ showHVM lv v
               showCase (c,[],b) = indent (lv+1) ++ c ++ ":\n" ++ indent (lv+2) ++ showHVM (lv+2) b
