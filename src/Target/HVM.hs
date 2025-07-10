@@ -51,16 +51,24 @@ compileFn book nam tm ty =
   "!@" ++ (defNam nam) ++ "(" ++ unwords (argsStri args body) ++ ") =\n  " ++ showHVM 1 (termToHVM book MS.empty body) ++ "\n"
   where
     (args, body) = collectLamArgs tm ty []
-    argsStri args bod = map (\k -> if (Just k) == fstMat bod then "!&"++k else "&"++k) args
-    fstMat bod  = case cut bod of
-      BitM (cut -> Var k _) _ _ -> Just k
-      NatM (cut -> Var k _) _ _ -> Just k
-      LstM (cut -> Var k _) _ _ -> Just k
-      SigM (cut -> Var k _) _   -> Just k
-      Let _ (Lam k (subst k -> f)) -> fstMat f
-      SupM _ _ (Lam a (subst a -> Lam b (subst b -> f))) -> fstMat f
-      Pat [(cut -> Var k _)] _ _  -> Just k
-      _ -> Nothing
+    argsStri args bod = map (\k -> if alwaysMat k bod then "!&"++k else "&"++k) args
+    alwaysMat x bod  = case cut bod of
+      -- Matches this var
+      BitM (cut -> Var y _) _ _  | x == y -> True
+      NatM (cut -> Var y _) _ _  | x == y -> True
+      LstM (cut -> Var y _) _ _  | x == y -> True
+      SigM (cut -> Var y _) _    | x == y -> True
+      Pat [(cut -> Var y _)] _ _ | x == y -> True
+      -- All branches of the mat eventually match this var
+      BitM _ f t                                         -> alwaysMat x f && alwaysMat x t
+      NatM _ z (Lam p (subst p -> s))                    -> alwaysMat x z && alwaysMat x s
+      LstM _ n (Lam h (subst h -> Lam t (subst t -> c))) -> alwaysMat x n && alwaysMat x c
+      SigM _ (Lam l (subst l -> (Lam r (subst r -> f)))) -> alwaysMat x f
+      Pat _ _ c                                          -> all (\(p,f) -> alwaysMat x f) c
+      -- Pass through terms that just bind
+      Let _ (Lam k (subst k -> f)) -> alwaysMat x f
+      SupM _ _ (Lam a (subst a -> Lam b (subst b -> f))) -> alwaysMat x f
+      _ -> False
 
 -- Extract constructor definition info from type definitions
 extractTypeDef :: Term -> Maybe ([Name], [(Name, [Name])])
