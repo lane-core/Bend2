@@ -313,7 +313,7 @@ def WTreeRec(tag: WTreeTag(Nat)) -> Set:
     case @WLeaf{value}:
       return Empty
     case @WNode:
-      return &{&lft, &rgt}
+      return enum{&lft, &rgt}
 
 # W-Tree Type
 def WTree : Set =

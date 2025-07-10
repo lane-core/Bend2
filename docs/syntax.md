@@ -34,8 +34,8 @@ F64      # Float (64-bit)
 ### Enums
 
 ```python
-@{@A, @B, @C}   # Enum type
-@Tag            # Enum value
+enum{&A, &B, &C} # Enum type
+&Tag             # Enum value
 ```
 
 ### Compound Types
@@ -51,6 +51,8 @@ any x:A y:B. C  # Multi-argument dependent pair
 T{a == b}       # Propositional Equality type
 ```
 
+Note: `∀` and `Σ` can be used as `all` and `any`.
+
 ## Variables and Bindings
 
 ```python
@@ -64,7 +66,7 @@ x : T = v       # Assignment (typed)
 ```python
 lambda x. e        # Lambda abstraction
 lambda x y z. e    # Multi-argument lambda
-f(a, b, c)      # Function application
+f(a, b, c)         # Function application
 
 # Function definition sugar:
 def f(x: A, y: B) -> C:
@@ -72,6 +74,8 @@ def f(x: A, y: B) -> C:
 ```
 
 Note: All functions take exactly one argument. Multi-argument syntax is sugar for curried functions.
+
+Note: `λ` can be used as `lambda`.
 
 ## Pattern Matching
 
@@ -106,9 +110,7 @@ match x y ...:
   ...
 ```
 
-The `with` clause serves two purposes:
-- Linearizes a variable (useful on HVM target only)
-- Specializes its type (useful for theorem proving)
+The `with` clause linearizes a variable (useful to control HVM output).
 
 ### Eliminators (Low-level)
 
@@ -121,7 +123,7 @@ Pattern matches desugar to native eliminators, which can also be used directly:
 λ{[]: n; <>: c}       # List eliminator
 λ{(,): f}             # Pair eliminator
 λ{{==}: f}            # Equality eliminator
-λ{@A: a; @B: b}       # Enum eliminator
+λ{&A: a; &B: b}       # Enum eliminator
 ```
 
 ## Data Constructors
@@ -204,13 +206,13 @@ This desugars to a function that returns a dependent pair:
 - First component: an enum tag (@Nil or @Cons)
 - Second component: a record of fields based on the constructor
 
-Constructor:
+## Constructors
 
 ```python
-@Cons{head,tail} # desugars to (@Cons,head,tail,())
+@Cons{head,tail}
 ```
 
-You can also pattern-match as usual.
+Note: this desugars to `(&Cons,head,tail,())`; similarly for all constructors.
 
 ## Imports
 

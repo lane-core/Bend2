@@ -255,7 +255,10 @@ parseAllSimple = do
 -- | Syntax: &{tag1, tag2, tag3}
 parseEnu :: Parser Term
 parseEnu = label "enum type" $ do
-  _ <- try $ symbol "&{"
+  _ <- try $ do
+    _ <- symbol "enum"
+    _ <- symbol "{"
+    return ()
   s <- sepBy parseSymbolName (symbol ",")
   _ <- symbol "}"
   return (Enu s)
@@ -660,7 +663,6 @@ parseFun t = label "function type" $ do
 parseAnd :: Term -> Parser Term
 parseAnd t = label "product type" $ do
   _ <- try $ symbol "&"
-  notFollowedBy (satisfy isNameChar)
   u <- parseTerm
   return (Sig t (Lam "_" (\_ -> u)))
 
