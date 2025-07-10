@@ -250,8 +250,8 @@ patToHVM book ctx [x] m c@(([p], f) : _) =
     (Var k i)    -> HVM.Let HVM.LAZY (bindNam k) (termToHVM book ctx x) (termToHVM book ctx f) -- unreachable?
     (Emp)        -> HVM.Era
     (One)        -> termToHVM book ctx f
-    (Bt0)        -> simpleMat
-    (Bt1)        -> simpleMat
+    (Bt0)        -> bitMat
+    (Bt1)        -> bitMat
     (Zer)        -> simpleMat
     (Suc _)      -> simpleMat
     (Nil)        -> simpleMat
@@ -281,7 +281,13 @@ patToHVM book ctx [x] m c@(([p], f) : _) =
         (Tup (Var a _) (Var b _)) -> ("#P", [bindNam a, bindNam b], termToHVM book ctx x)
         _                         -> ("_", [], termToHVM book ctx x)
       ) (filter (not . badPatCase) c)
-
+    bitMat = case c of
+      (([Bt0],f):([Bt1],t):_) -> tm (termToHVM book ctx f) (termToHVM book ctx t)
+      (([Bt1],t):([Bt0],f):_) -> tm (termToHVM book ctx f) (termToHVM book ctx t)
+      (([Bt0],f):([Var k _],t):_) -> tm (termToHVM book ctx f) (HVM.Let HVM.LAZY k (HVM.Op2 HVM.OP_ADD (HVM.U32 1) (HVM.Var "bp$")) (termToHVM book ctx t))
+      (([Bt1],f):([Var k _],t):_) -> tm (HVM.Let HVM.LAZY k (HVM.U32 0) (termToHVM book ctx f)) (termToHVM book ctx t)
+      _ -> HVM.Era
+      where tm f t = HVM.Mat HVM.SWI (termToHVM book ctx x) hvmMv [ ("0", [], f), ("1+bp$", [], t)]
 patToHVM book ctx x m c = HVM.Era
 
 ctrPatToHVM :: Book -> MS.Map Name HVM.Name -> Term -> [Move] -> [Case] -> Maybe HVM.Core
