@@ -204,7 +204,7 @@ whnfOp2 lv book op a b =
   case a' of
     Sup l a0 a1 -> whnf lv book $ Sup l (Op2 op a0 b0) (Op2 op a1 b1)
       where (b0, b1) = dup book l b
-    _ -> let b' = whnf lv book b in
+    _ -> let b' = whnf Full book b in
       case b' of
         Sup l b0 b1 -> whnf lv book $ Sup l (Op2 op a'0 b0) (Op2 op a'1 b1)
           where (a'0, a'1) = dup book l a'
@@ -292,63 +292,26 @@ whnfOp2 lv book op a b =
             POW -> Val (CHR_V (toEnum ((fromEnum x) ^ (fromEnum y))))
             _   -> Op2 op a' b'
           -- Nat operations: normalize to Nat/op calls
-          (a'@Zer, b'@Zer) -> case op of
-            ADD -> App (App (Ref "Nat/add") a') b'
-            SUB -> App (App (Ref "Nat/sub") a') b'
-            MUL -> App (App (Ref "Nat/mul") a') b'
-            DIV -> App (App (Ref "Nat/div") a') b'
-            MOD -> App (App (Ref "Nat/mod") a') b'
-            POW -> App (App (Ref "Nat/pow") a') b'
-            EQL -> App (App (Ref "Nat/eql") a') b'
-            NEQ -> App (App (Ref "Nat/neq") a') b'
-            LST -> App (App (Ref "Nat/lst") a') b'
-            GRT -> App (App (Ref "Nat/grt") a') b'
-            LEQ -> App (App (Ref "Nat/leq") a') b'
-            GEQ -> App (App (Ref "Nat/geq") a') b'
-            _   -> Op2 op a' b'
-          (a'@Zer, b'@(Suc _)) -> case op of
-            ADD -> App (App (Ref "Nat/add") a') b'
-            SUB -> App (App (Ref "Nat/sub") a') b'
-            MUL -> App (App (Ref "Nat/mul") a') b'
-            DIV -> App (App (Ref "Nat/div") a') b'
-            MOD -> App (App (Ref "Nat/mod") a') b'
-            POW -> App (App (Ref "Nat/pow") a') b'
-            EQL -> App (App (Ref "Nat/eql") a') b'
-            NEQ -> App (App (Ref "Nat/neq") a') b'
-            LST -> App (App (Ref "Nat/lst") a') b'
-            GRT -> App (App (Ref "Nat/grt") a') b'
-            LEQ -> App (App (Ref "Nat/leq") a') b'
-            GEQ -> App (App (Ref "Nat/geq") a') b'
-            _   -> Op2 op a' b'
-          (a'@(Suc _), b'@Zer) -> case op of
-            ADD -> App (App (Ref "Nat/add") a') b'
-            SUB -> App (App (Ref "Nat/sub") a') b'
-            MUL -> App (App (Ref "Nat/mul") a') b'
-            DIV -> App (App (Ref "Nat/div") a') b'
-            MOD -> App (App (Ref "Nat/mod") a') b'
-            POW -> App (App (Ref "Nat/pow") a') b'
-            EQL -> App (App (Ref "Nat/eql") a') b'
-            NEQ -> App (App (Ref "Nat/neq") a') b'
-            LST -> App (App (Ref "Nat/lst") a') b'
-            GRT -> App (App (Ref "Nat/grt") a') b'
-            LEQ -> App (App (Ref "Nat/leq") a') b'
-            GEQ -> App (App (Ref "Nat/geq") a') b'
-            _   -> Op2 op a' b'
-          (a'@(Suc _), b'@(Suc _)) -> case op of
-            ADD -> App (App (Ref "Nat/add") a') b'
-            SUB -> App (App (Ref "Nat/sub") a') b'
-            MUL -> App (App (Ref "Nat/mul") a') b'
-            DIV -> App (App (Ref "Nat/div") a') b'
-            MOD -> App (App (Ref "Nat/mod") a') b'
-            POW -> App (App (Ref "Nat/pow") a') b'
-            EQL -> App (App (Ref "Nat/eql") a') b'
-            NEQ -> App (App (Ref "Nat/neq") a') b'
-            LST -> App (App (Ref "Nat/lst") a') b'
-            GRT -> App (App (Ref "Nat/grt") a') b'
-            LEQ -> App (App (Ref "Nat/leq") a') b'
-            GEQ -> App (App (Ref "Nat/geq") a') b'
-            _   -> Op2 op a' b'
-          _ -> Op2 op a' b'
+          (a'@Zer, b')     -> natOp op a' b'
+          (a'@(Suc _), b') -> natOp op a' b'
+          (a', b'@Zer)     -> natOp op a' b'
+          (a', b'@(Suc _)) -> natOp op a' b'
+          _                -> Op2 op a' b'
+  where
+    natOp op a b = case op of
+      ADD -> whnf lv book $ App (App (Ref "Nat/add") a) b
+      SUB -> whnf lv book $ App (App (Ref "Nat/sub") a) b
+      MUL -> whnf lv book $ App (App (Ref "Nat/mul") a) b
+      DIV -> whnf lv book $ App (App (Ref "Nat/div") a) b
+      MOD -> whnf lv book $ App (App (Ref "Nat/mod") a) b
+      POW -> whnf lv book $ App (App (Ref "Nat/pow") a) b
+      EQL -> whnf lv book $ App (App (Ref "Nat/eql") a) b
+      NEQ -> whnf lv book $ App (App (Ref "Nat/neq") a) b
+      LST -> whnf lv book $ App (App (Ref "Nat/lst") a) b
+      GRT -> whnf lv book $ App (App (Ref "Nat/grt") a) b
+      LEQ -> whnf lv book $ App (App (Ref "Nat/leq") a) b
+      GEQ -> whnf lv book $ App (App (Ref "Nat/geq") a) b
+      _   -> Op2 op a b
 
 whnfOp1 :: EvalLevel -> Book -> NOp1 -> Term -> Term
 whnfOp1 lv book op a =
