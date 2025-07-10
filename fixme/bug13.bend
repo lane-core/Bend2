@@ -1,3 +1,8 @@
+# fixed
+# (the error was improved from CantInfer to TypeMismatch)
+
+###
+
 def String() -> Set:
   Char[]
 

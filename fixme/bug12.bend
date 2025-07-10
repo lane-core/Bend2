@@ -1,5 +1,7 @@
 # FIXME
 
+# make a smaller version that reproduces it
+
 ###
 
 # very ugly error message:
