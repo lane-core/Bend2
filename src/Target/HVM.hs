@@ -7,7 +7,7 @@ module Target.HVM where
 import Control.Monad (forM)
 import Core.Type
 import Data.Either (partitionEithers)
-import Data.List (unsnoc)
+import Data.List (unsnoc, sortBy)
 import Data.Maybe (fromJust)
 import Debug.Trace
 import qualified Data.Map as M
@@ -252,8 +252,11 @@ patToHVM book ctx [x] m c@(([p], f) : _) =
     _ -> HVM.Era
   where
     -- A match that is contained in a single Pat term (bool, nat, list, pair)
-    simpleMat = HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) hvmMv hvmCs
+    simpleMat = HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) hvmMv sortedCs
     hvmMv     = map (\(k,v) -> (bindNam k, termToHVM book ctx v)) m
+    -- Bend can output first True (1/_) and then False (0), so need to sort.
+    -- A coincidence, but lexicographic string order actually works for this (var can't start with $)
+    sortedCs  = sortBy (\(a,_,_) (b,_,_) -> compare a b) hvmCs
     hvmCs     = map (\(p,x) -> case head p of
         (Bt0)                     -> ("0", [], termToHVM book ctx x)
         (Bt1)                     -> ("_", [], termToHVM book ctx x)
