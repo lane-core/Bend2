@@ -266,10 +266,11 @@ check d span book ctx term goal =
     (term, Rwt a b goal) -> do
       let new_ctx  = rewriteCtx 3 d book a b ctx
       let new_goal = rewrite 3 d book a b goal
+      let new_term = rewrite 0 d book a b term
       -- trace ("> REWRITE " ++ show (normal d book a) ++ " → " ++ show (normal d book b) ++ ":\n" ++
         -- "- ctx : " ++ show (normalCtx d book ctx) ++ " → " ++ show (normalCtx d book new_ctx) ++ "\n" ++
         -- "- goal: " ++ show (normal d book goal) ++ " → " ++ show (normal d book new_goal)) $
-      check d span book new_ctx term new_goal
+      check d span book new_ctx new_term new_goal
     (Era, _) -> do
       Done ()
     (Let v f, _) -> do
