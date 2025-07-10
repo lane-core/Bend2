@@ -1,4 +1,6 @@
-# FIX ME
+# not a bug
+# use Σx:Nat.Nat instead. ΣNat.F accepts a function and can be used with lambda
+# cases, like ΣNat.λ{0n:...;1n+:...}
 
 ###
 
