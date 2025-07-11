@@ -81,9 +81,10 @@ autoImportRef visited (Right (book@(Book defs), newRefs)) refName = do
                   let mergedBook = mergeBooks book importedBook'
                   let additionalRefs = getBookDeps importedBook'
                   return (Right (mergedBook, S.union newRefs additionalRefs))
-        else
-          return (Left $ "Definition '" ++ refName ++ "' not found. Expected file at: " ++ filePath ++ 
-                        ", " ++ pyFilePath ++ ", " ++ altFilePath ++ " or " ++ altPyFilePath)
+        else do
+          -- putStrLn $ "WARNING: unbound variable: '" ++ refName ++ "'"
+          return $ Right (book, newRefs)
+          
 
 -- Merge two books, preferring definitions from the first book
 mergeBooks :: Book -> Book -> Book

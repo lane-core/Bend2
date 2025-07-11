@@ -45,7 +45,7 @@ infer d span book@(Book defs) ctx term =
     Ref k -> do
       case deref book k of
         Just (_, _, typ) -> Done typ
-        Nothing          -> Fail $ CantInfer span (formatCtx d book ctx)
+        Nothing          -> Fail $ Undefined span (formatCtx d book ctx) k
     Sub x -> do
       infer d span book ctx x
     Let v f -> do

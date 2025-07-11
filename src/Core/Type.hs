@@ -172,6 +172,7 @@ data Span = Span
 
 data Error
   = CantInfer Span Ctx
+  | Undefined Span Ctx Name
   | TypeMismatch Span Ctx Term Term
   | TermMismatch Span Ctx Term Term
   | IncompleteMatch Span Ctx
@@ -326,6 +327,10 @@ instance Show Span where
 instance Show Error where
   show (CantInfer span ctx) = 
     "\x1b[1mCantInfer:\x1b[0m" ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
+    show span
+  show (Undefined span ctx name) = 
+    "\x1b[1mUndefined:\x1b[0m " ++ name ++
     "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
   show (TypeMismatch span ctx goal typ) = 
