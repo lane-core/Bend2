@@ -255,7 +255,10 @@ instance Show Term where
               Var k i -> show (Var k i)
               Ref k   -> show (Ref k)
               fn      -> "(" ++ show fn ++ ")"
-  show (Eql t a b)     = show t ++ "{" ++ show a ++ "==" ++ show b ++ "}"
+  show (Eql t a b)     = case t of
+    (Sig _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
+    (All _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
+    _         ->        show t ++        "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)           = "{==}"
   show (EqlM x f)      = "~ " ++ show x ++ " { {==}:" ++ show f ++ " }"
   show (Ind t)         = "~~ {" ++ show t ++ "}"
