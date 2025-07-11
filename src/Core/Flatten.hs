@@ -53,58 +53,59 @@ import Core.WHNF
 -- Outer scrutinees will be moved inside via 'with'.
 
 flatten :: Int -> Book -> Term -> Term
-flatten d book (Var n i)    = Var n i
-flatten d book (Ref n)      = Ref n
-flatten d book (Sub t)      = Sub (flatten d book t)
-flatten d book (Fix n f)    = Fix n (\x -> flatten (d+1) book (f x))
-flatten d book (Let v f)    = Let (flatten d book v) (flatten d book f)
-flatten d book Set          = Set
-flatten d book (Chk x t)    = Chk (flatten d book x) (flatten d book t)
-flatten d book Emp          = Emp
-flatten d book (EmpM x)     = EmpM (flatten d book x)
-flatten d book Uni          = Uni
-flatten d book One          = One
-flatten d book (UniM x f)   = UniM (flatten d book x) (flatten d book f)
-flatten d book Bit          = Bit
-flatten d book Bt0          = Bt0
-flatten d book Bt1          = Bt1
-flatten d book (BitM x f t) = BitM (flatten d book x) (flatten d book f) (flatten d book t)
-flatten d book Nat          = Nat
-flatten d book Zer          = Zer
-flatten d book (Suc n)      = Suc (flatten d book n)
-flatten d book (NatM x z s) = NatM (flatten d book x) (flatten d book z) (flatten d book s)
-flatten d book (Lst t)      = Lst (flatten d book t)
-flatten d book Nil          = Nil
-flatten d book (Con h t)    = Con (flatten d book h) (flatten d book t)
-flatten d book (LstM x n c) = LstM (flatten d book x) (flatten d book n) (flatten d book c)
-flatten d book (Enu s)      = Enu s
-flatten d book (Sym s)      = Sym s
-flatten d book (EnuM x c e) = EnuM (flatten d book x) [(s, flatten d book t) | (s, t) <- c] (flatten d book e)
-flatten d book (Sig a b)    = Sig (flatten d book a) (flatten d book b)
-flatten d book (Tup a b)    = Tup (flatten d book a) (flatten d book b)
-flatten d book (SigM x f)   = SigM (flatten d book x) (flatten d book f)
-flatten d book (All a b)    = All (flatten d book a) (flatten d book b)
-flatten d book (Lam n f)    = Lam n (\x -> flatten (d+1) book (f x))
-flatten d book (App f x)    = App (flatten d book f) (flatten d book x)
-flatten d book (Eql t a b)  = Eql (flatten d book t) (flatten d book a) (flatten d book b)
-flatten d book Rfl          = Rfl
-flatten d book (EqlM x f)   = EqlM (flatten d book x) (flatten d book f)
-flatten d book (Met i t x)  = Met i (flatten d book t) (map (flatten d book) x)
-flatten d book (Ind t)      = Ind (flatten d book t)
-flatten d book (Frz t)      = Frz (flatten d book t)
-flatten d book Era          = Era
-flatten d book (Sup l a b)  = Sup (flatten d book l) (flatten d book a) (flatten d book b)
-flatten d book (SupM x l f) = SupM (flatten d book x) (flatten d book l) (flatten d book f)
-flatten d book (Frk l a b)  = Frk (flatten d book l) (flatten d book a) (flatten d book b)
-flatten d book (Num t)      = Num t
-flatten d book (Val v)      = Val v
-flatten d book (Op2 o a b)  = Op2 o (flatten d book a) (flatten d book b)
-flatten d book (Op1 o a)    = Op1 o (flatten d book a)
-flatten d book (Pri p)      = Pri p
-flatten d book (Log s x)    = Log (flatten d book s) (flatten d book x)
-flatten d book (Loc s t)    = Loc s (flatten d book t)
-flatten d book (Rwt a b x)  = Rwt (flatten d book a) (flatten d book b) (flatten d book x)
-flatten d book (Pat s m c)  = simplify d $ flattenPat d book (Pat s m c)
+flatten d book term = case term of
+  (Var n i)    -> Var n i
+  (Ref n)      -> Ref n
+  (Sub t)      -> Sub (flatten d book t)
+  (Fix n f)    -> Fix n (\x -> flatten (d+1) book (f x))
+  (Let v f)    -> Let (flatten d book v) (flatten d book f)
+  Set          -> Set
+  (Chk x t)    -> Chk (flatten d book x) (flatten d book t)
+  Emp          -> Emp
+  (EmpM x)     -> EmpM (flatten d book x)
+  Uni          -> Uni
+  One          -> One
+  (UniM x f)   -> UniM (flatten d book x) (flatten d book f)
+  Bit          -> Bit
+  Bt0          -> Bt0
+  Bt1          -> Bt1
+  (BitM x f t) -> BitM (flatten d book x) (flatten d book f) (flatten d book t)
+  Nat          -> Nat
+  Zer          -> Zer
+  (Suc n)      -> Suc (flatten d book n)
+  (NatM x z s) -> NatM (flatten d book x) (flatten d book z) (flatten d book s)
+  (Lst t)      -> Lst (flatten d book t)
+  Nil          -> Nil
+  (Con h t)    -> Con (flatten d book h) (flatten d book t)
+  (LstM x n c) -> LstM (flatten d book x) (flatten d book n) (flatten d book c)
+  (Enu s)      -> Enu s
+  (Sym s)      -> Sym s
+  (EnuM x c e) -> EnuM (flatten d book x) [(s, flatten d book t) | (s, t) <- c] (flatten d book e)
+  (Sig a b)    -> Sig (flatten d book a) (flatten d book b)
+  (Tup a b)    -> Tup (flatten d book a) (flatten d book b)
+  (SigM x f)   -> SigM (flatten d book x) (flatten d book f)
+  (All a b)    -> All (flatten d book a) (flatten d book b)
+  (Lam n f)    -> Lam n (\x -> flatten (d+1) book (f x))
+  (App f x)    -> App (flatten d book f) (flatten d book x)
+  (Eql t a b)  -> Eql (flatten d book t) (flatten d book a) (flatten d book b)
+  Rfl          -> Rfl
+  (EqlM x f)   -> EqlM (flatten d book x) (flatten d book f)
+  (Met i t x)  -> Met i (flatten d book t) (map (flatten d book) x)
+  (Ind t)      -> Ind (flatten d book t)
+  (Frz t)      -> Frz (flatten d book t)
+  Era          -> Era
+  (Sup l a b)  -> Sup (flatten d book l) (flatten d book a) (flatten d book b)
+  (SupM x l f) -> SupM (flatten d book x) (flatten d book l) (flatten d book f)
+  (Frk l a b)  -> Frk (flatten d book l) (flatten d book a) (flatten d book b)
+  (Num t)      -> Num t
+  (Val v)      -> Val v
+  (Op2 o a b)  -> Op2 o (flatten d book a) (flatten d book b)
+  (Op1 o a)    -> Op1 o (flatten d book a)
+  (Pri p)      -> Pri p
+  (Log s x)    -> Log (flatten d book s) (flatten d book x)
+  (Loc s t)    -> Loc s (flatten d book t)
+  (Rwt a b x)  -> Rwt (flatten d book a) (flatten d book b) (flatten d book x)
+  (Pat s m c)  -> simplify d $ flattenPat d book (Pat s m c)
 
 isVarCol :: [Case] -> Bool
 isVarCol []                        = True
@@ -131,7 +132,7 @@ flattenPat d book pat =
         picks   = Pat (fs   ++ ss) ms ps
         drops   = Pat (var d : ss) ms ds
     flattenPatGo d book pat@(Pat [] ms (([],rhs):cs)) =
-      flattenPat d book rhs
+      flatten d book rhs
     flattenPatGo d book (Loc l t) =
       Loc l (flattenPat d book t)
     flattenPatGo d book pat =

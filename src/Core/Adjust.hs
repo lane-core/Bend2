@@ -18,9 +18,17 @@ import Core.WHNF
 -- It uses a book of already-adjusted definitions for context during flattening.
 adjust :: Book -> Term -> Term
 adjust book term =
-  -- trace (">> parsed: " ++ show ret) $
-  ret
-  where ret = bind (unfrk 0 (unpat 0 (flatten 0 book term)))
+  -- trace (">> term  = " ++ show term) $
+  -- trace (">> flat  = " ++ show flat) $
+  -- trace (">> nopat = " ++ show nopat) $
+  -- trace (">> nofrk = " ++ show nofrk) $
+  -- trace (">> done  = " ++ show done) $
+  done
+  where
+    flat  = flatten 0 book term
+    nopat = unpat 0 flat
+    nofrk = unfrk 0 nopat
+    done  = bind nofrk
 
 -- | Adjusts a term. simplifying patterns but leaving terms as Pats.
 adjustWithPats :: Book -> Term -> Term
