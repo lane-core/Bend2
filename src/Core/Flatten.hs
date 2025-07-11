@@ -609,7 +609,7 @@ subst name val term = go name val term where
     Var k _    -> if k == name then val else term
     Ref k      -> Ref k
     Sub t      -> Sub (go name val t)
-    Fix k f    -> Fix k (\x -> go name val (f x))
+    Fix k f    -> if k == name then term else Fix k (\x -> go name val (f x))
     Let v f    -> Let (go name val v) (go name val f)
     Chk x t    -> Chk (go name val x) (go name val t)
     Set        -> Set
@@ -637,7 +637,7 @@ subst name val term = go name val term where
     Tup a b    -> Tup (go name val a) (go name val b)
     SigM x f   -> SigM (go name val x) (go name val f)
     All a b    -> All (go name val a) (go name val b)
-    Lam k f    -> Lam k (\x -> go name val (f x))
+    Lam k f    -> if k == name then term else Lam k (\x -> go name val (f x))
     App f x    -> App (go name val f) (go name val x)
     Eql t a b  -> Eql (go name val t) (go name val a) (go name val b)
     Rfl        -> Rfl
