@@ -244,6 +244,7 @@ refAppToHVM book ctx term =
         return $ foldl HVM.App call appArgs
       | otherwise = undefined
 
+-- Convert a match (Pat) term to HVM
 patToHVM :: Book -> MS.Map Name HVM.Name -> [Term] -> [Move] -> [Case] -> HVM.Core
 patToHVM book ctx [x] m c@(([p], f) : _) =
   case p of
@@ -256,7 +257,7 @@ patToHVM book ctx [x] m c@(([p], f) : _) =
     (Suc _)      -> simpleMat
     (Nil)        -> simpleMat
     (Con _ _)    -> simpleMat
-    (Sym _)      -> error "TODO: patToHVM Sym"
+    (Sym _)      -> error "Nested matches on constructors and matches on symbols are not yet supported on Bend-to-HVM compiler."
     (Tup _ _)    ->
       case ctrPatToHVM book ctx x m c of
         Just hvm -> hvm
@@ -290,6 +291,8 @@ patToHVM book ctx [x] m c@(([p], f) : _) =
       where tm f t = HVM.Mat HVM.SWI (termToHVM book ctx x) hvmMv [ ("0", [], f), ("1+bp$", [], t)]
 patToHVM book ctx x m c = HVM.Era
 
+-- Since ctrs are desugared to a Sym + some Tups, the nested matches on the fields happen before the Tup matches on the entire constructor.
+-- We need to somehow reorder the cases so that firsdt we match on the entire constructor and only then on the fields.
 ctrPatToHVM :: Book -> MS.Map Name HVM.Name -> Term -> [Move] -> [Case] -> Maybe HVM.Core
 ctrPatToHVM book ctx x m c = case c of
   (([Tup (Var a _) (Var kB _)], Pat [(Var k _)] _ c) : _) ->
