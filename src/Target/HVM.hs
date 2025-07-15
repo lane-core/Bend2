@@ -33,8 +33,8 @@ prelude = unlines [
     "data Nat { #Z #S{n} }",
     "data Pair { #P{fst snd} }",
     "@fix(&f) = (f @fix(f))",
-    "@CHAR_TO_U64 = λx. (+ x 0)",
-    "@U64_TO_CHAR = λx. (+ (& x 0xFFFFFFFF) '\0')",
+    "@CHAR_TO_U64(x) = (+ x 0)",
+    "@U64_TO_CHAR(x) = (+ (& x 0xFFFFFFFF) '\0')",
     "",
     "// Bend to HVM Compiler Output"
   ]
@@ -112,7 +112,7 @@ termToHVM book ctx term = go term where
     case MS.lookup n ctx of
       Just n  -> HVM.Var n
       Nothing -> HVM.Var n
-  go (Ref k)      = fromJust (refAppToHVM book ctx term)
+  go (Ref k)      = fromJust (refAppToHVM book ctx (Ref k))
   go (Sub t)      = termToHVM book ctx t
   go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))]
   go (Let v f)    =
@@ -188,9 +188,7 @@ termToHVM book ctx term = go term where
   go (Frk l a b)  = HVM.Era
   go (Loc s t)    = termToHVM book ctx t
   go (Rwt _ _ x)  = termToHVM book ctx x
-  go (Pri p)      = case p of
-    U64_TO_CHAR -> HVM.Ref "U64_TO_CHAR" 0 []
-    CHAR_TO_U64 -> HVM.Ref "CHAR_TO_U64" 0 []
+  go (Pri p)      = fromJust (refAppToHVM book ctx (Pri p))
   go (Pat x m c)  = patToHVM book ctx x m c
 
 ctrToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Term -> Maybe HVM.Core
@@ -239,21 +237,23 @@ refAppToHVM book ctx term =
           argsHVM     = map (termToHVM book ctx) (drop (length era) args)
           ari         = length arg
           len         = length argsHVM
-      in wrapRef ctx k argsHVM len ari
+      in return $ wrapRef (defNam k) argsHVM len ari
+    (Pri p, args) -> case p of
+      U64_TO_CHAR -> return $ wrapRef "U64_TO_CHAR" (map (termToHVM book ctx) args) (length args) 1
+      CHAR_TO_U64 -> return $ wrapRef "CHAR_TO_U64" (map (termToHVM book ctx) args) (length args) 1
     _ -> Nothing
   where
     -- Eta expand the Ref if less args than needed and rebuild the Apps if more args than needed
-    wrapRef ctx k args len ari
-      | len <  ari = do
+    wrapRef nam args len ari
+      | len < ari =
         let var = "_a" ++ show len
-        bod <- wrapRef (MS.insert var var ctx) k (args ++ [HVM.Var var]) (len+1) ari
-        return $ HVM.Lam (bindNam var) bod
-      | len == ari = do
-        return $ HVM.Ref (defNam k) 0 args
-      | len >  ari = do
+            bod = wrapRef nam (args ++ [HVM.Var var]) (len+1) ari
+        in HVM.Lam (bindNam var) bod
+      | len == ari =
+        HVM.Ref nam 0 args
+      | len >  ari =
         let (refArgs, appArgs) = splitAt ari args
-        let ref = HVM.Ref (defNam k) 0 refArgs
-        return $ foldl HVM.App ref appArgs
+        in foldl HVM.App (HVM.Ref nam 0 refArgs) appArgs
       | otherwise = undefined
 
 -- Convert a match (Pat) term to HVM
