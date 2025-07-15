@@ -2,17 +2,17 @@
 
 ###
 
-# import alias gives the error:
+# explicit import with alias doesn't import
+# works with the change inside f add => fixme/add_for_import
 
-  # Error: Definition 'add' not found. Expected file at: add.bend, add.bend.py, add/_.bend or add/_.bend.py
-
-# no error would happen if we instead had the unaliased
-
-  # def f() -> Nat -> Nat -> Nat:
-  #   add_for_import
-
-import add_for_import as add
+import fixme/add_for_import as add
 
 def f() -> Nat -> Nat -> Nat:
   add
 
+  # ✗ f
+  # Undefined: add
+  # Context:
+  #
+  # Location: (line 10, column 3)
+  # 10 |   add
