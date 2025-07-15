@@ -25,10 +25,10 @@ import Core.Type
 
 -- | Book parsing
 
--- | Syntax: def name : Type = term | type Name<T>(i) -> Type: cases | name : Type = term
+-- | Syntax: def name : Type = term | type Name<T>(i) -> Type: cases | name : Type = term | try name : Type
 parseDefinition :: Parser (Name, Defn)
 parseDefinition = do
-  (name, defn) <- choice [ parseType , parseDef ]
+  (name, defn) <- choice [ parseType , parseDef , parseTry ]
   return $ (name, defn)
 
 -- | Syntax: def name : Type = term | def name(x: T1, y: T2) -> RetType: body
@@ -162,6 +162,14 @@ parseArg expr = do
   _ <- symbol ":"
   t <- if expr then parseTerm else parseTerm
   return (k, t)
+
+parseTry :: Parser (Name, Defn)
+parseTry = do
+  _       <- symbol "try"
+  tryName <- name
+  _       <- symbol ":"
+  tryType <- parseTerm
+  return (tryName, (False, Met tryName tryType [], tryType))
 
 -- | Main entry points
 

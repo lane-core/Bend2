@@ -120,7 +120,7 @@ data Term
   | EqlM Term Term     -- ~x{{==}:f}
 
   -- MetaVar
-  | Met Int Type [Term] -- ?N:T{x0,x1,...}
+  | Met Name Type [Term] -- ?N:T{x0,x1,...}
   
   -- Hints
   | Ind Type -- ~~T

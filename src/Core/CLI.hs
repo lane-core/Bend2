@@ -92,8 +92,8 @@ processFile :: FilePath -> IO ()
 processFile file = do
   book <- parseFile file
   let bookAdj = adjustBook book
-  checkDefinitions bookAdj
   -- putStrLn $ show bookAdj
+  checkDefinitions bookAdj
   runMain bookAdj
 
 -- | Try to format JavaScript code using prettier if available

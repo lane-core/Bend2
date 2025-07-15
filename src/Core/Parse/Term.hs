@@ -32,9 +32,7 @@ import Core.Type
 -- | Parse a "core" form
 parseTermIni :: Parser Term
 parseTermIni = choice
-  [ parseGen
-  , parseTst
-  , parseFix
+  [ parseFix
   , parseLam
   , parseBifIf
   , parsePat
@@ -813,43 +811,6 @@ parseFix = label "fixed point" $ do
   f <- parseTerm
   return (Fix k (\v -> f))
 
--- | Syntax: gen name(x: Type1, y: Type2) -> RetType { context } body
-parseGen :: Parser Term
-parseGen = label "generation" $ do
-  _    <- try $ keyword "gen"
-  f    <- name
-  args <- parens $ sepEndBy parseArg (symbol ",")
-  _    <- symbol "->"
-  retT <- parseTerm
-  ctx  <- option [] parseContext
-  body <- parseTerm
-  let metT = foldr nestType retT args
-  return $ Let (Chk (Met 1 metT ctx) metT) (Lam f (\_ -> body))
-  where
-    parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
-    nestType (argName, argType) currType = All argType $ Lam argName (\v -> currType)
-
--- | Syntax: test term1 == term2 : Type ...
-parseTst :: Parser Term
-parseTst = label "test statement" $ do
-  _ <- try $ keyword "test"
-  a <- parseTerm
-  _ <- symbol "=="
-  b <- parseTerm
-  skip -- FIXME: do NOT use skip outside of 'lexeme'
-  _ <- symbol ":"
-  t <- parseTerm
-  skip
-  nxt <- choice [ parseEnd , parseTst ]
-  return (Let (Eql t a b) (Lam "_" (\_ -> nxt)))
-
--- | Syntax: end term
-parseEnd :: Parser Term
-parseEnd = label "end gen statement" $ do
-  _ <- try $ symbol "end"
-  c <- parseTerm
-  return c
-
 -- | Syntax: ~{term} | ~term | ~ term { cases... }
 parseTildeExpr :: Parser Term
 parseTildeExpr = label "tilde expression (induction or match)" $ do
@@ -1007,11 +968,6 @@ parseSupMCases scrut = do
   f <- parseTerm
   _ <- parseSemi
   return (SupM scrut l f)
-
--- | Syntax: {term1, term2, term3}
--- Helper for parsing context in gen statements
-parseContext :: Parser [Term]
-parseContext = braces $ sepEndBy parseTerm (symbol ",")
 
 -- | Main entry points
 
