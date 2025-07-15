@@ -193,7 +193,8 @@ whnfAppPri lv book p x =
     Sup l a b -> whnf lv book $ Sup l (App (Pri p) a) (App (Pri p) b)
     x' -> case (p, x') of
       (U64_TO_CHAR, Val (U64_V n)) -> Val (CHR_V (toEnum (fromIntegral n)))
-      _ -> App (Pri p) x'
+      (CHAR_TO_U64, Val (CHR_V c)) -> Val (U64_V (fromIntegral (fromEnum c)))
+      _                            -> App (Pri p) x'
 
 -- Numeric operations
 -- ------------------

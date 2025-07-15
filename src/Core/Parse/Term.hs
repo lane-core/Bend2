@@ -159,6 +159,7 @@ parseVar = label "variable" $ do
     "F64"         -> return (Num F64_T)
     "Char"        -> return (Num CHR_T)
     "U64_TO_CHAR" -> return (Pri U64_TO_CHAR)
+    "CHAR_TO_U64" -> return (Pri CHAR_TO_U64)
     _             -> return $ Var n 0
 
 -- | Syntax: ()

@@ -46,6 +46,7 @@ data NOp1
 
 data PriF
   = U64_TO_CHAR
+  | CHAR_TO_U64
   deriving (Show, Eq)
 
 -- Bend's Term Type
@@ -274,6 +275,7 @@ instance Show Term where
   show (Log s x)       = "log " ++ show s ++ " " ++ show x
   show (Pri p)         = pri p where
     pri U64_TO_CHAR    = "U64_TO_CHAR"
+    pri CHAR_TO_U64    = "CHAR_TO_U64"
   show (Num U64_T)     = "U64"
   show (Num I64_T)     = "I64"
   show (Num F64_T)     = "F64"

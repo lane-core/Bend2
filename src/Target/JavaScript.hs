@@ -523,6 +523,7 @@ ctToJS book fnName fnArgs isTail var term dep = case term of
 
     compilePri p = case p of
       U64_TO_CHAR -> set var "(x => String.fromCharCode(Number(x)))"
+      CHAR_TO_U64 -> set var "(x => BigInt(x.charCodeAt(0)))"
 
     compileLet var v f dep = do
       vName <- fresh

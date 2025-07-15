@@ -33,6 +33,8 @@ prelude = unlines [
     "data Nat { #Z #S{n} }",
     "data Pair { #P{fst snd} }",
     "@fix(&f) = (f @fix(f))",
+    "@CHAR_TO_U64 = λx. (+ x 0)",
+    "@U64_TO_CHAR = λx. (+ (& x 0xFFFFFFFF) '\0')",
     "",
     "// Bend to HVM Compiler Output"
   ]
@@ -186,7 +188,9 @@ termToHVM book ctx term = go term where
   go (Frk l a b)  = HVM.Era
   go (Loc s t)    = termToHVM book ctx t
   go (Rwt _ _ x)  = termToHVM book ctx x
-  go (Pri p)      = HVM.Era
+  go (Pri p)      = case p of
+    U64_TO_CHAR -> HVM.Ref "U64_TO_CHAR" 0 []
+    CHAR_TO_U64 -> HVM.Ref "CHAR_TO_U64" 0 []
   go (Pat x m c)  = patToHVM book ctx x m c
 
 ctrToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Term -> Maybe HVM.Core
@@ -432,3 +436,13 @@ showHVM lv tm =
     prettyLst (HVM.Ctr "#Cons" [h, t]) acc = prettyLst t (showHVM lv h : acc)
     prettyLst (HVM.Ctr "#Nil" [])      acc = Just $ "[" ++ unwords (reverse acc) ++ "]"
     prettyLst _ _ = Nothing
+
+
+
+
+
+
+
+
+
+
