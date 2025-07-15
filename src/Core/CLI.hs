@@ -81,7 +81,8 @@ runMain book = do
           putStrLn $ show e
           exitFailure
         Done typ -> do
-          let results = flatten $ collapse 0 book $ normal 0 book mainCall
+          -- let results = flatten $ collapse 0 book $ normal 0 book mainCall
+          let results = [normal 0 book mainCall]
           putStrLn ""
           forM_ results $ \ term -> do
             print term

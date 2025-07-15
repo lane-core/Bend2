@@ -362,16 +362,29 @@ parseBraceClauses arity = manyTill singleClause (lookAhead (symbol "}")) where
     pure (pats, body)
 
 -- | Syntax: fork L:a else:b
+--   or: fork L:a elif:b elif:c ... else:d
 parseFrk :: Parser Term
 parseFrk = label "fork" $ do
   _ <- try $ symbol "fork"
   l <- parseTerm
   _ <- symbol ":"
   a <- parseTerm
+  elifs <- many parseElif
   _ <- symbol "else"
   _ <- symbol ":"
-  b <- parseTerm
-  return $ Frk l a b
+  elseBranch <- parseTerm
+  return $ buildForkChain l a elifs elseBranch
+  where
+    parseElif :: Parser Term
+    parseElif = do
+      _ <- keyword "elif"
+      _ <- symbol ":"
+      parseTerm
+    
+    buildForkChain :: Term -> Term -> [Term] -> Term -> Term
+    buildForkChain l firstBranch [] elseBranch = Frk l firstBranch elseBranch
+    buildForkChain l firstBranch (elif:elifs) elseBranch = 
+      Frk l firstBranch (buildForkChain l elif elifs elseBranch)
 
 -- | Syntax: log string expr
 parseLog :: Parser Term
