@@ -34,7 +34,7 @@ prelude = unlines [
     "data Pair { #P{fst snd} }",
     "@fix(&f) = (f @fix(f))",
     "@CHAR_TO_U64(x) = (+ x 0)",
-    "@U64_TO_CHAR(x) = (+ (& x 0xFFFFFFFF) '\0')",
+    "@U64_TO_CHAR(x) = (+ (& x 0xFFFFFFFF) '\\0')",
     "",
     "// Bend to HVM Compiler Output"
   ]
