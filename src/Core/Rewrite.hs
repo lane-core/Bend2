@@ -62,7 +62,7 @@ rewriteGo lv d book old neo val =
     Tup a b    -> Tup (rewrite lv d book old neo a) (rewrite lv d book old neo b)
     SigM x f   -> SigM (rewrite lv d book old neo x) (rewrite lv d book old neo f)
     All a b    -> All (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-    Lam k f    -> Lam k (\v -> rewrite lv d book old neo (f v))
+    Lam k t f  -> Lam k (fmap (rewrite lv d book old neo) t) (\v -> rewrite lv d book old neo (f v))
     App f x    -> foldl (\ f x -> App f (rewrite lv d book old neo x)) fn xs
             where (fn,xs) = collectApps (App f x) []
     Eql t a b  -> Eql (rewrite lv d book old neo t) (rewrite lv d book old neo a) (rewrite lv d book old neo b)

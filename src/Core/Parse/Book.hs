@@ -70,7 +70,7 @@ parseDefFunction f = label "function definition" $ do
   where
     -- parseArg = (,) <$> name <*> (symbol ":" *> parseTerm)
     -- TODO: refactor parseArg to use a do-block instead. DO IT BELOW:
-    nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (\v -> currType)), Lam argName (\v -> currBod))
+    nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (Just argType) (\v -> currType)), Lam argName (Just argType) (\v -> currBod))
 
 -- | Parse a module path like Path/To/Lib
 parseModulePath :: Parser String
@@ -122,13 +122,13 @@ parseType = label "datatype declaration" $ do
   let tags = map fst cases
       mkFields :: [(Name, Term)] -> Term
       mkFields []             = Uni
-      mkFields ((fn,ft):rest) = Sig ft (Lam fn (\_ -> mkFields rest))
+      mkFields ((fn,ft):rest) = Sig ft (Lam fn (Just ft) (\_ -> mkFields rest))
       --   match ctr: case @Tag: …
       branches v = Pat [v] [] [([Sym tag], mkFields flds) | (tag, flds) <- cases]
       -- The body of the definition (see docstring).
-      body0 = Sig (Enu tags) (Lam "ctr" (\v -> branches v))
+      body0 = Sig (Enu tags) (Lam "ctr" (Just $ Enu tags) (\v -> branches v))
       -- Wrap the body with lambdas for the parameters.
-      nest (n, ty) (tyAcc, bdAcc) = (All ty  (Lam n (\_ -> tyAcc)) , Lam n (\_ -> bdAcc))
+      nest (n, ty) (tyAcc, bdAcc) = (All ty  (Lam n (Just ty) (\_ -> tyAcc)) , Lam n (Just ty) (\_ -> bdAcc))
       (fullTy, fullBody) = foldr nest (retTy, body0) args
       term = fullBody
   return (tName, (True, term, fullTy))

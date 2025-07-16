@@ -63,59 +63,59 @@ ctToTerm _ = error "ctToTerm: only variables can be converted back"
 -- Convert Term to CT (erase types, keep runtime values)
 termToCT :: Book -> Term -> Int -> CT
 termToCT book term dep = case term of
-  Var k i    -> CVar k i
-  Ref k      -> CRef k
-  Sub t      -> termToCT book t dep
-  Fix k f    -> CFix k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
-  Let v f    -> case f of
-     Lam k g -> CLet (termToCT book v dep) (\x -> termToCT book (g (ctToTerm x)) (dep+1))
-     _       -> termToCT book (App f v) dep
-  Set        -> CEra
-  Chk x _    -> termToCT book x dep
-  Emp        -> CEra
-  EmpM _     -> CEra
-  Uni        -> CEra
-  Bit        -> CEra
-  Nat        -> CEra
-  Lst _      -> CEra
-  Enu _      -> CEra
-  Num _      -> CEra
-  Sig _ _    -> CEra
-  All _ _    -> CEra
-  Eql _ _ _  -> CEra
-  Ind _      -> CEra
-  Frz _      -> CEra
-  Met _ _ _  -> CEra
-  Loc _ t    -> termToCT book t dep
-  Rwt _ _ _  -> error "TODO"
-  One        -> COne
-  Zer        -> CZer
-  Suc n      -> CSuc (termToCT book n dep)
-  Nil        -> CNil
-  Con h t    -> CCon (termToCT book h dep) (termToCT book t dep)
-  Bt0        -> CBt0
-  Bt1        -> CBt1
-  Sym s      -> CSym s
-  Tup a b    -> CTup (termToCT book a dep) (termToCT book b dep)
-  Val v      -> CVal v
-  Lam k f    -> CLam k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
-  App f x    -> CApp (termToCT book f dep) (termToCT book x dep)
-  UniM x f   -> CApp (CUse (termToCT book f dep)) (termToCT book x dep)
-  BitM x f t -> CApp (CBif (termToCT book f dep) (termToCT book t dep)) (termToCT book x dep)
-  NatM x z s -> CApp (CSwi (termToCT book z dep) (termToCT book s dep)) (termToCT book x dep)
-  LstM x n c -> CApp (CMat (termToCT book n dep) (termToCT book c dep)) (termToCT book x dep)
-  EnuM x c d -> CApp (CCse (map (\(s,t) -> (s, termToCT book t dep)) c) (termToCT book d dep)) (termToCT book x dep)
-  SigM x f   -> CApp (CGet (termToCT book f dep)) (termToCT book x dep)
-  EqlM x f   -> CApp (CEql (termToCT book f dep)) (termToCT book x dep)
-  Op2 o a b  -> COp2 o (termToCT book a dep) (termToCT book b dep)
-  Op1 o a    -> COp1 o (termToCT book a dep)
-  Log s x    -> termToCT book x dep  -- For JavaScript, just return the result expression
-  Pri p      -> CPri p
-  Rfl        -> CEra
-  Era        -> CEra
-  Sup l a b  -> CSup (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
-  SupM x l f -> CSupM (termToCT book x dep) (termToCT book l dep) (termToCT book f dep)
-  Frk l a b  -> CFrk (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
+  Var k i      -> CVar k i
+  Ref k        -> CRef k
+  Sub t        -> termToCT book t dep
+  Fix k f      -> CFix k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
+  Let v f      -> case f of
+     Lam k _ g -> CLet (termToCT book v dep) (\x -> termToCT book (g (ctToTerm x)) (dep+1))
+     _         -> termToCT book (App f v) dep
+  Set          -> CEra
+  Chk x _      -> termToCT book x dep
+  Emp          -> CEra
+  EmpM _       -> CEra
+  Uni          -> CEra
+  Bit          -> CEra
+  Nat          -> CEra
+  Lst _        -> CEra
+  Enu _        -> CEra
+  Num _        -> CEra
+  Sig _ _      -> CEra
+  All _ _      -> CEra
+  Eql _ _ _    -> CEra
+  Ind _        -> CEra
+  Frz _        -> CEra
+  Met _ _ _    -> CEra
+  Loc _ t      -> termToCT book t dep
+  Rwt _ _ _    -> error "TODO"
+  One          -> COne
+  Zer          -> CZer
+  Suc n        -> CSuc (termToCT book n dep)
+  Nil          -> CNil
+  Con h t      -> CCon (termToCT book h dep) (termToCT book t dep)
+  Bt0          -> CBt0
+  Bt1          -> CBt1
+  Sym s        -> CSym s
+  Tup a b      -> CTup (termToCT book a dep) (termToCT book b dep)
+  Val v        -> CVal v
+  Lam k _ f    -> CLam k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
+  App f x      -> CApp (termToCT book f dep) (termToCT book x dep)
+  UniM x f     -> CApp (CUse (termToCT book f dep)) (termToCT book x dep)
+  BitM x f t   -> CApp (CBif (termToCT book f dep) (termToCT book t dep)) (termToCT book x dep)
+  NatM x z s   -> CApp (CSwi (termToCT book z dep) (termToCT book s dep)) (termToCT book x dep)
+  LstM x n c   -> CApp (CMat (termToCT book n dep) (termToCT book c dep)) (termToCT book x dep)
+  EnuM x c d   -> CApp (CCse (map (\(s,t) -> (s, termToCT book t dep)) c) (termToCT book d dep)) (termToCT book x dep)
+  SigM x f     -> CApp (CGet (termToCT book f dep)) (termToCT book x dep)
+  EqlM x f     -> CApp (CEql (termToCT book f dep)) (termToCT book x dep)
+  Op2 o a b    -> COp2 o (termToCT book a dep) (termToCT book b dep)
+  Op1 o a      -> COp1 o (termToCT book a dep)
+  Log s x      -> termToCT book x dep  -- For JavaScript, just return the result expression
+  Pri p        -> CPri p
+  Rfl          -> CEra
+  Era          -> CEra
+  Sup l a b    -> CSup (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
+  SupM x l f   -> CSupM (termToCT book x dep) (termToCT book l dep) (termToCT book f dep)
+  Frk l a b    -> CFrk (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
   Pat _ _ _  -> error "unreachable"
 
 -- JavaScript State Monad

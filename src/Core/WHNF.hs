@@ -74,11 +74,11 @@ whnfFix lv book k f = whnf lv book (f (Fix k f))
 whnfApp :: EvalLevel -> Book -> Term -> Term -> Term
 whnfApp lv book f x =
   case whnf Full book f of
-    Lam _ f'  -> whnfAppLam lv book f' x
-    Pri p     -> whnfAppPri lv book p x
-    Sup l a b -> whnfAppSup lv book l a b x
-    Frk _ _ _ -> error "unrechable"
-    f'        -> App f' x
+    Lam _ t f' -> whnfAppLam lv book f' x
+    Pri p      -> whnfAppPri lv book p x
+    Sup l a b  -> whnfAppSup lv book l a b x
+    Frk _ _ _  -> error "unrechable"
+    f'         -> App f' x
 
 -- Normalizes a lambda application
 whnfAppLam :: EvalLevel -> Book -> Body -> Term -> Term
@@ -404,9 +404,9 @@ dup book l (SigM x f)   = (SigM x0 f0, SigM x1 f1)
 dup book l (All a b)    = (All a0 b0, All a1 b1)
   where (a0,a1)         = dup book l a
         (b0,b1)         = dup book l b
-dup book l (Lam k f)    = (lam0, lam1)
-  where lam0            = Lam k $ \x -> fst (dup book l (f x))
-        lam1            = Lam k $ \x -> snd (dup book l (f x))
+dup book l (Lam k t f)  = (lam0, lam1)
+  where lam0            = Lam k t $ \x -> fst (dup book l (f x))
+        lam1            = Lam k t $ \x -> snd (dup book l (f x))
 dup book l (App f x)    = (App f0 x0, App f1 x1)
   where (f0,f1)         = dup book l f
         (x0,x1)         = dup book l x
@@ -495,7 +495,7 @@ normal d book term =
     Tup a b    -> Tup (normal d book a) (normal d book b)
     SigM x f   -> SigM (normal d book x) (normal d book f)
     All a b    -> All (normal d book a) (normal d book b)
-    Lam k f    -> Lam k (\x -> normal d book (f (Sub x)))
+    Lam k t f  -> Lam k (fmap (normal d book) t) (\x -> normal d book (f (Sub x)))
     App f x    -> foldl (\f' x' -> App f' (normal d book x')) fn xs
       where (fn,xs) = collectApps (App f x) []
     Eql t a b  -> Eql (normal d book t) (normal d book a) (normal d book b)
@@ -535,7 +535,7 @@ ugly (cut -> LstM _ _ _) = True
 ugly (cut -> EnuM _ _ _) = True
 ugly (cut -> SigM _ _  ) = True
 ugly (cut -> EqlM _ _  ) = True
-ugly (cut -> Lam _ _   ) = True
+ugly (cut -> Lam _ _ _ ) = True
 ugly (cut -> App f x   ) = ugly f
 ugly _                   = False
 

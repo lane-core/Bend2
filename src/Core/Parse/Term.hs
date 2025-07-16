@@ -204,7 +204,7 @@ parseSig = label "dependent pair type" $ do
     _  -> do
       _ <- symbol "."
       b <- parseTerm
-      return $ foldr (\(x, t) acc -> Sig t (Lam x (\v -> acc))) b bindings
+      return $ foldr (\(x, t) acc -> Sig t (Lam x (Just t) (\v -> acc))) b bindings
   where
     parseBinding = try $ do
       x <- name
@@ -231,7 +231,7 @@ parseAll = label "dependent function type" $ do
     _  -> do
       _ <- symbol "."
       b <- parseTerm
-      return $ foldr (\(x, t) acc -> All t (Lam x (\v -> acc))) b bindings
+      return $ foldr (\(x, t) acc -> All t (Lam x (Just t) (\v -> acc))) b bindings
   where
     parseBinding = try $ do
       x <- name
@@ -669,14 +669,14 @@ parseFun :: Term -> Parser Term
 parseFun t = label "function type" $ do
   _ <- try $ symbol "->"
   u <- parseTerm
-  return (All t (Lam "_" (\_ -> u)))
+  return (All t (Lam "_" (Just t) (\_ -> u)))
 
 -- | Syntax: Type1 & Type2
 parseAnd :: Term -> Parser Term
 parseAnd t = label "product type" $ do
   _ <- try $ symbol "&"
   u <- parseTerm
-  return (Sig t (Lam "_" (\_ -> u)))
+  return (Sig t (Lam "_" (Just t) (\_ -> u)))
 
 -- | Syntax: term :: Type
 parseChk :: Term -> Parser Term
@@ -776,7 +776,7 @@ parseAss t = label "location binding" $ do
   _ <- parseSemi
   b <- expectBody "assignment" parseTerm
   case t of
-    Var x _ -> return $ Let v (Lam x (\_ -> b))
+    Var x _ -> return $ Let v (Lam x Nothing (\_ -> b))
     _       -> return $ Pat [v] [] [([t], b)]
 
 -- | HOAS‐style binders
@@ -789,18 +789,24 @@ parseLam = label "lambda abstraction" $ do
     notFollowedBy (symbol "{")
     return ()
   -- Parse terms instead of just names to support patterns
-  pats <- some parseTerm
+  -- pats <- some parseTerm
+  binders <- some $ do
+    pat <- parseTerm
+    mtyp <- optional $ do
+      _ <- symbol ":"
+      parseTerm
+    return (pat, mtyp)
   _  <- symbol "."
   body  <- parseTerm
   -- Desugar pattern lambdas
-  return $ foldr desugarLamPat body (zip [0..] pats)
+  return $ foldr desugarLamPat body (zip [0..] binders)
   where
-    desugarLamPat :: (Int, Term) -> Term -> Term
-    desugarLamPat (_  , cut -> (Var x _)) acc = Lam x (\_ -> acc)
-    desugarLamPat (idx, pat)              acc = 
+    desugarLamPat :: (Int, (Term, Maybe Term)) -> Term -> Term
+    desugarLamPat (_  , (cut -> (Var x _), mtyp)) acc = Lam x mtyp (\_ -> acc)
+    desugarLamPat (idx, (pat,mtyp))               acc = 
       -- Generate a fresh variable name using index
       let freshVar = "_" ++ show idx
-      in Lam freshVar (\_ -> Pat [Var freshVar 0] [] [([pat], acc)])
+      in Lam freshVar mtyp (\_ -> Pat [Var freshVar 0] [] [([pat], acc)])
 
 -- | Syntax: μ f. body
 parseFix :: Parser Term

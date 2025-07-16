@@ -68,14 +68,14 @@ compileFn book nam tm ty =
       SigM (cut -> Var y _) _    | x == y -> True
       Pat [(cut -> Var y _)] _ _ | x == y -> True
       -- All branches of the mat eventually match this var
-      BitM _ f t                                         -> alwaysMat x f && alwaysMat x t
-      NatM _ z (Lam p (subst p -> s))                    -> alwaysMat x z && alwaysMat x s
-      LstM _ n (Lam h (subst h -> Lam t (subst t -> c))) -> alwaysMat x n && alwaysMat x c
-      SigM _ (Lam l (subst l -> (Lam r (subst r -> f)))) -> alwaysMat x f
-      Pat _ _ c                                          -> all (\(p,f) -> alwaysMat x f) c
+      BitM _ f t                                             -> alwaysMat x f && alwaysMat x t
+      NatM _ z (Lam p _ (subst p -> s))                      -> alwaysMat x z && alwaysMat x s
+      LstM _ n (Lam h _ (subst h -> Lam t _ (subst t -> c))) -> alwaysMat x n && alwaysMat x c
+      SigM _ (Lam l _ (subst l -> (Lam r _ (subst r -> f)))) -> alwaysMat x f
+      Pat _ _ c                                              -> all (\(p,f) -> alwaysMat x f) c
       -- Pass through terms that just bind
-      Let _ (Lam k (subst k -> f))                       -> alwaysMat x f
-      SupM _ _ (Lam a (subst a -> Lam b (subst b -> f))) -> alwaysMat x f
+      Let _ (Lam k _ (subst k -> f))                         -> alwaysMat x f
+      SupM _ _ (Lam a _ (subst a -> Lam b _ (subst b -> f))) -> alwaysMat x f
       _ -> False
 
 -- Extract constructor definition info from type definitions
@@ -86,11 +86,11 @@ extractTypeDef tm = do
   return (args, css)
   where
     getTypeArgs :: Term -> [Name] -> Maybe ([Name], Term)
-    getTypeArgs (Lam arg tm) args = getTypeArgs (tm (Var arg 0)) (args ++ [arg])
-    getTypeArgs tm           args = Just (args, tm)
+    getTypeArgs (Lam arg _ tm) args = getTypeArgs (tm (Var arg 0)) (args ++ [arg])
+    getTypeArgs tm             args = Just (args, tm)
 
     getTypeCss :: Term -> Maybe [(Name, [Name])]
-    getTypeCss (Sig (Enu _) (Lam "ctr" (subst "ctr" -> Pat [(Var "ctr" _)] [] cs))) =
+    getTypeCss (Sig (Enu _) (Lam "ctr" _ (subst "ctr" -> Pat [(Var "ctr" _)] [] cs))) =
       forM cs (\(p, bod) -> do
         ctr <- case p of
           [Sym ctr] -> Just ctr
@@ -100,7 +100,7 @@ extractTypeDef tm = do
     getTypeCss _ = Nothing
 
     getTypeCsFds :: Term -> Maybe [Name]
-    getTypeCsFds (Sig _ (Lam fd (subst fd -> tm))) = do
+    getTypeCsFds (Sig _ (Lam fd _ (subst fd -> tm))) = do
       fds <- getTypeCsFds tm
       return $ fd : fds
     getTypeCsFds Uni = Just []
@@ -117,8 +117,8 @@ termToHVM book ctx term = go term where
   go (Fix n f)    = HVM.Ref "fix" 0 [HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))]
   go (Let v f)    =
     case f of
-      (Lam n (subst n -> f)) -> HVM.Let HVM.LAZY (bindNam n) (termToHVM book ctx v) (termToHVM book ctx f)
-      _                      -> HVM.App (termToHVM book ctx f) (termToHVM book ctx v)
+      (Lam n _ (subst n -> f)) -> HVM.Let HVM.LAZY (bindNam n) (termToHVM book ctx v) (termToHVM book ctx f)
+      _                        -> HVM.App (termToHVM book ctx f) (termToHVM book ctx v)
   go Set          = HVM.Era
   go (Chk v t)    = termToHVM book ctx v
   go Emp          = HVM.Era
@@ -135,7 +135,7 @@ termToHVM book ctx term = go term where
   go (Suc p)      = HVM.Ctr "#S" [termToHVM book ctx p]
   go (NatM x z s) =
     case s of
-      (Lam n (subst n -> s)) ->
+      (Lam n _ (subst n -> s)) ->
         HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Z", [], termToHVM book ctx z), ("#S", [n], termToHVM book ctx s)]
       _ ->
         HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Z", [], termToHVM book ctx z), ("#S", ["x$p"], HVM.App (termToHVM book ctx s) (HVM.Var "x$p"))]
@@ -144,7 +144,7 @@ termToHVM book ctx term = go term where
   go (Con h t)    = HVM.Ctr "#Cons" [termToHVM book ctx h, termToHVM book ctx t]
   go (LstM x n c) =
     case c of
-      (Lam h (subst h -> (Lam t (subst t -> c)))) ->
+      (Lam h _ (subst h -> (Lam t _ (subst t -> c)))) ->
         HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Nil", [], termToHVM book ctx n), ("#Cons", [h, t], termToHVM book ctx c)]
       _ ->
         HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Nil", [], termToHVM book ctx n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM book ctx c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
@@ -163,12 +163,12 @@ termToHVM book ctx term = go term where
       Nothing -> HVM.Ctr "#P" [termToHVM book ctx x, termToHVM book ctx y]
   go (SigM x f)   =
     case f of
-      (Lam l (subst l -> (Lam r (subst r -> f)))) ->
+      (Lam l _ (subst l -> (Lam r _ (subst r -> f)))) ->
         HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#P", [l, r], termToHVM book ctx f)]
       _ ->
         HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#P", ["x$l", "x$r"], HVM.App (HVM.App (termToHVM book ctx f) (HVM.Var "x$l")) (HVM.Var "x$r"))]
   go (All _ _)    = HVM.Era
-  go (Lam n f)    = HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))
+  go (Lam n _ f)  = HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))
   go (App f x)    =
     case refAppToHVM book ctx term of
       Just hvm -> hvm
@@ -354,7 +354,7 @@ replace old new xs = foldr (\c acc -> if c == old then new ++ acc else c : acc) 
 -- The remaining body after the lambdas
 collectLamArgs :: Term -> Term -> [Name] -> [(Name, Term)] -> ([Name], [(Name, Term)], Term)
 collectLamArgs tm ty argsEra argsBod = case (tm, ty) of
-  (Lam xtm (subst xtm -> bod), All (cut -> xty) (Lam x (subst x -> ty))) ->
+  (Lam xtm _ (subst xtm -> bod), All (cut -> xty) (Lam x _ (subst x -> ty))) ->
     case (xty, argsBod) of
       (Set, []) -> collectLamArgs bod ty (argsEra ++ [xtm]) argsBod
       _         -> collectLamArgs bod ty argsEra (argsBod ++ [(xtm, xty)])

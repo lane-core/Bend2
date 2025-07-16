@@ -7,10 +7,14 @@ module Core.Equal where
 import System.IO.Unsafe
 import Data.IORef
 import Data.Bits
+import Data.Maybe (fromMaybe, isNothing)
+import Control.Applicative
 import GHC.Float (castDoubleToWord64, castWord64ToDouble)
 
 import Core.Type
 import Core.WHNF
+
+import Debug.Trace
 
 -- Equality
 -- ========
@@ -62,7 +66,7 @@ cmp lv d book a b =
     (Tup aa ba    , Tup ab bb    ) -> eql lv d book aa ab && eql lv d book ba bb
     (SigM xa fa   , SigM xb fb   ) -> eql lv d book xa xb && eql lv d book fa fb
     (All aa ba    , All ab bb    ) -> eql lv d book aa ab && eql lv d book ba bb
-    (Lam ka fa    , Lam kb fb    ) -> eql lv (d+1) book (fa (Var ka d)) (fb (Var kb d))
+    (Lam ka ta fa , Lam kb tb fb ) -> eql lv (d+1) book (fa (Var ka d)) (fb (Var kb d)) && fromMaybe True (liftA2 (eql lv d book) ta tb)
     (App fa xa    , App fb xb    ) -> eql lv d book fa fb && eql lv d book xa xb
     (Eql ta aa ba , Eql tb ab bb ) -> eql lv d book ta tb && eql lv d book aa ab && eql lv d book ba bb
     -- (Eql ta _  _  , b            ) -> eql lv d book ta b

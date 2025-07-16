@@ -201,9 +201,10 @@ collapse dep book term = case term of
     a' <- collapse dep book a
     b' <- collapse dep book b
     return $ All a' b'
-  Lam k f     -> do
+  Lam k t f     -> do
+    t' <- traverse (collapse dep book) t
     f' <- collapse (dep+1) book (f (Var k dep))
-    return $ Lam k (\_ -> f')
+    return $ Lam k t' (\_ -> f')
   App f x     -> do
     f' <- collapse dep book f
     x' <- collapse dep book x

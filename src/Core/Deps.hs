@@ -55,7 +55,7 @@ collectDeps bound term = case term of
   Tup a b     -> S.union (collectDeps bound a) (collectDeps bound b)
   SigM x f    -> S.union (collectDeps bound x) (collectDeps bound f)
   All a b     -> S.union (collectDeps bound a) (collectDeps bound b)
-  Lam k f     -> collectDeps (S.insert k bound) (f (Var k 0))
+  Lam k t f   -> S.union (collectDeps (S.insert k bound) (f (Var k 0))) (foldMap (collectDeps bound) t)
   App f x     -> S.union (collectDeps bound f) (collectDeps bound x)
   Eql t a b   -> S.unions [collectDeps bound t, collectDeps bound a, collectDeps bound b]
   Rfl         -> S.empty

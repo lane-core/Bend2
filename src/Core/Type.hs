@@ -110,9 +110,9 @@ data Term
   | SigM Term Term      -- ~x{(,):f}
 
   -- Function
-  | All Type Type -- ∀A.B
-  | Lam Name Body -- λx.f
-  | App Term Term -- (f x)
+  | All Type Type              -- ∀A.B
+  | Lam Name (Maybe Term) Body -- λx.f | λx:A . f
+  | App Term Term              -- (f x)
 
   -- Equality
   | Eql Type Term Term -- T{a==b}
@@ -225,32 +225,34 @@ instance Show Term where
   show (Sym s)        = "&" ++ s
   show (EnuM x c e)   = "~ " ++ show x ++ " { " ++ intercalate " ; " (map (\(s,t) -> "&" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
   show (Sig a b) = case b of
-      Lam "_" f -> showArg a ++ " & " ++ showCodomain (f (Var "_" 0))
-      Lam k   f -> "Σ" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
-      _         -> "Σ" ++ showArg a ++ ". " ++ show b
+      Lam "_" t f -> showArg a ++ " & " ++ showCodomain (f (Var "_" 0))
+      Lam k t f   -> "Σ" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
+      _           -> "Σ" ++ showArg a ++ ". " ++ show b
     where
       showArg t = case t of
           All{} -> "(" ++ show t ++ ")"
           Sig{} -> "(" ++ show t ++ ")"
           _     -> show t
       showCodomain t = case t of
-          Sig _ (Lam k _) | k /= "_" -> "(" ++ show t ++ ")"
+          Sig _ (Lam k t _) | k /= "_" -> "(" ++ show t ++ ")"
           _                           -> show t
   show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
   show (SigM x f)     = "~ " ++ show x ++ " { (,):" ++ show f ++ " }"
   show (All a b) = case b of
-      Lam "_" f -> showArg a ++ " -> " ++ showCodomain (f (Var "_" 0))
-      Lam k   f -> "∀" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
-      _         -> "∀" ++ showArg a ++ ". " ++ show b
+      Lam "_" t f -> showArg a ++ " -> " ++ showCodomain (f (Var "_" 0))
+      Lam k t f   -> "∀" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
+      _           -> "∀" ++ showArg a ++ ". " ++ show b
     where
       showArg t = case t of
           All{} -> "(" ++ show t ++ ")"
           Sig{} -> "(" ++ show t ++ ")"
           _     -> show t
       showCodomain t = case t of
-          All _ (Lam k _) | k /= "_"  -> "(" ++ show t ++ ")"
+          All _ (Lam k t _) | k /= "_"  -> "(" ++ show t ++ ")"
           _                           -> show t
-  show (Lam k f)      = "λ" ++ k ++ ". " ++ show (f (Var k 0))
+  show (Lam k t f)      = case t of
+    Just t  -> "λ" ++ k ++ " : " ++ show t ++ " . " ++ show (f (Var k 0))
+    Nothing -> "λ" ++ k ++ ". " ++ show (f (Var k 0))
   show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
            (fn, args) = collectApps app []
            fnStr      = case cut fn of
@@ -384,9 +386,9 @@ unlam k d f = f (Var k d)
 
 collectArgs :: Term -> ([(String, Term)], Term)
 collectArgs = go [] where
-  go acc (Loc _ t)         = go acc t
-  go acc (All t (Lam k f)) = go (acc ++ [(k, t)]) (f (Var k 0))
-  go acc goal              = (acc, goal)
+  go acc (Loc _ t)            = go acc t
+  go acc (All t (Lam k ty f)) = go (acc ++ [(k, t)]) (f (Var k 0))
+  go acc goal                 = (acc, goal)
 
 collectApps :: Term -> [Term] -> (Term, [Term])
 collectApps (cut -> App f x) args = collectApps f (x:args)
@@ -441,7 +443,7 @@ freeVars ctx tm = case tm of
   Tup a b    -> S.union (freeVars ctx a) (freeVars ctx b)
   SigM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
   All a b    -> S.union (freeVars ctx a) (freeVars ctx b)
-  Lam n f    -> freeVars (S.insert n ctx) (f (Var n 0))
+  Lam n t f  -> S.union (freeVars (S.insert n ctx) (f (Var n 0))) (foldMap (freeVars ctx) t)
   App f x    -> S.union (freeVars ctx f) (freeVars ctx x)
   Eql t a b  -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
   EqlM x f   -> S.union (freeVars ctx x) (freeVars ctx f)
