@@ -163,13 +163,32 @@ parseArg expr = do
   t <- if expr then parseTerm else parseTerm
   return (k, t)
 
+-- | Syntax: try name : Type { t1, t2, ... } | try name(x: Type1, y: Type2) -> Type { t1, t2, ... }
 parseTry :: Parser (Name, Defn)
 parseTry = do
-  _       <- symbol "try"
-  tryName <- name
-  _       <- symbol ":"
-  tryType <- parseTerm
-  return (tryName, (False, Met tryName tryType [], tryType))
+  _ <- symbol "try"
+  f <- name
+  choice
+    [ parseTryFunction f
+    , parseTrySimple f ]
+
+parseTrySimple :: Name -> Parser (Name, Defn)
+parseTrySimple nam = do
+  _   <- symbol ":"
+  typ <- parseTerm
+  ctx <- option [] $ braces $ sepEndBy parseTerm (symbol ",")
+  return (nam, (False, Met nam typ ctx, typ))
+
+parseTryFunction :: Name -> Parser (Name, Defn)
+parseTryFunction nam = label "try definition" $ do
+  tyParams <- option [] $ angles $ sepEndBy name (symbol ",")
+  regularArgs <- parens $ sepEndBy (parseArg False) (symbol ",")
+  let args = [(tp, Set) | tp <- tyParams] ++ regularArgs
+  _        <- symbol "->"
+  retTyp   <- parseTerm
+  let typ  = foldr (\(nm,ty) acc -> All ty (Lam nm Nothing (\_ -> acc))) retTyp args
+  ctx      <- option [] $ braces $ sepEndBy parseTerm (symbol ",")
+  return (nam, (False, Met nam typ ctx, typ))
 
 -- | Main entry points
 
