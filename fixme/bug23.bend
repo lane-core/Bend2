@@ -1,12 +1,5 @@
 # FIXME
 
-# Fixed. comparison in `equal` is context dependent once we have local definitions
-# because the defined variables can be equal to others not just by de brujin index,
-# but also by the values they are defined to be. Store those values
-# in context when checking a Let, then also check against them in equal.
-
-###
-
 # an unused variable causes a type mismatch by rewriting goal:
 
 def thm(A:Set, B:Set) -> (∀C:Set. (A->B->C) -> C) -> Σa:A.B:
