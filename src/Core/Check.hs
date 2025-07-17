@@ -272,8 +272,8 @@ check d span book ctx term goal =
   case (term, force book goal) of
     (term, Rwt a b goal) -> do
       let new_ctx  = rewriteCtx 3 d book a b ctx
-      let new_goal = rewrite 3 d book a b goal
-      let new_term = rewrite 0 d book a b term
+      let new_goal = rewrite 3 d book ctx a b goal
+      let new_term = rewrite 0 d book ctx a b term
       -- trace ("> REWRITE " ++ show (normal d book a) ++ " → " ++ show (normal d book b) ++ ":\n" ++
         -- "- ctx : " ++ show (normalCtx d book ctx) ++ " → " ++ show (normalCtx d book new_ctx) ++ "\n" ++
         -- "- goal: " ++ show (normal d book goal) ++ " → " ++ show (normal d book new_goal)) $
@@ -281,7 +281,12 @@ check d span book ctx term goal =
     (Era, _) -> do
       Done ()
     (Let v f, _) -> do
-      check d span book ctx (App f v) goal
+      case f of
+        Lam k t b -> do
+          xt <- infer d span book ctx v
+          let x = Var k d
+          check (d+1) span book (extend ctx k v xt) (b x) (Rwt v x goal)
+        _         -> check d span book ctx (App f v) goal
     (One, Uni) -> do
       Done ()
     (Bt0, Bit) -> do
@@ -312,7 +317,7 @@ check d span book ctx term goal =
         Eql t a b -> do
           check d span book ctx a t
           check d span book ctx b t
-          if not (equal d book a b)
+          if not (equal d book ctx a b)
             then Done ()
             else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
         _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Emp) (format d book xT)
@@ -378,7 +383,7 @@ check d span book ctx term goal =
     (Rfl, Eql t a b) -> do
       check d span book ctx a t
       check d span book ctx b t
-      if equal d book a b
+      if equal d book ctx a b
         then Done ()
         else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
     (EqlM x f, _) -> do
@@ -403,13 +408,13 @@ check d span book ctx term goal =
       ta <- infer d span book ctx a
       tb <- infer d span book ctx b
       tr <- inferOp2Type d span book ctx op a b ta tb
-      if equal d book tr goal
+      if equal d book ctx tr goal
         then Done ()
         else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book tr)
     (Op1 op a, _) -> do
       ta <- infer d span book ctx a
       tr <- inferOp1Type d span book ctx op a ta
-      if equal d book tr goal
+      if equal d book ctx tr goal
         then Done ()
         else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book tr)
     (Sup l a b, _) -> do
@@ -447,7 +452,7 @@ check d span book ctx term goal =
 verify :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 verify d span book ctx term goal = do
   t <- infer d span book ctx term
-  if equal d book t goal
+  if equal d book ctx t goal
     then Done ()
     else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book t)
 

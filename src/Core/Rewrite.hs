@@ -16,71 +16,71 @@ import Debug.Trace
 -- Rewrite
 -- =======
 
-rewrite :: Int -> Int -> Book -> Term -> Term -> Term -> Term
-rewrite lv d book old neo val
-  | eql lv d book old val = neo
+rewrite :: Int -> Int -> Book -> Ctx -> Term -> Term -> Term -> Term
+rewrite lv d book ctx old neo val
+  | eql lv d book (Ctx []) old val = neo
   | otherwise             = k
-      where k | lv == 0   = rewriteGo lv d book old neo $ val
-              | otherwise = rewriteGo lv d book old neo $ whnf Soft book val
+      where k | lv == 0   = rewriteGo lv d book ctx old neo $ val
+              | otherwise = rewriteGo lv d book ctx old neo $ whnf Soft book val
 
 -- Recursively rewrites occurrences of 'old' with 'neo' in 'val'
-rewriteGo :: Int -> Int -> Book -> Term -> Term -> Term -> Term
-rewriteGo lv d book old neo val =
+rewriteGo :: Int -> Int -> Book -> Ctx -> Term -> Term -> Term -> Term
+rewriteGo lv d book ctx old neo val =
   case val of
     Var k i    -> Var k i
     Ref k      -> Ref k
     Sub t      -> t
-    Fix k f    -> Fix k (\x -> rewrite lv d book old neo (f x))
-    Let v f    -> Let (rewrite lv d book old neo v) (rewrite lv d book old neo f)
+    Fix k f    -> Fix k (\x -> rewrite lv d book ctx old neo (f x))
+    Let v f    -> Let (rewrite lv d book ctx old neo v) (rewrite lv d book ctx old neo f)
     Set        -> Set
-    Chk x t    -> Chk (rewrite lv d book old neo x) (rewrite lv d book old neo t)
+    Chk x t    -> Chk (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo t)
     Emp        -> Emp
-    EmpM x     -> EmpM (rewrite lv d book old neo x)
+    EmpM x     -> EmpM (rewrite lv d book ctx old neo x)
     Uni        -> Uni
     One        -> One
-    UniM x f   -> UniM (rewrite lv d book old neo x) (rewrite lv d book old neo f)
+    UniM x f   -> UniM (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo f)
     Bit        -> Bit
     Bt0        -> Bt0
     Bt1        -> Bt1
-    BitM x f t -> BitM (rewrite lv d book old neo x) (rewrite lv d book old neo f) (rewrite lv d book old neo t)
+    BitM x f t -> BitM (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo f) (rewrite lv d book ctx old neo t)
     Nat        -> Nat
     Zer        -> Zer
-    Suc n      -> Suc (rewrite lv d book old neo n)
-    NatM x z s -> NatM (rewrite lv d book old neo x) (rewrite lv d book old neo z) (rewrite lv d book old neo s)
-    Lst t      -> Lst (rewrite lv d book old neo t)
+    Suc n      -> Suc (rewrite lv d book ctx old neo n)
+    NatM x z s -> NatM (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo z) (rewrite lv d book ctx old neo s)
+    Lst t      -> Lst (rewrite lv d book ctx old neo t)
     Nil        -> Nil
-    Con h t    -> Con (rewrite lv d book old neo h) (rewrite lv d book old neo t)
-    LstM x n c -> LstM (rewrite lv d book old neo x) (rewrite lv d book old neo n) (rewrite lv d book old neo c)
+    Con h t    -> Con (rewrite lv d book ctx old neo h) (rewrite lv d book ctx old neo t)
+    LstM x n c -> LstM (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo n) (rewrite lv d book ctx old neo c)
     Enu s      -> Enu s
     Sym s      -> Sym s
-    EnuM x c e -> EnuM (rewrite lv d book old neo x) (map (\(s,t) -> (s, rewrite lv d book old neo t)) c) (rewrite lv d book old neo e)
+    EnuM x c e -> EnuM (rewrite lv d book ctx old neo x) (map (\(s,t) -> (s, rewrite lv d book ctx old neo t)) c) (rewrite lv d book ctx old neo e)
     Num t      -> Num t
     Val v      -> Val v
-    Op2 o a b  -> Op2 o (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-    Op1 o a    -> Op1 o (rewrite lv d book old neo a)
-    Sig a b    -> Sig (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-    Tup a b    -> Tup (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-    SigM x f   -> SigM (rewrite lv d book old neo x) (rewrite lv d book old neo f)
-    All a b    -> All (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-    Lam k t f  -> Lam k (fmap (rewrite lv d book old neo) t) (\v -> rewrite lv d book old neo (f v))
-    App f x    -> foldl (\ f x -> App f (rewrite lv d book old neo x)) fn xs
+    Op2 o a b  -> Op2 o (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b)
+    Op1 o a    -> Op1 o (rewrite lv d book ctx old neo a)
+    Sig a b    -> Sig (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b)
+    Tup a b    -> Tup (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b)
+    SigM x f   -> SigM (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo f)
+    All a b    -> All (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b)
+    Lam k t f  -> Lam k (fmap (rewrite lv d book ctx old neo) t) (\v -> rewrite lv d book ctx old neo (f v))
+    App f x    -> foldl (\ f x -> App f (rewrite lv d book ctx old neo x)) fn xs
             where (fn,xs) = collectApps (App f x) []
-    Eql t a b  -> Eql (rewrite lv d book old neo t) (rewrite lv d book old neo a) (rewrite lv d book old neo b)
+    Eql t a b  -> Eql (rewrite lv d book ctx old neo t) (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b)
     Rfl        -> Rfl
-    EqlM x f   -> EqlM (rewrite lv d book old neo x) (rewrite lv d book old neo f)
-    Met i t a  -> Met i (rewrite lv d book old neo t) (map (rewrite lv d book old neo) a)
-    Ind t      -> Ind (rewrite lv d book old neo t)
-    Frz t      -> Frz (rewrite lv d book old neo t)
+    EqlM x f   -> EqlM (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo f)
+    Met i t a  -> Met i (rewrite lv d book ctx old neo t) (map (rewrite lv d book ctx old neo) a)
+    Ind t      -> Ind (rewrite lv d book ctx old neo t)
+    Frz t      -> Frz (rewrite lv d book ctx old neo t)
     Era        -> Era
-    Sup l a b  -> Sup l (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-    SupM x l f -> SupM (rewrite lv d book old neo x) (rewrite lv d book old neo l) (rewrite lv d book old neo f)
-    Frk l a b  -> Frk (rewrite lv d book old neo l) (rewrite lv d book old neo a) (rewrite lv d book old neo b)
-    Loc s t    -> Loc s (rewrite lv d book old neo t)
-    Rwt a b x  -> Rwt (rewrite lv d book old neo a) (rewrite lv d book old neo b) (rewrite lv d book old neo x)
-    Log s x    -> Log (rewrite lv d book old neo s) (rewrite lv d book old neo x)
+    Sup l a b  -> Sup l (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b)
+    SupM x l f -> SupM (rewrite lv d book ctx old neo x) (rewrite lv d book ctx old neo l) (rewrite lv d book ctx old neo f)
+    Frk l a b  -> Frk (rewrite lv d book ctx old neo l) (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b)
+    Loc s t    -> Loc s (rewrite lv d book ctx old neo t)
+    Rwt a b x  -> Rwt (rewrite lv d book ctx old neo a) (rewrite lv d book ctx old neo b) (rewrite lv d book ctx old neo x)
+    Log s x    -> Log (rewrite lv d book ctx old neo s) (rewrite lv d book ctx old neo x)
     Pri p      -> Pri p
-    Pat t m c  -> Pat (map (rewrite lv d book old neo) t) (map (\(k,v) -> (k, rewrite lv d book old neo v)) m) (map (\(ps,v) -> (map (rewrite lv d book old neo) ps, rewrite lv d book old neo v)) c)
+    Pat t m c  -> Pat (map (rewrite lv d book ctx old neo) t) (map (\(k,v) -> (k, rewrite lv d book ctx old neo v)) m) (map (\(ps,v) -> (map (rewrite lv d book ctx old neo) ps, rewrite lv d book ctx old neo v)) c)
 
 rewriteCtx :: Int -> Int -> Book -> Term -> Term -> Ctx -> Ctx
 rewriteCtx lv d book old neo (Ctx ctx) = Ctx (map rewriteAnn ctx)
-  where rewriteAnn (k,v,t) = (k, v, rewrite lv d book old neo t)
+  where rewriteAnn (k,v,t) = (k, v, rewrite lv d book (Ctx []) old neo t)
