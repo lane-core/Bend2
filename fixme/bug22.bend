@@ -1,10 +1,15 @@
 # FIXME
 
+# Fixed. Now use annotated lambdas to help infer
+
+def thm_fixed(A:Set) -> Σf: A->A . Σg:A->A . ∀a:A . A{g(f(a)) == a}:
+  (λa:A.a,λb.b,λc.finally)
+
 ###
 
 # can't infer type of inlined function λa.a
 
-def thm1(A:Set) -> Σf: A->A . Σg:A->A . ∀a:A . A{g(f(a)) == a}:
+def thm(A:Set) -> Σf: A->A . Σg:A->A . ∀a:A . A{g(f(a)) == a}:
   (λa.a,λb.b,λc.finally)
   # (id(A),λb.b,λc.finally)
 

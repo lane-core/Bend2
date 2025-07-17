@@ -1,5 +1,11 @@
 # FIXME
 
+# Fixed. Now use annotated lambdas to help infer
+
+def thm_fixed(A:Set, B:Set) -> (∀C:Set. (A->B->C) -> C) -> Σa:A.B:
+  make_pair = λa1:A . λb1:B . (a1,b1)
+  λI.I(Σa:A.B, make_pair)
+
 ####
 
 # can't infer when aliasing (inline use checks):
