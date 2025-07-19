@@ -287,9 +287,10 @@ check d span book ctx term goal =
     (Let k t v f, _) -> case t of
         Just t  -> do
           check d span book ctx v t
-          check d span book ctx (f v) goal
+          check d span book (extend ctx k v t) (f v) goal
         Nothing -> do
-          check d span book ctx (f v) goal
+          t <- infer d span book ctx v
+          check d span book (extend ctx k v t) (f v) goal
     (One, Uni) -> do
       Done ()
     (Bt0, Bit) -> do
