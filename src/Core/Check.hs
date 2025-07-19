@@ -51,10 +51,10 @@ infer d span book@(Book defs) ctx term =
     Let k t v f -> case t of
       Just t  -> do
         check d span book ctx v t
-        infer d span book (extend ctx k v t) (f v)
+        infer (d+1) span book (extend ctx k v t) (f v)
       Nothing -> do
         t <- infer d span book ctx v
-        infer d span book (extend ctx k v t) (f v)
+        infer (d+1) span book (extend ctx k v t) (f v)
     Fix k f -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Chk v t -> do
@@ -288,10 +288,10 @@ check d span book ctx term goal =
     (Let k t v f, _) -> case t of
         Just t  -> do
           check d span book ctx v t
-          check d span book (extend ctx k v t) (f v) goal
+          check (d+1) span book (extend ctx k v t) (f v) goal
         Nothing -> do
           t <- infer d span book ctx v
-          check d span book (extend ctx k v t) (f v) goal
+          check (d+1) span book (extend ctx k v t) (f v) goal
     (One, Uni) -> do
       Done ()
     (Bt0, Bit) -> do
