@@ -51,9 +51,10 @@ infer d span book@(Book defs) ctx term =
     Let k t v f -> case t of
       Just t  -> do
         check d span book ctx v t
-        infer d span book ctx (f v)
+        infer d span book (extend ctx k v t) (f v)
       Nothing -> do
-        infer d span book ctx (f v)
+        t <- infer d span book ctx v
+        infer d span book (extend ctx k v t) (f v)
     Fix k f -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Chk v t -> do
