@@ -467,7 +467,9 @@ hasMet term = case term of
   Met {} -> True
   Sub t -> hasMet t
   Fix _ f -> hasMet (f (Var "" 0))
-  Let v f -> hasMet v || hasMet f
+  Let k t v f -> case t of
+    Just t  -> hasMet t || hasMet v || hasMet (f (Var k 0))
+    Nothing -> hasMet v || hasMet (f (Var k 0))
   Chk x t -> hasMet x || hasMet t
   EmpM x -> hasMet x
   UniM x f -> hasMet x || hasMet f
