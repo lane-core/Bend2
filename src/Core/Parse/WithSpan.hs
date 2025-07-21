@@ -36,6 +36,7 @@ withSpan getSource p = do
   st        <- get
 
   let src = getSource st
+      pth = sourceName begPos
 
       -- | Skip backwards over whitespace and line comments.  We treat any line
       -- starting with a hash ("# …") as a comment.  The returned offset is the
@@ -103,4 +104,4 @@ withSpan getSource p = do
       (begLine, begCol) = (unPos (sourceLine begPos), unPos (sourceColumn begPos))
       (endLine, endCol) = indexToPos src trimmedEndOff
 
-  return (Span (begLine, begCol) (endLine, endCol) src, x)
+  return (Span (begLine, begCol) (endLine, endCol) src pth, x)

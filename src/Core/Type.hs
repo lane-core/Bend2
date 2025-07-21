@@ -169,6 +169,7 @@ data Span = Span
   { spanBeg :: (Int,Int)
   , spanEnd :: (Int,Int)
   , spanSrc :: String -- original file
+  , spanPth :: FilePath -- original file path
   }
 
 data Error
@@ -397,7 +398,7 @@ collectApps (cut -> App f x) args = collectApps f (x:args)
 collectApps f                args = (f, args)
 
 noSpan :: Span
-noSpan = Span (0,0) (0,0) ""
+noSpan = Span (0,0) (0,0) "" ""
 
 flattenTup :: Term -> [Term]
 flattenTup (Tup l r) = l : flattenTup r
