@@ -236,7 +236,7 @@ instance Show Term where
           Sig{} -> "(" ++ show t ++ ")"
           _     -> show t
       showCodomain t = case t of
-          Sig _ (Lam k t _) | k /= "_" -> "(" ++ show t ++ ")"
+          Sig _ (Lam k _ _) | k /= "_" -> "(" ++ show t ++ ")"
           _                           -> show t
   show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
   show (SigM x f)     = "~ " ++ show x ++ " { (,):" ++ show f ++ " }"
@@ -250,7 +250,7 @@ instance Show Term where
           Sig{} -> "(" ++ show t ++ ")"
           _     -> show t
       showCodomain t = case t of
-          All _ (Lam k t _) | k /= "_"  -> "(" ++ show t ++ ")"
+          All _ (Lam k _ _) | k /= "_"  -> "(" ++ show t ++ ")"
           _                           -> show t
   show (Lam k t f)      = case t of
     Just t  -> "λ" ++ k ++ " : " ++ show t ++ " . " ++ show (f (Var k 0))
