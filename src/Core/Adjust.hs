@@ -19,13 +19,14 @@ import Core.WHNF
 -- It uses a book of already-adjusted definitions for context during flattening.
 adjust :: Book -> Term -> Term
 adjust book term =
+  trace ("done: " ++ show done) $
   done
   where
     flat  = flatten 0 book term
-    nopat = unpat 0 flat
-    nofrk = unfrk 0 nopat
-    etas  = etaForm 0 nofrk
-    done  = bind etas
+    npat = unpat 0 flat
+    nfrk = unfrk 0 npat
+    etas = etaForm 0 nfrk
+    done = bind etas
 
 -- | Adjusts a term. simplifying patterns but leaving terms as Pats.
 adjustWithPats :: Book -> Term -> Term
