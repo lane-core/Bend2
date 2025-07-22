@@ -114,9 +114,7 @@ collapse dep book term = case term of
 
   -- Empty
   Emp     -> return Emp
-  EmpM x  -> do
-    x' <- collapse dep book x
-    return $ EmpM x'
+  EmpM    -> return EmpM
 
   -- Unit
   Uni       -> return Uni
@@ -130,11 +128,10 @@ collapse dep book term = case term of
   Bit         -> return Bit
   Bt0         -> return Bt0
   Bt1         -> return Bt1
-  BitM x f t  -> do
-    x' <- collapse dep book x
+  BitM f t    -> do
     f' <- collapse dep book f
     t' <- collapse dep book t
-    return $ BitM x' f' t'
+    return $ BitM f' t'
 
   -- Nat
   Nat         -> return Nat
@@ -142,11 +139,10 @@ collapse dep book term = case term of
   Suc n       -> do
     n' <- collapse dep book n
     return $ Suc n'
-  NatM x z s  -> do
-    x' <- collapse dep book x
+  NatM z s    -> do
     z' <- collapse dep book z
     s' <- collapse dep book s
-    return $ NatM x' z' s'
+    return $ NatM z' s'
 
   -- List
   Lst t       -> do
@@ -157,20 +153,18 @@ collapse dep book term = case term of
     h' <- collapse dep book h
     t' <- collapse dep book t
     return $ Con h' t'
-  LstM x n c  -> do
-    x' <- collapse dep book x
+  LstM n c    -> do
     n' <- collapse dep book n
     c' <- collapse dep book c
-    return $ LstM x' n' c'
+    return $ LstM n' c'
 
   -- Enum
   Enu s       -> return $ Enu s
   Sym s       -> return $ Sym s
-  EnuM x cs e -> do
-    x' <- collapse dep book x
+  EnuM cs e   -> do
     cs' <- mapM (\(s,t) -> (,) s <$> collapse dep book t) cs
     e' <- collapse dep book e
-    return $ EnuM x' cs' e'
+    return $ EnuM cs' e'
 
   -- Numbers
   Num nt        -> return $ Num nt
@@ -192,10 +186,9 @@ collapse dep book term = case term of
     a' <- collapse dep book a
     b' <- collapse dep book b
     return $ Tup a' b'
-  SigM x f    -> do
-    x' <- collapse dep book x
+  SigM f      -> do
     f' <- collapse dep book f
-    return $ SigM x' f'
+    return $ SigM f'
 
   -- Function
   All a b     -> do
@@ -218,10 +211,10 @@ collapse dep book term = case term of
     b' <- collapse dep book b
     return $ Eql t' a' b'
   Rfl         -> return Rfl
-  EqlM x f    -> do
-    x' <- collapse dep book x
+  EqlM p f    -> do
+    p' <- collapse dep book p
     f' <- collapse dep book f
-    return $ EqlM x' f'
+    return $ EqlM p' f'
 
   -- MetaVar
   Met k t c   -> do
@@ -229,13 +222,6 @@ collapse dep book term = case term of
     c' <- mapM (collapse dep book) c
     return $ Met k t' c'
 
-  -- Hints
-  Ind t       -> do
-    t' <- collapse dep book t
-    return $ Ind t'
-  Frz t       -> do
-    t' <- collapse dep book t
-    return $ Frz t'
 
   -- Superpositions
   Era -> CEra
@@ -249,16 +235,11 @@ collapse dep book term = case term of
         Just k  -> CSup k (collapse dep book a) (collapse dep book b)
         Nothing -> CEra -- Invalid superposition label
 
-  SupM x l f ->
+  SupM l f ->
     error "TODO"
 
   -- Errors
   Loc _ t     -> collapse dep book t
-  Rwt a b x   -> do
-    a' <- collapse dep book a
-    b' <- collapse dep book b
-    x' <- collapse dep book x
-    return $ Rwt a' b' x'
 
   -- Logging
   Log s x -> do

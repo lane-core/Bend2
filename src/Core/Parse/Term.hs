@@ -192,7 +192,7 @@ parseBifIf = label "if clause" $ do
   _ <- symbol "else"
   _ <- symbol ":"
   falseCase <- parseTerm
-  return $ BitM condition falseCase trueCase
+  return $ App (BitM falseCase trueCase) condition
 
 -- | Syntax: Σ x: Type. body | any x: Type. body | Σ Type. Type | any Type. Type
 parseSig :: Parser Term
@@ -827,13 +827,7 @@ parseTildeExpr :: Parser Term
 parseTildeExpr = label "tilde expression (induction or match)" $ do
   _ <- try $ symbol "~"
   choice
-    [ -- ~{term}
-      try $ do
-        _ <- symbol "{"
-        t <- parseTerm
-        _ <- symbol "}"
-        return (Ind t)
-    , -- ~ term [{...}]
+    [ -- ~ term [{...}]
       do
         scrut <- parseTermBefore "{"
         is_match <- optional (lookAhead (symbol "{"))
@@ -845,7 +839,7 @@ parseTildeExpr = label "tilde expression (induction or match)" $ do
             case mb_close of
               Just _ -> do
                 _ <- symbol "}"
-                return (EmpM scrut)
+                return (App EmpM scrut)
               Nothing -> do
                 term <- choice
                   [ parseUniMCases scrut
@@ -859,7 +853,7 @@ parseTildeExpr = label "tilde expression (induction or match)" $ do
                   ]
                 _ <- symbol "}"
                 return term
-          Nothing -> return (Ind scrut) -- It's an Ind expression
+          Nothing -> fail "Expected match expression after ~"
     ]
 
 -- Case parsers for expression-based matches
@@ -889,7 +883,7 @@ parseBitMCases scrut = do
   _ <- symbol ":"
   t <- parseTerm
   _ <- parseSemi
-  return (BitM scrut f t)
+  return (App (BitM f t) scrut)
 
 -- | Syntax: 0n: term; 1n+: term;
 parseNatMCases :: Term -> Parser Term
@@ -904,7 +898,7 @@ parseNatMCases scrut = do
   _ <- symbol ":"
   s <- parseTerm
   _ <- parseSemi
-  return (NatM scrut z s)
+  return (App (NatM z s) scrut)
 
 -- | Syntax: []: term; <>: term;
 parseLstMCases :: Term -> Parser Term
@@ -919,7 +913,7 @@ parseLstMCases scrut = do
   _ <- symbol ":"
   c <- parseTerm
   _ <- parseSemi
-  return (LstM scrut n c)
+  return (App (LstM n c) scrut)
 
 -- | Syntax: (,): term;
 parseSigMCases :: Term -> Parser Term
@@ -930,7 +924,7 @@ parseSigMCases scrut = do
     return ()
   f <- parseTerm
   _ <- parseSemi
-  return (SigM scrut f)
+  return (App (SigM f) scrut)
 
 -- | Syntax: {==}: term;
 parseEqlMCases :: Term -> Parser Term
@@ -943,7 +937,7 @@ parseEqlMCases scrut = do
     return ()
   f <- parseTerm
   _ <- parseSemi
-  return (EqlM scrut f)
+  return (App (EqlM Era f) scrut)
 
 -- | Syntax: &tag1: term1; &tag2: term2; ...; default; (also accepts @tag for compatibility)
 parseEnuMCases :: Term -> Parser Term
@@ -963,7 +957,7 @@ parseEnuMCases scrut = do
     term <- parseTerm
     _ <- parseSemi
     return term
-  return (EnuM scrut cases def)
+  return (App (EnuM cases def) scrut)
 
 -- | Syntax: &L{,}: term;
 parseSupMCases :: Term -> Parser Term
@@ -978,7 +972,7 @@ parseSupMCases scrut = do
     return l
   f <- parseTerm
   _ <- parseSemi
-  return (SupM scrut l f)
+  return (App (SupM l f) scrut)
 
 -- | Main entry points
 

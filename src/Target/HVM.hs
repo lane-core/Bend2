@@ -62,20 +62,20 @@ compileFn book nam tm ty =
     isNum ty         = case ty of { Num _ -> True; _ -> False } -- We don't necessarily want to always do this, but most times it guarantees fast u32 duplication at no extra cost.
     alwaysMat x bod  = case cut bod of
       -- Matches this var
-      BitM (cut -> Var y _) _ _  | x == y -> True
-      NatM (cut -> Var y _) _ _  | x == y -> True
-      LstM (cut -> Var y _) _ _  | x == y -> True
-      SigM (cut -> Var y _) _    | x == y -> True
+      App (BitM _ _) (cut -> Var y _)  | x == y -> True
+      App (NatM _ _) (cut -> Var y _)  | x == y -> True
+      App (LstM _ _) (cut -> Var y _)  | x == y -> True
+      App (SigM _) (cut -> Var y _)    | x == y -> True
       Pat [(cut -> Var y _)] _ _ | x == y -> True
       -- All branches of the mat eventually match this var
-      BitM _ f t                                             -> alwaysMat x f && alwaysMat x t
-      NatM _ z (Lam p _ (subst p -> s))                      -> alwaysMat x z && alwaysMat x s
-      LstM _ n (Lam h _ (subst h -> Lam t _ (subst t -> c))) -> alwaysMat x n && alwaysMat x c
-      SigM _ (Lam l _ (subst l -> (Lam r _ (subst r -> f)))) -> alwaysMat x f
+      BitM f t                                                -> alwaysMat x f && alwaysMat x t
+      NatM z (Lam p _ (subst p -> s))                        -> alwaysMat x z && alwaysMat x s
+      LstM n (Lam h _ (subst h -> Lam t _ (subst t -> c)))   -> alwaysMat x n && alwaysMat x c
+      SigM (Lam l _ (subst l -> (Lam r _ (subst r -> f))))   -> alwaysMat x f
       Pat _ _ c                                              -> all (\(p,f) -> alwaysMat x f) c
       -- Pass through terms that just bind
       Let k t v f                                            -> alwaysMat x (f (Var k 0))
-      SupM _ _ (Lam a _ (subst a -> Lam b _ (subst b -> f))) -> alwaysMat x f
+      SupM _ (Lam a _ (subst a -> Lam b _ (subst b -> f))) -> alwaysMat x f
       _ -> False
 
 -- Extract constructor definition info from type definitions
@@ -119,35 +119,25 @@ termToHVM book ctx term = go term where
   go Set          = HVM.Era
   go (Chk v t)    = termToHVM book ctx v
   go Emp          = HVM.Era
-  go (EmpM x)     = HVM.Era
+  go EmpM         = HVM.Lam "x$" HVM.Era
   go Uni          = HVM.Era
   go One          = HVM.U32 1
-  go (UniM x f)   = termToHVM book ctx f
+  go (UniM x f)   = HVM.Lam "x$" $ HVM.Mat HVM.SWI (HVM.Var "x$") [] [("1", [], termToHVM book ctx f), ("_", [], HVM.App (termToHVM book ctx $ UniM x f) (HVM.Var "x$"))]
   go Bit          = HVM.Era
   go Bt0          = HVM.U32 0
   go Bt1          = HVM.U32 1
-  go (BitM x f t) = HVM.Mat HVM.SWI (termToHVM book ctx x) [] [("0", [], termToHVM book ctx f), ("_", [], termToHVM book ctx t)]
+  go (BitM f t)   = HVM.Lam "x$" $ HVM.Mat HVM.SWI (HVM.Var "x$") [] [("0", [], termToHVM book ctx f), ("_", [], termToHVM book ctx t)]
   go Nat          = HVM.Era
   go Zer          = HVM.Ctr "#Z" []
   go (Suc p)      = HVM.Ctr "#S" [termToHVM book ctx p]
-  go (NatM x z s) =
-    case s of
-      (Lam n _ (subst n -> s)) ->
-        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Z", [], termToHVM book ctx z), ("#S", [n], termToHVM book ctx s)]
-      _ ->
-        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Z", [], termToHVM book ctx z), ("#S", ["x$p"], HVM.App (termToHVM book ctx s) (HVM.Var "x$p"))]
+  go (NatM z s) = HVM.Lam "x$" $ HVM.Mat (HVM.MAT 0) (HVM.Var "x$") [] [("#Z", [], termToHVM book ctx z), ("#S", ["x$p"], HVM.App (termToHVM book ctx s) (HVM.Var "x$p"))]
   go (Lst t)      = HVM.Era
   go Nil          = HVM.Ctr "#Nil" []
   go (Con h t)    = HVM.Ctr "#Cons" [termToHVM book ctx h, termToHVM book ctx t]
-  go (LstM x n c) =
-    case c of
-      (Lam h _ (subst h -> (Lam t _ (subst t -> c)))) ->
-        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Nil", [], termToHVM book ctx n), ("#Cons", [h, t], termToHVM book ctx c)]
-      _ ->
-        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#Nil", [], termToHVM book ctx n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM book ctx c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
+  go (LstM n c) = HVM.Lam "x$" $ HVM.Mat (HVM.MAT 0) (HVM.Var "x$") [] [("#Nil", [], termToHVM book ctx n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM book ctx c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
   go (Enu s)      = HVM.Era
   go (Sym s)      = error "TODO: termToHVM Sym"
-  go (EnuM x c e) = error "TODO: termToHVM EnuM"
+  go (EnuM c e) = error "TODO: termToHVM EnuM"
   go (Log s x)    = termToHVM book ctx x  -- For HVM, just return the result expression
   go (Num _)      = HVM.Era
   go (Val v)      = valToHVM book ctx v
@@ -158,12 +148,7 @@ termToHVM book ctx term = go term where
     case ctrToHVM book ctx x y of
       Just hvm -> hvm
       Nothing -> HVM.Ctr "#P" [termToHVM book ctx x, termToHVM book ctx y]
-  go (SigM x f)   =
-    case f of
-      (Lam l _ (subst l -> (Lam r _ (subst r -> f)))) ->
-        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#P", [l, r], termToHVM book ctx f)]
-      _ ->
-        HVM.Mat (HVM.MAT 0) (termToHVM book ctx x) [] [("#P", ["x$l", "x$r"], HVM.App (HVM.App (termToHVM book ctx f) (HVM.Var "x$l")) (HVM.Var "x$r"))]
+  go (SigM f)    = HVM.Lam "x$" $ HVM.Mat (HVM.MAT 0) (HVM.Var "x$") [] [("#P", ["x$l", "x$r"], HVM.App (HVM.App (termToHVM book ctx f) (HVM.Var "x$l")) (HVM.Var "x$r"))]
   go (All _ _)    = HVM.Era
   go (Lam n _ f)  = HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))
   go (App f x)    =
@@ -172,19 +157,16 @@ termToHVM book ctx term = go term where
       Nothing -> HVM.App (termToHVM book ctx f) (termToHVM book ctx x)
   go (Eql _ _ _)  = HVM.Era
   go Rfl          = HVM.Era
-  go (EqlM x f)   = termToHVM book ctx f
+  go (EqlM p f)   = termToHVM book ctx f
   go (Met n t ts) = HVM.Era -- TODO: Met
-  go (Ind t)      = termToHVM book ctx t
-  go (Frz t)      = termToHVM book ctx t
   go Era          = HVM.Era
   go (Sup l a b)  =
     HVM.Let HVM.LAZY "sup0$" (termToHVM book ctx a) $
     HVM.Let HVM.LAZY "sup1$" (termToHVM book ctx b) $
     HVM.Ref "SUP" 0 [termToHVM book ctx l, HVM.Var "sup0$", HVM.Var "sup1$"]
-  go (SupM x l f) = HVM.Ref "DUP" 0 [termToHVM book ctx l, termToHVM book ctx x, termToHVM book ctx f]
+  go (SupM l f)   = termToHVM book ctx f
   go (Frk l a b)  = HVM.Era
   go (Loc s t)    = termToHVM book ctx t
-  go (Rwt _ _ x)  = termToHVM book ctx x
   go (Pri p)      = fromJust (refAppToHVM book ctx (Pri p))
   go (Pat x m c)  = patToHVM book ctx x m c
 

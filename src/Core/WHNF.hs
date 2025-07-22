@@ -21,16 +21,9 @@ data EvalLevel
   | Full
   deriving (Show,Eq)
 
--- Levels:
--- - 0: undo ugly forms
--- - 1: full evaluation
-
 -- Reduction
 whnf :: EvalLevel -> Book -> Term -> Term
-whnf lv book term
-  | lv == Soft && ugly nf = term
-  | otherwise             = nf
-  where nf = whnfGo lv book term
+whnf lv book term = whnfGo lv book term
 
 whnfGo :: EvalLevel -> Book -> Term -> Term
 whnfGo lv book term =
@@ -44,14 +37,7 @@ whnfGo lv book term =
     Op2 o a b   -> whnfOp2 lv book o a b
     Op1 o a     -> whnfOp1 lv book o a
     Pri p       -> Pri p
-    UniM x f    -> whnfUniM lv book x f
-    BitM x f t  -> whnfBitM lv book x f t
-    NatM x z s  -> whnfNatM lv book x z s
-    LstM x n c  -> whnfLstM lv book x n c
-    EnuM x c f  -> whnfEnuM lv book x c f
-    SigM x f    -> whnfSigM lv book x f
-    EqlM x f    -> whnfEqlM lv book x f
-    SupM x l f  -> whnfSupM lv book x l f
+    -- λ-Match constructors are values, they only reduce when applied
     Log s x     -> whnfLog lv book s x
     _           -> term
 
@@ -77,7 +63,16 @@ whnfApp lv book f x =
     Lam _ t f' -> whnfAppLam lv book f' x
     Pri p      -> whnfAppPri lv book p x
     Sup l a b  -> whnfAppSup lv book l a b x
-    Frk _ _ _  -> error "unrechable"
+    -- λ-Match applications
+    UniM _ f   -> whnfUniM lv book x f
+    BitM f t   -> whnfBitM lv book x f t
+    NatM z s   -> whnfNatM lv book x z s
+    LstM n c   -> whnfLstM lv book x n c
+    EnuM c e   -> whnfEnuM lv book x c e
+    SigM f     -> whnfSigM lv book x f
+    EqlM p f   -> whnfEqlM lv book x f  -- p is the motive, not used in reduction
+    SupM l f   -> whnfSupM lv book x l f
+    Frk _ _ _  -> error "unreachable"
     f'         -> App f' x
 
 -- Normalizes a lambda application
@@ -100,9 +95,9 @@ whnfUniM :: EvalLevel -> Book -> Term -> Term -> Term
 whnfUniM lv book x f =
   case whnf Full book x of
     One       -> whnf lv book f
-    Sup l a b -> whnf lv book $ Sup l (UniM a f0) (UniM b f1)
+    Sup l a b -> whnf lv book $ Sup l (App (UniM (Sub Era) f0) a) (App (UniM (Sub Era) f1) b)
       where (f0, f1) = dup book l f
-    x'  -> UniM x' f
+    x'  -> App (UniM (Sub Era) f) x'
 
 -- Normalizes a boolean match
 whnfBitM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
@@ -110,10 +105,10 @@ whnfBitM lv book x f t =
   case whnf Full book x of
     Bt0       -> whnf lv book f
     Bt1       -> whnf lv book t
-    Sup l a b -> whnf lv book $ Sup l (BitM a f0 t0) (BitM b f1 t1)
+    Sup l a b -> whnf lv book $ Sup l (App (BitM f0 t0) a) (App (BitM f1 t1) b)
       where (f0, f1) = dup book l f
             (t0, t1) = dup book l t
-    x'  -> BitM x' f t
+    x'  -> App (BitM f t) x'
 
 -- Normalizes a natural number match
 whnfNatM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
@@ -121,10 +116,10 @@ whnfNatM lv book x z s =
   case whnf Full book x of
     Zer       -> whnf lv book z
     Suc n     -> whnf lv book (App s (whnf lv book n))
-    Sup l a b -> whnf lv book $ Sup l (NatM a z0 s0) (NatM b z1 s1)
+    Sup l a b -> whnf lv book $ Sup l (App (NatM z0 s0) a) (App (NatM z1 s1) b)
       where (z0,z1) = dup book l z
             (s0,s1) = dup book l s
-    x'    -> NatM x' z s
+    x'    -> App (NatM z s) x'
 
 -- Normalizes a list match
 whnfLstM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
@@ -132,19 +127,19 @@ whnfLstM lv book x n c =
   case whnf Full book x of
     Nil       -> whnf lv book n
     Con h t   -> whnf lv book (App (App c (whnf lv book h)) (whnf lv book t))
-    Sup l a b -> whnf lv book $ Sup l (LstM a n0 c0) (LstM b n1 c1)
+    Sup l a b -> whnf lv book $ Sup l (App (LstM n0 c0) a) (App (LstM n1 c1) b)
       where (n0,n1) = dup book l n
             (c0,c1) = dup book l c
-    x'      -> LstM x' n c
+    x'      -> App (LstM n c) x'
 
 -- Normalizes a pair match
 whnfSigM :: EvalLevel -> Book -> Term -> Term -> Term
 whnfSigM lv book x f =
   case whnf Full book x of
     Tup a b   -> whnf lv book (App (App f (whnf lv book a)) (whnf lv book b))
-    Sup l a b -> whnf lv book $ Sup l (SigM a f0) (SigM b f1)
+    Sup l a b -> whnf lv book $ Sup l (App (SigM f0) a) (App (SigM f1) b)
       where (f0, f1) = dup book l f
-    x'      -> SigM x' f
+    x'      -> App (SigM f) x'
 
 -- Normalizes an enum match
 whnfEnuM :: EvalLevel -> Book -> Term -> [(String,Term)] -> Term -> Term
@@ -153,10 +148,10 @@ whnfEnuM lv book x c f =
     Sym s -> case lookup s c of
       Just t  -> whnf lv book t
       Nothing -> whnf lv book (App f (Sym s))
-    Sup l a b -> whnf lv book $ Sup l (EnuM a c0 f0) (EnuM b c1 f1)
+    Sup l a b -> whnf lv book $ Sup l (App (EnuM c0 f0) a) (App (EnuM c1 f1) b)
       where (c0, c1) = unzip (map (\(s,t) -> let (t0,t1) = dup book l t in ((s,t0),(s,t1))) c)
             (f0, f1) = dup book l f
-    x' -> EnuM x' c f
+    x' -> App (EnuM c f) x'
 
 -- Normalizes an equality match
 whnfEqlM :: EvalLevel -> Book -> Term -> Term -> Term
@@ -355,8 +350,7 @@ dup book l (Chk x t)     = (Chk x0 t0, Chk x1 t1)
   where (x0,x1)          = dup book l x
         (t0,t1)          = dup book l t
 dup book l Emp           = (Emp, Emp)
-dup book l (EmpM x)      = (EmpM x0, EmpM x1)
-  where (x0,x1)          = dup book l x
+dup book l EmpM          = (EmpM, EmpM)
 dup book l Uni           = (Uni, Uni)
 dup book l One           = (One, One)
 dup book l (UniM x f)    = (UniM x0 f0, UniM x1 f1)
@@ -365,17 +359,15 @@ dup book l (UniM x f)    = (UniM x0 f0, UniM x1 f1)
 dup book l Bit           = (Bit, Bit)
 dup book l Bt0           = (Bt0, Bt0)
 dup book l Bt1           = (Bt1, Bt1)
-dup book l (BitM x f t)  = (BitM x0 f0 t0, BitM x1 f1 t1)
-  where (x0,x1)          = dup book l x
-        (f0,f1)          = dup book l f
+dup book l (BitM f t)    = (BitM f0 t0, BitM f1 t1)
+  where (f0,f1)          = dup book l f
         (t0,t1)          = dup book l t
 dup book l Nat           = (Nat, Nat)
 dup book l Zer           = (Zer, Zer)
 dup book l (Suc n)       = (Suc n0, Suc n1)
   where (n0,n1)          = dup book l n
-dup book l (NatM x z s)  = (NatM x0 z0 s0, NatM x1 z1 s1)
-  where (x0,x1)          = dup book l x
-        (z0,z1)          = dup book l z
+dup book l (NatM z s)    = (NatM z0 s0, NatM z1 s1)
+  where (z0,z1)          = dup book l z
         (s0,s1)          = dup book l s
 dup book l (Lst t)       = (Lst t0, Lst t1)
   where (t0,t1)          = dup book l t
@@ -383,15 +375,13 @@ dup book l Nil           = (Nil, Nil)
 dup book l (Con h t)     = (Con h0 t0, Con h1 t1)
   where (h0,h1)          = dup book l h
         (t0,t1)          = dup book l t
-dup book l (LstM x n c)  = (LstM x0 n0 c0, LstM x1 n1 c1)
-  where (x0,x1)          = dup book l x
-        (n0,n1)          = dup book l n
+dup book l (LstM n c)    = (LstM n0 c0, LstM n1 c1)
+  where (n0,n1)          = dup book l n
         (c0,c1)          = dup book l c
 dup book l (Enu s)       = (Enu s, Enu s)
 dup book l (Sym s)       = (Sym s, Sym s)
-dup book l (EnuM x c e)  = (EnuM x0 c0 e0, EnuM x1 c1 e1)
-  where (x0,x1)          = dup book l x
-        (c0,c1)          = unzip (map (\(s,t) -> let (t0,t1) = dup book l t in ((s,t0),(s,t1))) c)
+dup book l (EnuM c e)    = (EnuM c0 e0, EnuM c1 e1)
+  where (c0,c1)          = unzip (map (\(s,t) -> let (t0,t1) = dup book l t in ((s,t0),(s,t1))) c)
         (e0,e1)          = dup book l e
 dup book l (Sig a b)     = (Sig a0 b0, Sig a1 b1)
   where (a0,a1)          = dup book l a
@@ -399,9 +389,8 @@ dup book l (Sig a b)     = (Sig a0 b0, Sig a1 b1)
 dup book l (Tup a b)     = (Tup a0 b0, Tup a1 b1)
   where (a0,a1)          = dup book l a
         (b0,b1)          = dup book l b
-dup book l (SigM x f)    = (SigM x0 f0, SigM x1 f1)
-  where (x0,x1)          = dup book l x
-        (f0,f1)          = dup book l f
+dup book l (SigM f)      = (SigM f0, SigM f1)
+  where (f0,f1)          = dup book l f
 dup book l (All a b)     = (All a0 b0, All a1 b1)
   where (a0,a1)          = dup book l a
         (b0,b1)          = dup book l b
@@ -416,30 +405,23 @@ dup book l (Eql t a b)   = (Eql t0 a0 b0, Eql t1 a1 b1)
         (a0,a1)          = dup book l a
         (b0,b1)          = dup book l b
 dup book l Rfl           = (Rfl, Rfl)
-dup book l (EqlM x f)    = (EqlM x0 f0, EqlM x1 f1)
-  where (x0,x1)          = dup book l x
+dup book l (EqlM p f)    = (EqlM p0 f0, EqlM p1 f1)
+  where (p0,p1)          = dup book l p
         (f0,f1)          = dup book l f
-dup book l (Ind t)       = (Ind t0, Ind t1)
-  where (t0,t1)          = dup book l t
-dup book l (Frz t)       = (Frz t0, Frz t1)
-  where (t0,t1)          = dup book l t
 dup book l Era           = (Era, Era)
 dup book l (Sup r a b)
   | ieql book l r        = (a, b)
   | otherwise            = (Sup r a0 b0, Sup r a1 b1)
   where (a0,a1)          = dup book l a
         (b0,b1)          = dup book l b
-dup book l (SupM x r f)  = dup book l (App (App f x0) x1)
-  where (x0,x1)          = dup book r x
+dup book l (SupM l' f)   = (SupM l'0 f0, SupM l'1 f1)
+  where (l'0,l'1)        = dup book l l'
+        (f0,f1)          = dup book l f
 dup book l (Met k t c)   = (Met k t0 c0, Met k t1 c1)
   where (t0,t1)          = dup book l t
         (c0,c1)          = unzip (map (dup book l) c)
 dup book l (Loc s t)     = (Loc s t0, Loc s t1)
   where (t0,t1)          = dup book l t
-dup book l (Rwt a b x)   = (Rwt a0 b0 x0, Rwt a1 b1 x1)
-  where (a0,a1)          = dup book l a
-        (b0,b1)          = dup book l b
-        (x0,x1)          = dup book l x
 dup book l (Num t)       = (Num t, Num t)
 dup book l (Val v)       = (Val v, Val v)
 dup book l (Op2 o a b)   = (Op2 o a0 b0, Op2 o a1 b1)
@@ -473,28 +455,28 @@ normal d book term =
     Set         -> Set
     Chk x t     -> Chk (normal d book x) (normal d book t)
     Emp         -> Emp
-    EmpM x      -> EmpM (normal d book x)
+    EmpM        -> EmpM
     Uni         -> Uni
     One         -> One
     UniM x f    -> UniM (normal d book x) (normal d book f)
     Bit         -> Bit
     Bt0         -> Bt0
     Bt1         -> Bt1
-    BitM x f t  -> BitM (normal d book x) (normal d book f) (normal d book t)
+    BitM f t    -> BitM (normal d book f) (normal d book t)
     Nat         -> Nat
     Zer         -> Zer
     Suc n       -> Suc (normal d book n)
-    NatM x z s  -> NatM (normal d book x) (normal d book z) (normal d book s)
+    NatM z s    -> NatM (normal d book z) (normal d book s)
     Lst t       -> Lst (normal d book t)
     Nil         -> Nil
     Con h t     -> Con (normal d book h) (normal d book t)
-    LstM x n c  -> LstM (normal d book x) (normal d book n) (normal d book c)
+    LstM n c    -> LstM (normal d book n) (normal d book c)
     Enu s       -> Enu s
     Sym s       -> Sym s
-    EnuM x c e  -> EnuM (normal d book x) (map (\(s, t) -> (s, normal d book t)) c) (normal d book e)
+    EnuM c e    -> EnuM (map (\(s, t) -> (s, normal d book t)) c) (normal d book e)
     Sig a b     -> Sig (normal d book a) (normal d book b)
     Tup a b     -> Tup (normal d book a) (normal d book b)
-    SigM x f    -> SigM (normal d book x) (normal d book f)
+    SigM f      -> SigM (normal d book f)
     All a b     -> All (normal d book a) (normal d book b)
     Lam k t f   -> Lam k (fmap (normal d book) t) (\x -> normal d book (f (Sub x)))
     App f x     -> foldl (\f' x' -> App f' (normal d book x')) fn xs
@@ -502,14 +484,11 @@ normal d book term =
     Eql t a b   -> Eql (normal d book t) (normal d book a) (normal d book b)
     Rfl         -> Rfl
     EqlM x f    -> EqlM (normal d book x) (normal d book f)
-    Ind t       -> Ind (normal d book t)
-    Frz t       -> Frz (normal d book t)
     Loc l t     -> Loc l (normal d book t)
-    Rwt a b x   -> Rwt (normal d book a) (normal d book b) (normal d book x)
     Log s x     -> Log (normal d book s) (normal d book x)
     Era         -> Era
     Sup l a b   -> Sup l (normal d book a) (normal d book b)
-    SupM x l f  -> SupM (normal d book x) (normal d book l) (normal d book f)
+    SupM l f    -> SupM (normal d book l) (normal d book f)
     Frk l a b   -> error "Fork interactions unsupported in Haskell"
     Num t       -> Num t
     Val v       -> Val v
@@ -526,28 +505,11 @@ normalCtx d book (Ctx ctx) = Ctx (map normalAnn ctx)
 -- Utils
 -- =====
 
--- Shapes that are rolled back for pretty printing
--- This is safe because these terms are stuck
-ugly :: Term -> Bool
-ugly (cut -> UniM _ _  ) = True
-ugly (cut -> BitM _ _ _) = True
-ugly (cut -> NatM _ _ _) = True
-ugly (cut -> LstM _ _ _) = True
-ugly (cut -> EnuM _ _ _) = True
-ugly (cut -> SigM _ _  ) = True
-ugly (cut -> EqlM _ _  ) = True
-ugly (cut -> Lam _ _ _ ) = True
-ugly (cut -> App f x   ) = ugly f
-ugly _                   = False
-
 -- Evaluates terms that whnf won't, including:
--- - Type decorations like Ind/Frz
 -- - Injective Refs (whnf skips them for pretty printing)
 force :: Book -> Term -> Term
 force book term =
   case whnf Full book term of
-    Ind t -> force book t
-    Frz t -> force book t
     term' -> case fn of
       Ref k -> case deref book k of
         Just (_,fn',_) -> force book $ foldl App fn' xs

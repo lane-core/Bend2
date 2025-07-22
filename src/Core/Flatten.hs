@@ -60,40 +60,38 @@ flatten d book term = case term of
   Set           -> Set
   (Chk x t)     -> Chk (flatten d book x) (flatten d book t)
   Emp           -> Emp
-  (EmpM x)      -> EmpM (flatten d book x)
+  EmpM          -> EmpM
   Uni           -> Uni
   One           -> One
   (UniM x f)    -> UniM (flatten d book x) (flatten d book f)
   Bit           -> Bit
   Bt0           -> Bt0
   Bt1           -> Bt1
-  (BitM x f t)  -> BitM (flatten d book x) (flatten d book f) (flatten d book t)
+  (BitM f t)    -> BitM (flatten d book f) (flatten d book t)
   Nat           -> Nat
   Zer           -> Zer
   (Suc n)       -> Suc (flatten d book n)
-  (NatM x z s)  -> NatM (flatten d book x) (flatten d book z) (flatten d book s)
+  (NatM z s)    -> NatM (flatten d book z) (flatten d book s)
   (Lst t)       -> Lst (flatten d book t)
   Nil           -> Nil
   (Con h t)     -> Con (flatten d book h) (flatten d book t)
-  (LstM x n c)  -> LstM (flatten d book x) (flatten d book n) (flatten d book c)
+  (LstM n c)    -> LstM (flatten d book n) (flatten d book c)
   (Enu s)       -> Enu s
   (Sym s)       -> Sym s
-  (EnuM x c e)  -> EnuM (flatten d book x) [(s, flatten d book t) | (s, t) <- c] (flatten d book e)
+  (EnuM c e)    -> EnuM [(s, flatten d book t) | (s, t) <- c] (flatten d book e)
   (Sig a b)     -> Sig (flatten d book a) (flatten d book b)
   (Tup a b)     -> Tup (flatten d book a) (flatten d book b)
-  (SigM x f)    -> SigM (flatten d book x) (flatten d book f)
+  (SigM f)      -> SigM (flatten d book f)
   (All a b)     -> All (flatten d book a) (flatten d book b)
   (Lam n t f)   -> Lam n (fmap (flatten d book) t) (\x -> flatten (d+1) book (f x))
   (App f x)     -> App (flatten d book f) (flatten d book x)
   (Eql t a b)   -> Eql (flatten d book t) (flatten d book a) (flatten d book b)
   Rfl           -> Rfl
-  (EqlM x f)    -> EqlM (flatten d book x) (flatten d book f)
+  (EqlM p f)    -> EqlM (flatten d book p) (flatten d book f)
   (Met i t x)   -> Met i (flatten d book t) (map (flatten d book) x)
-  (Ind t)       -> Ind (flatten d book t)
-  (Frz t)       -> Frz (flatten d book t)
   Era           -> Era
   (Sup l a b)   -> Sup (flatten d book l) (flatten d book a) (flatten d book b)
-  (SupM x l f)  -> SupM (flatten d book x) (flatten d book l) (flatten d book f)
+  (SupM l f)    -> SupM (flatten d book l) (flatten d book f)
   (Frk l a b)   -> Frk (flatten d book l) (flatten d book a) (flatten d book b)
   (Num t)       -> Num t
   (Val v)       -> Val v
@@ -102,7 +100,6 @@ flatten d book term = case term of
   (Pri p)       -> Pri p
   (Log s x)     -> Log (flatten d book s) (flatten d book x)
   (Loc s t)     -> Loc s (flatten d book t)
-  (Rwt a b x)   -> Rwt (flatten d book a) (flatten d book b) (flatten d book x)
   (Pat s m c)   -> simplify d $ flattenPat d book (Pat s m c)
 
 isVarCol :: [Case] -> Bool
@@ -257,40 +254,38 @@ unpat d (Let k t v f)   = Let k (fmap (unpat d) t) (unpat d v) (\x -> unpat (d+1
 unpat d Set             = Set
 unpat d (Chk x t)       = Chk (unpat d x) (unpat d t)
 unpat d Emp             = Emp
-unpat d (EmpM x)        = EmpM (unpat d x)
+unpat d EmpM            = EmpM
 unpat d Uni             = Uni
 unpat d One             = One
 unpat d (UniM x f)      = UniM (unpat d x) (unpat d f)
 unpat d Bit             = Bit
 unpat d Bt0             = Bt0
 unpat d Bt1             = Bt1
-unpat d (BitM x f t)    = BitM (unpat d x) (unpat d f) (unpat d t)
+unpat d (BitM f t)      = BitM (unpat d f) (unpat d t)
 unpat d Nat             = Nat
 unpat d Zer             = Zer
 unpat d (Suc n)         = Suc (unpat d n)
-unpat d (NatM x z s)    = NatM (unpat d x) (unpat d z) (unpat d s)
+unpat d (NatM z s)      = NatM (unpat d z) (unpat d s)
 unpat d (Lst t)         = Lst (unpat d t)
 unpat d Nil             = Nil
 unpat d (Con h t)       = Con (unpat d h) (unpat d t)
-unpat d (LstM x n c)    = LstM (unpat d x) (unpat d n) (unpat d c)
+unpat d (LstM n c)      = LstM (unpat d n) (unpat d c)
 unpat d (Enu s)         = Enu s
 unpat d (Sym s)         = Sym s
-unpat d (EnuM x c e)    = EnuM (unpat d x) [(s, unpat d t) | (s, t) <- c] (unpat d e)
+unpat d (EnuM c e)      = EnuM [(s, unpat d t) | (s, t) <- c] (unpat d e)
 unpat d (Sig a b)       = Sig (unpat d a) (unpat d b)
 unpat d (Tup a b)       = Tup (unpat d a) (unpat d b)
-unpat d (SigM x f)      = SigM (unpat d x) (unpat d f)
+unpat d (SigM f)        = SigM (unpat d f)
 unpat d (All a b)       = All (unpat d a) (unpat d b)
 unpat d (Lam n t f)     = Lam n (fmap (unpat d) t) (\x -> unpat (d+1) (f x))
 unpat d (App f x)       = App (unpat d f) (unpat d x)
 unpat d (Eql t a b)     = Eql (unpat d t) (unpat d a) (unpat d b)
 unpat d Rfl             = Rfl
-unpat d (EqlM x f)      = EqlM (unpat d x) (unpat d f)
+unpat d (EqlM p f)      = EqlM (unpat d p) (unpat d f)
 unpat d (Met i t x)     = Met i (unpat d t) (map (unpat d) x)
-unpat d (Ind t)         = Ind (unpat d t)
-unpat d (Frz t)         = Frz (unpat d t)
 unpat d Era             = Era
 unpat d (Sup l a b)     = Sup (unpat d l) (unpat d a) (unpat d b)
-unpat d (SupM x l f)    = SupM (unpat d x) (unpat d l) (unpat d f)
+unpat d (SupM l f)      = SupM (unpat d l) (unpat d f)
 unpat d (Frk l a b)     = Frk (unpat d l) (unpat d a) (unpat d b)
 unpat d (Num t)         = Num t
 unpat d (Val v)         = Val v
@@ -299,7 +294,6 @@ unpat d (Op1 o a)       = Op1 o (unpat d a)
 unpat d (Pri p)         = Pri p
 unpat d (Log s x)       = Log (unpat d s) (unpat d x)
 unpat d (Loc s t)       = Loc s (unpat d t)
-unpat d (Rwt a b f)     = Rwt (unpat d a) (unpat d b) (unpat d f)
 unpat d (Pat [s] ms cs) = match d s ms cs
 unpat d (Pat ss  ms []) = One
 unpat d (Pat ss  ms cs) = error "unpat: multiple scrutinees after flattening"
@@ -310,7 +304,7 @@ match :: Int -> Term -> [Move] -> [Case] -> Term
 -- ---------------------------
 -- ~x { 0n: z ; 1n+: λp. s }
 match d x ms (([(cut -> Zer)], z) : ([(cut -> Suc p)], s) : _) =
-  apps d (map snd ms) $ NatM x if_zer if_suc
+  apps d (map snd ms) $ App (NatM if_zer if_suc) x
   where if_zer = lam d (map fst ms) $ unpat d z
         if_suc = Lam (patOf d p) (Just Nat) $ \x -> lam d (map fst ms) $ unpat (d+1) s
 
@@ -318,7 +312,7 @@ match d x ms (([(cut -> Zer)], z) : ([(cut -> Suc p)], s) : _) =
 -- ---------------------------
 -- ~x { 0n: z ; 1n+: λp. s }
 match d x ms (([(cut -> Suc p)], s) : ([(cut -> Zer)], z) : _) =
-  apps d (map snd ms) $ NatM x if_zer if_suc
+  apps d (map snd ms) $ App (NatM if_zer if_suc) x
   where if_zer = lam d (map fst ms) $ unpat d z
         if_suc = Lam (patOf d p) (Just Nat) $ \x -> lam d (map fst ms) $ unpat (d+1) s
 
@@ -326,7 +320,7 @@ match d x ms (([(cut -> Suc p)], s) : ([(cut -> Zer)], z) : _) =
 -- --------------------------------------
 -- ~x { 0n: z ; 1n+: λk. v[k := 1n+k] }
 match d x ms (([(cut -> Zer)], z) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ NatM x if_zer if_suc
+  apps d (map snd ms) $ App (NatM if_zer if_suc) x
   where if_zer = lam d (map fst ms) $ unpat d z
         if_suc = Lam k (Just Nat) $ \x -> lam d (map fst ms) $ unpat (d+1) (subst k (Suc (Var k 0)) v)
 
@@ -334,7 +328,7 @@ match d x ms (([(cut -> Zer)], z) : ([(cut -> Var k i)], v) : _) =
 -- ------------------------------------
 -- ~x { 0n: v[k := 0n] ; 1n+: λp. s }
 match d x ms (([(cut -> Suc p)], s) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ NatM x if_zer if_suc
+  apps d (map snd ms) $ App (NatM if_zer if_suc) x
   where if_zer = lam d (map fst ms) $ unpat d (subst k Zer v)
         if_suc = Lam (patOf d p) (Just Nat) $ \x -> lam d (map fst ms) $ unpat (d+1) s
 
@@ -342,31 +336,31 @@ match d x ms (([(cut -> Suc p)], s) : ([(cut -> Var k i)], v) : _) =
 -- ------------------------------
 -- ~x { False: f ; True: t }
 match d x ms (([(cut -> Bt0)], f) : ([(cut -> Bt1)], t) : _) =
-  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d t)
+  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d t)) x
 
 -- match x { True: t ; False: f }
 -- ------------------------------
 -- ~x { False: f ; True: t }
 match d x ms (([(cut -> Bt1)], t) : ([(cut -> Bt0)], f) : _) =
-  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d t)
+  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d t)) x
 
 -- match x { False: f ; k: v }
 -- --------------------------------------
 -- ~x { False: f ; True: v[k := True] }
 match d x ms (([(cut -> Bt0)], f) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d (subst k Bt1 v))
+  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ unpat d f) (lam d (map fst ms) $ unpat d (subst k Bt1 v))) x
 
 -- match x { True: t ; k: v }
 -- ---------------------------------------
 -- ~x { False: v[k := False] ; True: t }
 match d x ms (([(cut -> Bt1)], t) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ BitM x (lam d (map fst ms) $ unpat d (subst k Bt0 v)) (lam d (map fst ms) $ unpat d t)
+  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ unpat d (subst k Bt0 v)) (lam d (map fst ms) $ unpat d t)) x
 
 -- match x { []: n ; h<>t: c }
 -- ------------------------------
 -- ~x { []: n ; <>: λh. λt. c }
 match d x ms (([(cut -> Nil)], n) : ([(cut -> Con h t)], c) : _) =
-  apps d (map snd ms) $ LstM x if_nil if_con
+  apps d (map snd ms) $ App (LstM if_nil if_con) x
   where if_nil = lam d (map fst ms) $ unpat d n
         if_con = Lam (patOf d h) Nothing $ \_ -> Lam (patOf (d+1) t) Nothing $ \_ -> lam d (map fst ms) $ unpat (d+2) c
 
@@ -374,7 +368,7 @@ match d x ms (([(cut -> Nil)], n) : ([(cut -> Con h t)], c) : _) =
 -- ------------------------------
 -- ~x { []: n ; <>: λh. λt. c }
 match d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
-  apps d (map snd ms) $ LstM x if_nil if_con
+  apps d (map snd ms) $ App (LstM if_nil if_con) x
   where if_nil = lam d (map fst ms) $ unpat d n
         if_con = Lam (patOf d h) Nothing $ \_ -> Lam (patOf (d+1) t) Nothing $ \_ -> lam d (map fst ms) $ unpat (d+2) c
 
@@ -382,7 +376,7 @@ match d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
 -- -----------------------------------------
 -- ~x { []: n ; <>: λh. λt. v[k := h<>t] }
 match d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ LstM x if_nil if_con
+  apps d (map snd ms) $ App (LstM if_nil if_con) x
   where if_nil = lam d (map fst ms) $ unpat d n
         if_con = Lam (nam d) Nothing $ \_ -> Lam (nam (d+1)) Nothing $ \_ -> lam d (map fst ms) $ unpat (d+2) (subst k (Con (var d) (var (d+1))) v)
 
@@ -390,7 +384,7 @@ match d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
 -- ---------------------------------------
 -- ~x { []: v[k := []] ; <>: λh. λt. c }
 match d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ LstM x if_nil if_con
+  apps d (map snd ms) $ App (LstM if_nil if_con) x
   where if_nil = lam d (map fst ms) $ unpat d (subst k Nil v)
         if_con = Lam (patOf d h) Nothing $ \_ -> Lam (patOf (d+1) t) Nothing $ \_ -> lam d (map fst ms) $ unpat (d+2) c
 
@@ -398,13 +392,13 @@ match d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
 -- -----------------
 -- ~x { (): u }
 match d x ms cs@(([(cut -> One)], u) : _) =
-  apps d (map snd ms) $ UniM x (lam d (map fst ms) $ unpat d u)
+  apps d (map snd ms) $ App (UniM (Sub Era) (lam d (map fst ms) $ unpat d u)) x
 
 -- match x { (a,b): p }
 -- --------------------
 -- ~x { (,): λa. λb. p }
 match d x ms (([(cut -> Tup a b)], p) : _) =
-  apps d (map snd ms) $ SigM x if_tup
+  apps d (map snd ms) $ App (SigM if_tup) x
   where if_tup = Lam (patOf d a) Nothing $ \_ -> Lam (patOf (d+1) b) Nothing $ \_ -> lam d (map fst ms) $ unpat (d+2) p
 
 -- match x { @S1: b1 ; @S2: b2 ; ... ; k: d }
@@ -412,7 +406,7 @@ match d x ms (([(cut -> Tup a b)], p) : _) =
 -- ~x { @S1:b1 ; @S2:b2 ; ... ; d }
 match d x ms cs@(([(cut -> Sym _)], _) : _) =
   let (cBranches, defBranch) = collect cs
-  in apps d (map snd ms) $ EnuM x cBranches defBranch
+  in apps d (map snd ms) $ App (EnuM cBranches defBranch) x
   where
     collect :: [Case] -> ([(String, Term)], Term)
     collect [] = ([], Lam "_" Nothing $ \_ -> lam d (map fst ms) $ One)
@@ -427,13 +421,13 @@ match d x ms cs@(([(cut -> Sym _)], _) : _) =
 -- --------------------
 -- ~x { {==}: r }
 match d x ms (([(cut -> Rfl)], r) : _) =
-  apps d (map snd ms) $ EqlM x (lam d (map fst ms) $ unpat d r)
+  apps d (map snd ms) $ App (EqlM Era (lam d (map fst ms) $ unpat d r)) x
 
 -- match x { &L{a,b}: s }
 -- ---------------------------
 -- ~ x { &L{,}: λa. λb. s }
 match d x ms (([(cut -> Sup l a b)], s) : _) =
-  apps d (map snd ms) $ SupM x l if_sup
+  apps d (map snd ms) $ App (SupM l if_sup) x
   where if_sup = Lam (patOf d a) Nothing $ \_ -> Lam (patOf (d+1) b) Nothing $ \_ -> lam d (map fst ms) $ unpat (d+2) s
 
 -- match x { k: body }
@@ -446,7 +440,7 @@ match d x ms (([(cut -> Var k i)], body) : _) =
 -- -----------
 -- λ{}
 match d x ms [] =
-  apps d (map snd ms) (EmpM x)
+  apps d (map snd ms) (App EmpM x)
 
 -- Invalid pattern
 match d s ms cs = error $ "match - invalid pattern: " ++ show (d, s, ms, cs)
@@ -482,40 +476,38 @@ unfrkGo d ctx (Let k t v f) = Let k (fmap (unfrkGo d ctx) t) (unfrkGo d ctx v) (
 unfrkGo d ctx Set           = Set
 unfrkGo d ctx (Chk x t)     = Chk (unfrkGo d ctx x) (unfrkGo d ctx t)
 unfrkGo d ctx Emp           = Emp
-unfrkGo d ctx (EmpM x)      = EmpM (unfrkGo d ctx x)
+unfrkGo d ctx EmpM          = EmpM
 unfrkGo d ctx Uni           = Uni
 unfrkGo d ctx One           = One
 unfrkGo d ctx (UniM x f)    = UniM (unfrkGo d ctx x) (unfrkGo d ctx f)
 unfrkGo d ctx Bit           = Bit
 unfrkGo d ctx Bt0           = Bt0
 unfrkGo d ctx Bt1           = Bt1
-unfrkGo d ctx (BitM x f t)  = BitM (unfrkGo d ctx x) (unfrkGo d ctx f) (unfrkGo d ctx t)
+unfrkGo d ctx (BitM f t)    = BitM (unfrkGo d ctx f) (unfrkGo d ctx t)
 unfrkGo d ctx Nat           = Nat
 unfrkGo d ctx Zer           = Zer
 unfrkGo d ctx (Suc n)       = Suc (unfrkGo d ctx n)
-unfrkGo d ctx (NatM x z s)  = NatM (unfrkGo d ctx x) (unfrkGo d ctx z) (unfrkGo d ctx s)
+unfrkGo d ctx (NatM z s)    = NatM (unfrkGo d ctx z) (unfrkGo d ctx s)
 unfrkGo d ctx (Lst t)       = Lst (unfrkGo d ctx t)
 unfrkGo d ctx Nil           = Nil
 unfrkGo d ctx (Con h t)     = Con (unfrkGo d ctx h) (unfrkGo d ctx t)
-unfrkGo d ctx (LstM x n c)  = LstM (unfrkGo d ctx x) (unfrkGo d ctx n) (unfrkGo d ctx c)
+unfrkGo d ctx (LstM n c)    = LstM (unfrkGo d ctx n) (unfrkGo d ctx c)
 unfrkGo d ctx (Enu s)       = Enu s
 unfrkGo d ctx (Sym s)       = Sym s
-unfrkGo d ctx (EnuM x c e)  = EnuM (unfrkGo d ctx x) [(s, unfrkGo d ctx t) | (s, t) <- c] (unfrkGo d ctx e)
+unfrkGo d ctx (EnuM c e)    = EnuM [(s, unfrkGo d ctx t) | (s, t) <- c] (unfrkGo d ctx e)
 unfrkGo d ctx (Sig a b)     = Sig (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx (Tup a b)     = Tup (unfrkGo d ctx a) (unfrkGo d ctx b)
-unfrkGo d ctx (SigM x f)    = SigM (unfrkGo d ctx x) (unfrkGo d ctx f)
+unfrkGo d ctx (SigM f)      = SigM (unfrkGo d ctx f)
 unfrkGo d ctx (All a b)     = All (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx (Lam n t f)   = Lam n (fmap (unfrkGo d ctx) t) (\x -> unfrkGo (d+1) ((n,d):ctx) (f x))
 unfrkGo d ctx (App f x)     = App (unfrkGo d ctx f) (unfrkGo d ctx x)
 unfrkGo d ctx (Eql t a b)   = Eql (unfrkGo d ctx t) (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx Rfl           = Rfl
-unfrkGo d ctx (EqlM x f)    = EqlM (unfrkGo d ctx x) (unfrkGo d ctx f)
+unfrkGo d ctx (EqlM p f)    = EqlM (unfrkGo d ctx p) (unfrkGo d ctx f)
 unfrkGo d ctx (Met i t x)   = Met i (unfrkGo d ctx t) (map (unfrkGo d ctx) x)
-unfrkGo d ctx (Ind t)       = Ind (unfrkGo d ctx t)
-unfrkGo d ctx (Frz t)       = Frz (unfrkGo d ctx t)
 unfrkGo d ctx Era           = Era
 unfrkGo d ctx (Sup l a b)   = Sup (unfrkGo d ctx l) (unfrkGo d ctx a) (unfrkGo d ctx b)
-unfrkGo d ctx (SupM x l f)  = SupM (unfrkGo d ctx x) (unfrkGo d ctx l) (unfrkGo d ctx f)
+unfrkGo d ctx (SupM l f)    = SupM (unfrkGo d ctx l) (unfrkGo d ctx f)
 unfrkGo d ctx (Frk l a b)   = unfrkFrk d ctx l a b
 unfrkGo d ctx (Num t)       = Num t
 unfrkGo d ctx (Val v)       = Val v
@@ -524,7 +516,6 @@ unfrkGo d ctx (Op1 o a)     = Op1 o (unfrkGo d ctx a)
 unfrkGo d ctx (Pri p)       = Pri p
 unfrkGo d ctx (Log s x)     = Log (unfrkGo d ctx s) (unfrkGo d ctx x)
 unfrkGo d ctx (Loc s t)     = Loc s (unfrkGo d ctx t)
-unfrkGo d ctx (Rwt a b x)   = Rwt (unfrkGo d ctx a) (unfrkGo d ctx b) (unfrkGo d ctx x)
 unfrkGo d ctx (Pat s m c)   = Pat (map (unfrkGo d ctx) s) [(k, unfrkGo d ctx v) | (k,v) <- m] [(p, unfrkGo d (ctxCs p) f) | (p, f) <- c]
   where
     ctxCs  p = ctx ++ map (\(k,v) -> (k, d)) m ++ ctxPat p
@@ -546,10 +537,10 @@ unfrkFrk d ctx l a b = buildSupMs vars where
     b' = substMany rs (unfrkGo d ctx b)
   -- For each variable, create a SupM that binds the superposed versions
   buildSupMs ((n,d):rest) =
-    SupM (Var n d) l $
+    App (SupM l $
     Lam (n++"0") Nothing $ \_ ->
     Lam (n++"1") Nothing $ \_ ->
-    buildSupMs rest
+    buildSupMs rest) (Var n d)
   -- Removes repeated (shadowed) vars from the context
   shadowCtx ((n,d):ctx) =
     if n `elem` (map fst ctx)
@@ -613,40 +604,38 @@ subst name val term = go name val term where
     Chk x t     -> Chk (go name val x) (go name val t)
     Set         -> Set
     Emp         -> Emp
-    EmpM x      -> EmpM (go name val x)
+    EmpM        -> EmpM
     Uni         -> Uni
     One         -> One
     UniM x f    -> UniM (go name val x) (go name val f)
     Bit         -> Bit
     Bt0         -> Bt0
     Bt1         -> Bt1
-    BitM x f t  -> BitM (go name val x) (go name val f) (go name val t)
+    BitM f t    -> BitM (go name val f) (go name val t)
     Nat         -> Nat
     Zer         -> Zer
     Suc n       -> Suc (go name val n)
-    NatM x z s  -> NatM (go name val x) (go name val z) (go name val s)
+    NatM z s    -> NatM (go name val z) (go name val s)
     Lst t       -> Lst (go name val t)
     Nil         -> Nil
     Con h t     -> Con (go name val h) (go name val t)
-    LstM x n c  -> LstM (go name val x) (go name val n) (go name val c)
+    LstM n c    -> LstM (go name val n) (go name val c)
     Enu s       -> Enu s
     Sym s       -> Sym s
-    EnuM x c e  -> EnuM (go name val x) [(s, go name val t) | (s, t) <- c] (go name val e)
+    EnuM c e    -> EnuM [(s, go name val t) | (s, t) <- c] (go name val e)
     Sig a b     -> Sig (go name val a) (go name val b)
     Tup a b     -> Tup (go name val a) (go name val b)
-    SigM x f    -> SigM (go name val x) (go name val f)
+    SigM f      -> SigM (go name val f)
     All a b     -> All (go name val a) (go name val b)
     Lam k t f   -> if k == name then term else Lam k (fmap (go name val) t) (\x -> go name val (f x))
     App f x     -> App (go name val f) (go name val x)
     Eql t a b   -> Eql (go name val t) (go name val a) (go name val b)
     Rfl         -> Rfl
-    EqlM x f    -> EqlM (go name val x) (go name val f)
+    EqlM p f    -> EqlM (go name val p) (go name val f)
     Met i t x   -> Met i (go name val t) (map (go name val) x)
-    Ind t       -> Ind (go name val t)
-    Frz t       -> Frz (go name val t)
     Era         -> Era
     Sup l a b   -> Sup (go name val l) (go name val a) (go name val b)
-    SupM x l f  -> SupM (go name val x) (go name val l) (go name val f)
+    SupM l f    -> SupM (go name val l) (go name val f)
     Frk l a b   -> Frk (go name val l) (go name val a) (go name val b)
     Num t       -> Num t
     Val v       -> Val v
@@ -655,7 +644,6 @@ subst name val term = go name val term where
     Pri p       -> Pri p
     Log s x     -> Log (go name val s) (go name val x)
     Loc s t     -> Loc s (go name val t)
-    Rwt a b x   -> Rwt (go name val a) (go name val b) (go name val x)
     Pat s m c   -> Pat (map (go name val) s) m (map cse c)
       where cse (pats, rhs) = (map (go name val) pats, go name val rhs)
 

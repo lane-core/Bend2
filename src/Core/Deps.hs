@@ -28,46 +28,43 @@ collectDeps bound term = case term of
   Set         -> S.empty
   Chk x t     -> S.union (collectDeps bound x) (collectDeps bound t)
   Emp         -> S.empty
-  EmpM x      -> collectDeps bound x
+  EmpM        -> S.empty
   Uni         -> S.empty
   One         -> S.empty
   UniM x f    -> S.union (collectDeps bound x) (collectDeps bound f)
   Bit         -> S.empty
   Bt0         -> S.empty
   Bt1         -> S.empty
-  BitM x f t  -> S.unions [collectDeps bound x, collectDeps bound f, collectDeps bound t]
+  BitM f t    -> S.union (collectDeps bound f) (collectDeps bound t)
   Nat         -> S.empty
   Zer         -> S.empty
   Suc n       -> collectDeps bound n
-  NatM x z s  -> S.unions [collectDeps bound x, collectDeps bound z, collectDeps bound s]
+  NatM z s    -> S.union (collectDeps bound z) (collectDeps bound s)
   Lst t       -> collectDeps bound t
   Nil         -> S.empty
   Con h t     -> S.union (collectDeps bound h) (collectDeps bound t)
-  LstM x n c  -> S.unions [collectDeps bound x, collectDeps bound n, collectDeps bound c]
+  LstM n c    -> S.union (collectDeps bound n) (collectDeps bound c)
   Enu _       -> S.empty
   Sym _       -> S.empty
-  EnuM x cs d -> S.unions [collectDeps bound x, S.unions (map (collectDeps bound . snd) cs), collectDeps bound d]
+  EnuM cs d   -> S.union (S.unions (map (collectDeps bound . snd) cs)) (collectDeps bound d)
   Num _       -> S.empty
   Val _       -> S.empty
   Op2 _ a b   -> S.union (collectDeps bound a) (collectDeps bound b)
   Op1 _ a     -> collectDeps bound a
   Sig a b     -> S.union (collectDeps bound a) (collectDeps bound b)
   Tup a b     -> S.union (collectDeps bound a) (collectDeps bound b)
-  SigM x f    -> S.union (collectDeps bound x) (collectDeps bound f)
+  SigM f      -> collectDeps bound f
   All a b     -> S.union (collectDeps bound a) (collectDeps bound b)
   Lam k t f   -> S.union (collectDeps (S.insert k bound) (f (Var k 0))) (foldMap (collectDeps bound) t)
   App f x     -> S.union (collectDeps bound f) (collectDeps bound x)
   Eql t a b   -> S.unions [collectDeps bound t, collectDeps bound a, collectDeps bound b]
   Rfl         -> S.empty
-  EqlM x f    -> S.union (collectDeps bound x) (collectDeps bound f)
+  EqlM p f    -> S.union (collectDeps bound p) (collectDeps bound f)
   Met _ t ctx -> S.unions (collectDeps bound t : map (collectDeps bound) ctx)
-  Ind t       -> collectDeps bound t
-  Frz t       -> collectDeps bound t
   Era         -> S.empty
   Sup _ a b   -> S.union (collectDeps bound a) (collectDeps bound b)
-  SupM x l f  -> S.unions [collectDeps bound x, collectDeps bound l, collectDeps bound f]
+  SupM l f    -> S.union (collectDeps bound l) (collectDeps bound f)
   Loc _ t     -> collectDeps bound t
-  Rwt a b x   -> S.unions [collectDeps bound a, collectDeps bound b, collectDeps bound x]
   Log s x     -> S.union (collectDeps bound s) (collectDeps bound x)
   Pri _       -> S.empty
   Pat s m c   -> S.unions $ map (collectDeps bound) s ++ map (collectDeps bound . snd) m ++ concatMap (collectCaseDeps bound) c

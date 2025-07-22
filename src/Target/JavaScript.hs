@@ -71,7 +71,7 @@ termToCT book term dep = case term of
   Set          -> CEra
   Chk x _      -> termToCT book x dep
   Emp          -> CEra
-  EmpM _       -> CEra
+  EmpM         -> CLam "x$" (\_ -> CEra)
   Uni          -> CEra
   Bit          -> CEra
   Nat          -> CEra
@@ -81,11 +81,8 @@ termToCT book term dep = case term of
   Sig _ _      -> CEra
   All _ _      -> CEra
   Eql _ _ _    -> CEra
-  Ind _        -> CEra
-  Frz _        -> CEra
   Met _ _ _    -> CEra
   Loc _ t      -> termToCT book t dep
-  Rwt _ _ _    -> error "TODO"
   One          -> COne
   Zer          -> CZer
   Suc n        -> CSuc (termToCT book n dep)
@@ -98,13 +95,13 @@ termToCT book term dep = case term of
   Val v        -> CVal v
   Lam k _ f    -> CLam k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
   App f x      -> CApp (termToCT book f dep) (termToCT book x dep)
-  UniM x f     -> CApp (CUse (termToCT book f dep)) (termToCT book x dep)
-  BitM x f t   -> CApp (CBif (termToCT book f dep) (termToCT book t dep)) (termToCT book x dep)
-  NatM x z s   -> CApp (CSwi (termToCT book z dep) (termToCT book s dep)) (termToCT book x dep)
-  LstM x n c   -> CApp (CMat (termToCT book n dep) (termToCT book c dep)) (termToCT book x dep)
-  EnuM x c d   -> CApp (CCse (map (\(s,t) -> (s, termToCT book t dep)) c) (termToCT book d dep)) (termToCT book x dep)
-  SigM x f     -> CApp (CGet (termToCT book f dep)) (termToCT book x dep)
-  EqlM x f     -> CApp (CEql (termToCT book f dep)) (termToCT book x dep)
+  UniM x f     -> CLam "x$" (\x -> CApp (CUse (termToCT book f dep)) x)
+  BitM f t     -> CLam "x$" (\x -> CApp (CBif (termToCT book f dep) (termToCT book t dep)) x)
+  NatM z s     -> CLam "x$" (\x -> CApp (CSwi (termToCT book z dep) (termToCT book s dep)) x)
+  LstM n c     -> CLam "x$" (\x -> CApp (CMat (termToCT book n dep) (termToCT book c dep)) x)
+  EnuM c d     -> CLam "x$" (\x -> CApp (CCse (map (\(s,t) -> (s, termToCT book t dep)) c) (termToCT book d dep)) x)
+  SigM f       -> CLam "x$" (\x -> CApp (CGet (termToCT book f dep)) x)
+  EqlM p f     -> CLam "x$" (\x -> CApp (CEql (termToCT book f dep)) x)
   Op2 o a b    -> COp2 o (termToCT book a dep) (termToCT book b dep)
   Op1 o a      -> COp1 o (termToCT book a dep)
   Log s x      -> termToCT book x dep  -- For JavaScript, just return the result expression
@@ -112,7 +109,7 @@ termToCT book term dep = case term of
   Rfl          -> CEra
   Era          -> CEra
   Sup l a b    -> CSup (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
-  SupM x l f   -> CSupM (termToCT book x dep) (termToCT book l dep) (termToCT book f dep)
+  SupM l f     -> CSupM CEra (termToCT book l dep) (termToCT book f dep)
   Frk l a b    -> CFrk (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
   Pat _ _ _  -> error "unreachable"
 

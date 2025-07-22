@@ -43,28 +43,28 @@ cmp lv d book a b =
     (Set            , Set            ) -> True
     (Chk xa ta      , Chk xb tb      ) -> eql lv d book xa xb && eql lv d book ta tb
     (Emp            , Emp            ) -> True
-    (EmpM xa        , EmpM xb        ) -> eql lv d book xa xb
+    (EmpM           , EmpM           ) -> True
     (Uni            , Uni            ) -> True
     (One            , One            ) -> True
     (UniM xa fa     , UniM xb fb     ) -> eql lv d book xa xb && eql lv d book fa fb
     (Bit            , Bit            ) -> True
     (Bt0            , Bt0            ) -> True
     (Bt1            , Bt1            ) -> True
-    (BitM xa fa ta  , BitM xb fb tb  ) -> eql lv d book xa xb && eql lv d book fa fb && eql lv d book ta tb
+    (BitM fa ta     , BitM fb tb     ) -> eql lv d book fa fb && eql lv d book ta tb
     (Nat            , Nat            ) -> True
     (Zer            , Zer            ) -> True
     (Suc na         , Suc nb         ) -> eql lv d book na nb
-    (NatM xa za sa  , NatM xb zb sb  ) -> eql lv d book xa xb && eql lv d book za zb && eql lv d book sa sb
+    (NatM za sa     , NatM zb sb     ) -> eql lv d book za zb && eql lv d book sa sb
     (Lst ta         , Lst tb         ) -> eql lv d book ta tb
     (Nil            , Nil            ) -> True
     (Con ha ta      , Con hb tb      ) -> eql lv d book ha hb && eql lv d book ta tb
-    (LstM xa na ca  , LstM xb nb cb  ) -> eql lv d book xa xb && eql lv d book na nb && eql lv d book ca cb
+    (LstM na ca     , LstM nb cb     ) -> eql lv d book na nb && eql lv d book ca cb
     (Enu sa         , Enu sb         ) -> sa == sb
     (Sym sa         , Sym sb         ) -> sa == sb
-    (EnuM xa ca da  , EnuM xb cb db  ) -> eql lv d book xa xb && length ca == length cb && all (\ ((s1,t1), (s2,t2)) -> s1 == s2 && eql lv d book t1 t2) (zip ca cb) && eql lv d book da db
+    (EnuM ca da     , EnuM cb db     ) -> length ca == length cb && all (\ ((s1,t1), (s2,t2)) -> s1 == s2 && eql lv d book t1 t2) (zip ca cb) && eql lv d book da db
     (Sig aa ba      , Sig ab bb      ) -> eql lv d book aa ab && eql lv d book ba bb
     (Tup aa ba      , Tup ab bb      ) -> eql lv d book aa ab && eql lv d book ba bb
-    (SigM xa fa     , SigM xb fb     ) -> eql lv d book xa xb && eql lv d book fa fb
+    (SigM fa        , SigM fb        ) -> eql lv d book fa fb
     (All aa ba      , All ab bb      ) -> eql lv d book aa ab && eql lv d book ba bb
     (Lam ka ta fa   , Lam kb tb fb   ) -> eql lv (d+1) book (fa (Var ka d)) (fb (Var kb d)) && fromMaybe True (liftA2 (eql lv d book) ta tb)
     (App fa xa      , App fb xb      ) -> eql lv d book fa fb && eql lv d book xa xb
@@ -72,18 +72,12 @@ cmp lv d book a b =
     -- (Eql ta _  _  , b            ) -> eql lv d book ta b
     -- (a            , Eql tb _  _  ) -> eql lv d book a tb
     (Rfl            , Rfl            ) -> True
-    (EqlM xa fa     , EqlM xb fb     ) -> eql lv d book xa xb && eql lv d book fa fb
-    (Ind ta         , b              ) -> eql lv d book ta b
-    (a              , Ind tb         ) -> eql lv d book a tb
-    (Frz ta         , b              ) -> eql lv d book ta b
-    (a              , Frz tb         ) -> eql lv d book a tb
+    (EqlM pa fa     , EqlM pb fb     ) -> eql lv d book pa pb && eql lv d book fa fb
     (Loc _ ta       , b              ) -> eql lv d book ta b
     (a              , Loc _ tb       ) -> eql lv d book a tb
-    (Rwt _ _ xa     , _              ) -> eql lv d book xa b
-    (_              , Rwt _ _ xb     ) -> eql lv d book a xb
     (Era            , Era            ) -> True
     (Sup la aa ba   , Sup lb ab bb   ) -> eql lv d book la lb && eql lv d book aa ab && eql lv d book ba bb
-    (SupM xa la fa  , SupM xb lb fb  ) -> eql lv d book xa xb && eql lv d book la lb && eql lv d book fa fb
+    (SupM la fa     , SupM lb fb     ) -> eql lv d book la lb && eql lv d book fa fb
     (Frk la aa ba   , Frk lb ab bb   ) -> eql lv d book la lb && eql lv d book aa ab && eql lv d book ba bb
     (Num ta         , Num tb         ) -> ta == tb
     (Val va         , Val vb         ) -> va == vb

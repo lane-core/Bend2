@@ -49,6 +49,104 @@ data PriF
   | CHAR_TO_U64
   deriving (Show, Eq)
 
+-- -- Bend's Term Type
+-- data Term
+  -- -- Variables
+  -- = Var Name Int -- x
+  -- | Ref Name     -- x
+  -- | Sub Term     -- x
+
+  -- -- Definitions
+  -- | Fix Name Body                   -- μx. f
+  -- | Let Name (Maybe Term) Term Body -- !x : T = v; f
+
+  -- -- Universe
+  -- | Set -- Set
+
+  -- -- Annotation
+  -- | Chk Term Type -- x::t
+
+  -- -- Empty
+  -- | Emp       -- Empty
+  -- | EmpM Term -- ~x{}
+
+  -- -- Unit
+  -- | Uni            -- Unit
+  -- | One            -- ()
+  -- | UniM Term Term -- ~x{():f}
+
+  -- -- Bool
+  -- | Bit                 -- Bool
+  -- | Bt0                 -- False
+  -- | Bt1                 -- True
+  -- | BitM Term Term Term -- ~x{False:t;True:t}
+
+  -- -- Nat
+  -- | Nat                 -- Nat
+  -- | Zer                 -- 0
+  -- | Suc Term            -- ↑n
+  -- | NatM Term Term Term -- ~x{0n:z;1n+:s}
+
+  -- -- List
+  -- | Lst Type            -- T[]
+  -- | Nil                 -- []
+  -- | Con Term Term       -- h<>t
+  -- | LstM Term Term Term -- ~x{[]:n;<>:c}
+
+  -- -- Enum
+  -- | Enu [String]                   -- {@foo,@bar...}
+  -- | Sym String                     -- @foo
+  -- | EnuM Term [(String,Term)] Term -- ~x{@foo:f;@bar:b;...d}
+
+  -- -- Numbers
+  -- | Num NTyp           -- CHR | U64 | I64 | F64
+  -- | Val NVal           -- 123 | +123 | +123.0
+  -- | Op2 NOp2 Term Term -- x + y
+  -- | Op1 NOp1 Term      -- !x
+
+  -- -- Pair
+  -- | Sig Type Type       -- ΣA.B
+  -- | Tup Term Term       -- (a,b)
+  -- | SigM Term Term      -- ~x{(,):f}
+
+  -- -- Function
+  -- | All Type Type              -- ∀A.B
+  -- | Lam Name (Maybe Term) Body -- λx.f | λx:A . f
+  -- | App Term Term              -- (f x)
+
+  -- -- Equality
+  -- | Eql Type Term Term -- T{a==b}
+  -- | Rfl                -- {==}
+  -- | EqlM Term Term     -- ~x{{==}:f}
+
+  -- -- MetaVar
+  -- | Met Name Type [Term] -- ?N:T{x0,x1,...}
+  
+  -- -- Hints
+  -- | Ind Type -- ~~T
+  -- | Frz Type -- ∅T
+
+  -- -- Supperpositions
+  -- | Era                 -- *
+  -- | Sup Term Term Term  -- &L{a,b}
+  -- | SupM Term Term Term -- ~x{&L{,}:f}
+
+  -- -- Errors
+  -- | Loc Span Term -- x
+  -- | Rwt Term Term Term -- a → b ; x
+
+  -- -- Logging
+  -- | Log Term Term -- log s ; x
+
+  -- -- Primitive
+  -- | Pri PriF -- SOME_FUNC
+
+  -- -- Sugars
+  -- | Pat [Term] [Move] [Case] -- match x ... { with k=v ... ; case @A ...: F ; ... }
+  -- | Frk Term Term Term       -- fork L:a else:b
+
+-- NEW TERM TYPE:
+
 -- Bend's Term Type
 data Term
   -- Variables
@@ -67,36 +165,36 @@ data Term
   | Chk Term Type -- x::t
 
   -- Empty
-  | Emp       -- Empty
-  | EmpM Term -- ~x{}
+  | Emp  -- Empty
+  | EmpM -- λ{}
 
   -- Unit
   | Uni            -- Unit
   | One            -- ()
-  | UniM Term Term -- ~x{():f}
+  | UniM Term Term -- λ{():f}
 
   -- Bool
-  | Bit                 -- Bool
-  | Bt0                 -- False
-  | Bt1                 -- True
-  | BitM Term Term Term -- ~x{False:t;True:t}
+  | Bit            -- Bool
+  | Bt0            -- False
+  | Bt1            -- True
+  | BitM Term Term -- λ{False:t;True:t}
 
   -- Nat
-  | Nat                 -- Nat
-  | Zer                 -- 0
-  | Suc Term            -- ↑n
-  | NatM Term Term Term -- ~x{0n:z;1n+:s}
+  | Nat            -- Nat
+  | Zer            -- 0
+  | Suc Term       -- ↑n
+  | NatM Term Term -- λ{0n:z;1n+:s}
 
   -- List
-  | Lst Type            -- T[]
-  | Nil                 -- []
-  | Con Term Term       -- h<>t
-  | LstM Term Term Term -- ~x{[]:n;<>:c}
+  | Lst Type       -- T[]
+  | Nil            -- []
+  | Con Term Term  -- h<>t
+  | LstM Term Term -- λ{[]:n;<>:c}
 
   -- Enum
-  | Enu [String]                   -- {@foo,@bar...}
-  | Sym String                     -- @foo
-  | EnuM Term [(String,Term)] Term -- ~x{@foo:f;@bar:b;...d}
+  | Enu [String]              -- {&foo,&bar...}
+  | Sym String                -- &foo
+  | EnuM [(String,Term)] Term -- λ{&foo:f;&bar:b;...d}
 
   -- Numbers
   | Num NTyp           -- CHR | U64 | I64 | F64
@@ -105,45 +203,32 @@ data Term
   | Op1 NOp1 Term      -- !x
 
   -- Pair
-  | Sig Type Type       -- ΣA.B
-  | Tup Term Term       -- (a,b)
-  | SigM Term Term      -- ~x{(,):f}
+  | Sig Type Type -- ΣA.B
+  | Tup Term Term -- (a,b)
+  | SigM Term     -- λ{(,):f}
 
   -- Function
   | All Type Type              -- ∀A.B
-  | Lam Name (Maybe Term) Body -- λx.f | λx:A . f
+  | Lam Name (Maybe Term) Body -- λx.f | λx:A.f
   | App Term Term              -- (f x)
 
   -- Equality
   | Eql Type Term Term -- T{a==b}
   | Rfl                -- {==}
-  | EqlM Term Term     -- ~x{{==}:f}
+  | EqlM Term Term     -- λ{{==}:f}:T
 
   -- MetaVar
   | Met Name Type [Term] -- ?N:T{x0,x1,...}
-  
-  -- Hints
-  | Ind Type -- ~~T
-  | Frz Type -- ∅T
 
   -- Supperpositions
   | Era                 -- *
   | Sup Term Term Term  -- &L{a,b}
-  | SupM Term Term Term -- ~x{&L{,}:f}
+  | SupM Term Term      -- λ{&L{,}:f}
 
   -- Errors
   | Loc Span Term -- x
-  | Rwt Term Term Term -- a → b ; x
 
   -- Logging
-  -- NOTE: THIS IS A NEW PRIMITIVE (WIP)
-  -- when the user writes:
-  -- `log "foo" 123`
-  -- the evaluator (whnf) will log "foo" to the screen, and return 123
-  -- it will do so from Haskell-side by using Debug.Trace
-  -- the first term must be a Char[]. the whnfLog function will normalize the
-  -- Bend string layer by layer to convert to a Haskell string, and then print.
-  -- if this fails (say, if ill-typed, or stuck), nothing will be printed.
   | Log Term Term -- log s ; x
 
   -- Primitive
@@ -152,6 +237,337 @@ data Term
   -- Sugars
   | Pat [Term] [Move] [Case] -- match x ... { with k=v ... ; case @A ...: F ; ... }
   | Frk Term Term Term       -- fork L:a else:b
+
+-- # Changes:
+-- 
+-- ## Pattern-Matching is now done via λ-Matches:
+-- 
+-- All pattern-matching terms were replaced by λ-Match terms.
+-- That means that, now, instead of:
+--   ~ x { 0n:A 1n+:λp.B }
+-- We write:
+--   (λ{ 0n:A 1n+:λp.B } x)
+-- I.e., the scrutinee has been moved out: 'App mat_fn scrutinee'.
+-- On WHNF, instead of implementing rules like 'whnfNatM', we implement rules
+-- like 'whnfAppNat' instead. The whnfApp rule will dispatch to the λ-matcher.
+-- 
+-- ## The Ind/Frz hints were completely removed.
+--
+-- We don't use these anymore, so, they were removed.
+-- 
+-- ## Rewrites have been refactored:
+-- 
+-- The Rwt constructor has been removed.
+-- The Rewrite.hs file will also be removed.
+-- Instead, when checking dependent eliminations like λ{ 0n:Z 1n+:S }, we will
+-- substitute 0n and 1n+p on the *existing goal*, rather than using rewrite.
+-- For example:
+-- check λ{ 0n:Z 1n+:S } :: ∀n:Nat.P(n) =>
+-- - check Z :: P(0n)
+-- - check S :: ∀n:Nat.P(1n+n)
+-- This removes the need for 'rewrite' on all checking rules, except for:
+-- - λ{ {==}:R }
+-- To amend that, we extend EqlM with an explicit motive:
+-- - λ{ {==}:R } : P
+-- 
+-- ## Equality is now fully observational:
+-- 
+-- Previously, Equality had some observational flavor, because we allowed, in
+-- the type-checker, for T{↑a == ↑b} to check as ↑T{a == b}, and similar. Now,
+-- equality is truly observational, in the sense that it *reduces* to either
+-- Unit or Empty. For example, Nat{0 == 0} reduces to Uni, and Nat{0 == 1}
+-- reduces to empty.
+-- 
+-- ## Guarded Derefs replace Undo-Ugly
+-- 
+-- Previously, WHNF included an EvalLevel argument, with the goal of "undo'in
+-- ugly forms". That functionality will be removed. Instead, we will include a
+-- "Guarded Deref" function, which unrolls a ref against λ-cases, undo'ing on
+-- demand when it gets stuck in a var. The WHNF will not receive a level
+-- anymore, and the 'ugly' function will be removed.
+-- 
+-- ## New WHNF Reference:
+-- 
+-- The code below is the WHNF of Bend-in-Bend. The Haskell implementation should
+-- align with it as closely as possible.
+-- 
+-- def whnf(term: Term) -> Term:
+--   match term:
+--     case @Ref{k, f, t}:
+--       whnf_ref(k, f, t)
+--     case @Let{T, v, f}:
+--       whnf_let(T, v, f)
+--     case @Fix{f}:
+--       whnf_fix(f)
+--     case @App{f, x}:
+--       whnf_app(f, x)
+--     case @Eql{t, a, b}:
+--       whnf_eql(t, a, b)
+--     case @Rwt{e, P, f}:
+--       whnf_rwt(e, P, f)
+--     case x:
+--       x
+-- 
+-- def whnf_ref(k: String, f: Term, t: Term) -> Term:
+--   deref(k, @LHS{0n, λk.k}, f)
+-- 
+-- def whnf_let(T: Term, v: Term, f: Term -> Term) -> Term:
+--   whnf(f(v))
+-- 
+-- def whnf_fix(f: Term -> Term) -> Term:
+--   whnf(f(whnf(@Fix{f})))
+-- 
+-- def whnf_app(f: Term, x: Term) -> Term:
+--   match whnf(f):
+--     with x
+--     case @Lam{f}:
+--       whnf(f(whnf(x)))
+--     case @UniM{f}:
+--       whnf_uni(x, f)
+--     case @BitM{f, t}:
+--       whnf_bit(x, f, t)
+--     case @NatM{z, s}:
+--       whnf_nat(x, z, s)
+--     case @LstM{n, c}:
+--       whnf_lst(x, n, c)
+--     case @SigM{f}:
+--       whnf_sig(x, f)
+--     case f:
+--       @App{f, x}
+-- 
+-- def whnf_uni(x: Term, f: Term) -> Term:
+--   match whnf(x):
+--     with f
+--     case @One:
+--       whnf(f)
+--     case x:
+--       @App{@UniM{f}, x}
+-- 
+-- def whnf_bit(x: Term, f: Term, t: Term) -> Term:
+--   match whnf(x):
+--     with f
+--     with t
+--     case @Bt0:
+--       whnf(f)
+--     case @Bt1:
+--       whnf(t)
+--     case x:
+--       @App{@BitM{f, t}, x}
+-- 
+-- def whnf_nat(x: Term, z: Term, s: Term) -> Term:
+--   match whnf(x):
+--     with z
+--     with s
+--     case @Zer:
+--       whnf(z)
+--     case @Suc{n}:
+--       whnf(@App{s, whnf(n)})
+--     case x:
+--       @App{@NatM{z, s}, x}
+-- 
+-- def whnf_lst(x: Term, n: Term, c: Term) -> Term:
+--   match whnf(x):
+--     with n
+--     with c
+--     case @Nil:
+--       whnf(n)
+--     case @Con{h, t}:
+--       whnf(@App{@App{c, whnf(h)}, whnf(t)})
+--     case x:
+--       @App{@LstM{n, c}, x}
+-- 
+-- def whnf_sig(x: Term, f: Term) -> Term:
+--   match whnf(x):
+--     with f
+--     case @Tup{a, b}:
+--       whnf(@App{@App{f, whnf(a)}, whnf(b)})
+--     case x:
+--       @App{@SigM{f}, x}
+-- 
+-- def whnf_eql(T: Term, a: Term, b: Term) -> Term:
+--   match whnf(T):
+--     with a
+--     with b
+--     case @Uni:
+--       match a b:
+--         case @One @One:
+--           @Uni
+--         case a b:
+--           @Eql{@Bit, a, b}
+--     case @Bit:
+--       match whnf(a) whnf(b):
+--         case @Bt0 @Bt0:
+--           @Uni
+--         case @Bt1 @Bt1:
+--           @Uni
+--         case @Bt0 @Bt1:
+--           @Emp
+--         case @Bt1 @Bt0:
+--           @Emp
+--         case a b:
+--           @Eql{@Bit, a, b}
+--     case @Nat:
+--       match whnf(a) whnf(b):
+--         case @Zer @Zer:
+--           @Uni
+--         case @Zer @Suc{b}:
+--           @Emp
+--         case @Suc{a} @Zer:
+--           @Emp
+--         case @Suc{a} @Suc{b}:
+--           whnf(@Eql{@Nat, a, b})
+--         case a b:
+--           @Eql{@Nat, a, b}
+--     case @Lst{T}:
+--       match whnf(a) whnf(b):
+--         case @Nil @Nil:
+--           @Uni
+--         case @Nil @Con{bh,bt}:
+--           @Emp
+--         case @Con{ah,at} @Nil:
+--           @Emp
+--         case @Con{ah,at} @Con{bh,bt}:
+--           whnf(@Sig{@Eql{T, ah, bh}, @Lam{λ_. @Eql{@Lst{T}, at, bt}}})
+--         case a b:
+--           @Eql{@Lst{T}, a, b}
+--     case @Sig{X,Y}:
+--       match whnf(a) whnf(b):
+--         case @Tup{ax,ay} @Tup{bx,by}:
+--           whnf(@Sig{@Eql{X, ax, bx}, @Lam{λ_. @Eql{@App{Y, ax}, ay, by}}})
+--         case a b:
+--           @Eql{@Sig{X,Y}, a, b}
+--     case @All{X,Y}:
+--       @All{X, @Lam{λx. @Eql{@App{Y,x}, @App{a,x}, @App{b,x}}}}
+--     case T:
+--       @Eql{T, a, b}
+-- 
+-- def whnf_rwt(e: Term, P: Term, f: Term) -> Term:
+--   match whnf(e):
+--     with P
+--     with f
+--     case @Uni:
+--       whnf(f)
+--     case @Emp:
+--       *
+--     case e:
+--       @Rwt{e, P, f}
+-- 
+-- # Guarded Deref
+-- # -------------
+-- # Converts the Ref's body into a "guarded matcher" that eliminates received args
+-- # until it either succeeds, or gets stuck against a var. This emulates Agda-like
+-- # clauses, giving us recursive recursive Refs that don't unroll infinitely.
+-- 
+-- def deref(k: String, lhs: LHS, body: Term) -> Term:
+--   #log String/flat(["deref ", show(0n,F), " - ", show(0n,body)])
+--   match body:
+--     with k
+--     with lhs
+--     case @EmpM:
+--       @Lam{λx. deref_undo(k, lhs, @EmpM, x)} # FIXME: review
+--     case @UniM{f}:
+--       @Lam{λx.
+--         match x:
+--           case @One:
+--             deref(k, lhs_ctr(lhs, 0n, @One), f)
+--           case x:
+--             deref_undo(k, lhs, @UniM{f}, x)}
+--     case @BitM{f,t}:
+--       @Lam{λx.
+--         match x:
+--           case @Bt0:
+--             deref(k, lhs_ctr(lhs, 0n, @Bt0), f)
+--           case @Bt1:
+--             deref(k, lhs_ctr(lhs, 0n, @Bt1), t)
+--           case x:
+--             deref_undo(k, lhs, @BitM{f,t}, x)}
+--     case @NatM{z,s}:
+--       @Lam{λx.
+--         match x:
+--           case @Zer:
+--             deref(k, lhs_ctr(lhs, 0n, @Zer), z)
+--           case @Suc{xp}:
+--             @App{deref(k, lhs_ctr(lhs, 1n, λp.@Suc{p}), s), xp}
+--           case x:
+--             deref_undo(k, lhs, @NatM{z,s}, x)}
+--     case @LstM{n,c}:
+--       @Lam{λx.
+--         match x:
+--           case @Nil:
+--             deref(k, lhs_ctr(lhs, 0n, @Nil), n)
+--           case @Con{h,t}:
+--             @App{@App{deref(k, lhs_ctr(lhs, 2n, λh.λt.@Con{h,t}), c), h}, t}
+--           case x:
+--             deref_undo(k, lhs, @LstM{n,c}, x)}
+--     case @SigM{f}:
+--       @Lam{λx.
+--         match x:
+--           case @Tup{a,b}:
+--             @App{@App{deref(k, lhs_ctr(lhs, 2n, λa.λb.@Tup{a,b}), f), a}, b}
+--           case x:
+--             deref_undo(k, lhs, @SigM{f}, x)}
+--     case @Lam{f}: # FIXME: can we avoid cloning 'x' here?
+--       @Lam{λx. deref(k, lhs_ctr(lhs, 0n, x), f(x))}
+--     case body:
+--       body
+-- 
+-- def deref_undo(k: String, lhs: LHS, body: Term, x: Term) -> Term:
+--   @LHS{K,L} = lhs
+--   match K:
+--     case 0n:
+--       @App{L(@Nam{k}), x}
+--     case 1n+K:
+--       deref(k, @LHS{K, L(x)}, body)
+-- 
+-- type LHS:
+--   case @LHS:
+--     K: Nat
+--     L: Term -> Arg<K>
+-- 
+-- def lhs_ctr_new(L: Term -> Term, N: Nat, ctr: Arg<N>) -> Term -> Arg<N>:
+--   match N:
+--     with L
+--     with ctr
+--     case 0n:
+--       λk. @App{L(k), ctr}
+--     case 1n+Np:
+--       λx. lhs_ctr_new(L, Np, ctr(x))
+-- 
+-- def lhs_ctr_ext(K: Nat, L: Term -> Arg<1n+K>, N: Nat, ctr: Arg<N>) -> Arg<1n+Nat/add(N,K)>:
+--   match N:
+--     with K
+--     with L
+--     with ctr
+--     case 0n:
+--       L(ctr)
+--     case 1n+Np:
+--       λx. lhs_ctr_ext(K, L, Np, ctr(x))
+-- 
+-- def lhs_ctr(lhs: LHS, N: Nat, ctr: Arg<N>) -> LHS:
+--   @LHS{K,L} = lhs
+--   match K:
+--     with L
+--     with N
+--     with ctr
+--     case 0n:
+--       @LHS{N, lhs_ctr_new(L, N, ctr)}
+--     case 1n+K:
+--       @LHS{Nat/add(N,K), lhs_ctr_ext(K, L, N, ctr)}
+-- 
+-- def lhs_to_list(lhs: LHS) -> Term[]:
+--   @LHS{K,L} = lhs
+--   match K:
+--     case 0n:
+--       get_args(L(@Emp), [])
+--     case 1n+K:
+--       [] # won't happen
+-- 
+-- Note: since Haskell doesn't have dependent types, in order to implement the
+-- LHS type and functions, we use Term lambdas instead of native lambdas. That
+-- is, the LHS type will hold an Int and a Term, and, whenever we used a native
+-- lambda previously (like `lhs_ctr(lhs, 2n, λa.λb.@Tup{a,b})`), we will simply
+-- use a Term lambda instead (like `lhsCtr lhs 2 (Lam(\a->Lam(\b->Tup a b)))`)
+-- This will simplify type-checking, as we'll avoid GADTs and similar.
 
 -- Book of Definitions
 type Inj  = Bool -- "is injective" flag. improves pretty printing
@@ -208,25 +624,25 @@ instance Show Term where
   show (Set)          = "Set"
   show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
   show (Emp)          = "Empty"
-  show (EmpM x)       = "~" ++ show x ++ "{}"
+  show (EmpM)         = "λ{}"
   show (Uni)          = "Unit"
   show (One)          = "()"
-  show (UniM x f)     = "~ " ++ show x ++ " { (): " ++ show f ++ " }"
+  show (UniM x f)     = "λ{():" ++ show x ++ "." ++ show f ++ "}"
   show (Bit)          = "Bool"
   show (Bt0)          = "False"
   show (Bt1)          = "True"
-  show (BitM x f t)   = "~ " ++ show x ++ " { False: " ++ show f ++ " ; True: " ++ show t ++ " }"
+  show (BitM f t)     = "λ{False:" ++ show f ++ ";True:" ++ show t ++ "}"
   show (Nat)          = "Nat"
   show (Zer)          = "0n"
   show (Suc n)        = "1n+" ++ show n
-  show (NatM x z s)   = "~ " ++ show x ++ " { 0n: " ++ show z ++ " ; 1n+: " ++ show s ++ " }"
+  show (NatM z s)     = "λ{0n:" ++ show z ++ ";1n+:" ++ show s ++ "}"
   show (Lst t)        = show t ++ "[]"
   show (Nil)          = "[]"
   show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
-  show (LstM x n c)   = "~ " ++ show x ++ " { []:" ++ show n ++ " ; <>:" ++ show c ++ " }"
+  show (LstM n c)     = "λ{[]:" ++ show n ++ ";<>:" ++ show c ++ "}"
   show (Enu s)        = "enum{" ++ intercalate "," (map (\x -> "&" ++ x) s) ++ "}"
   show (Sym s)        = "&" ++ s
-  show (EnuM x c e)   = "~ " ++ show x ++ " { " ++ intercalate " ; " (map (\(s,t) -> "&" ++ s ++ ": " ++ show t) c) ++ " ; " ++ show e ++ " }"
+  show (EnuM c e)     = "λ{" ++ intercalate ";" (map (\(s,t) -> "&" ++ s ++ ":" ++ show t) c) ++ ";" ++ show e ++ "}"
   show (Sig a b) = case b of
       Lam "_" t f -> showArg a ++ " & " ++ showCodomain (f (Var "_" 0))
       Lam k t f   -> "Σ" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
@@ -240,7 +656,7 @@ instance Show Term where
           Sig _ (Lam k _ _) | k /= "_" -> "(" ++ show t ++ ")"
           _                           -> show t
   show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
-  show (SigM x f)     = "~ " ++ show x ++ " { (,):" ++ show f ++ " }"
+  show (SigM f)       = "λ{(,):" ++ show f ++ "}"
   show (All a b) = case b of
       Lam "_" t f -> showArg a ++ " -> " ++ showCodomain (f (Var "_" 0))
       Lam k t f   -> "∀" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
@@ -267,14 +683,11 @@ instance Show Term where
     (All _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
     _         ->        show t ++        "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)           = "{==}"
-  show (EqlM x f)      = "~ " ++ show x ++ " { {==}:" ++ show f ++ " }"
-  show (Ind t)         = "~~ {" ++ show t ++ "}"
-  show (Frz t)         = "∅" ++ show t
+  show (EqlM p f)      = "λ{{==}:" ++ show f ++ "}:" ++ show p
   show (Loc _ t)       = show t
-  show (Rwt a b x)     = show a ++ " ⇒ " ++ show b ++ "; " ++ show x
   show (Era)           = "*"
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
-  show (SupM x l f)    = "~ " ++ show x ++ " { &" ++ show l ++ "{,}:" ++ show f ++ " }"
+  show (SupM l f)      = "λ{&" ++ show l ++ "{,}:" ++ show f ++ "}"
   show (Frk l a b)     = "fork " ++ show l ++ ":" ++ show a ++ " else:" ++ show b
   show (Met n t ctx)   = "?" ++ n ++ ":" ++ show t ++ "{" ++ intercalate "," (map show ctx) ++ "}"
   show (Log s x)       = "log " ++ show s ++ " " ++ show x
@@ -431,34 +844,31 @@ freeVars ctx tm = case tm of
   Fix n f     -> freeVars (S.insert n ctx) (f (Var n 0))
   Let k t v f -> S.unions [foldMap (freeVars ctx) t, freeVars ctx v, freeVars (S.insert k ctx) (f (Var k 0))]
   Chk v t     -> S.union (freeVars ctx v) (freeVars ctx t)
-  EmpM x      -> freeVars ctx x
+  EmpM        -> S.empty
   UniM x f    -> S.union (freeVars ctx x) (freeVars ctx f)
-  BitM x f t  -> S.unions [freeVars ctx x, freeVars ctx f, freeVars ctx t]
+  BitM f t    -> S.union (freeVars ctx f) (freeVars ctx t)
   Suc n       -> freeVars ctx n
-  NatM x z s  -> S.unions [freeVars ctx x, freeVars ctx z, freeVars ctx s]
+  NatM z s    -> S.union (freeVars ctx z) (freeVars ctx s)
   Lst t       -> freeVars ctx t
   Con h t     -> S.union (freeVars ctx h) (freeVars ctx t)
-  LstM x n c  -> S.unions [freeVars ctx x, freeVars ctx n, freeVars ctx c]
-  EnuM x c e  -> S.unions [freeVars ctx x, S.unions (map (freeVars ctx . snd) c), freeVars ctx e]
+  LstM n c    -> S.union (freeVars ctx n) (freeVars ctx c)
+  EnuM c e    -> S.union (S.unions (map (freeVars ctx . snd) c)) (freeVars ctx e)
   Op2 _ a b   -> S.union (freeVars ctx a) (freeVars ctx b)
   Op1 _ a     -> freeVars ctx a
   Sig a b     -> S.union (freeVars ctx a) (freeVars ctx b)
   Tup a b     -> S.union (freeVars ctx a) (freeVars ctx b)
-  SigM x f    -> S.union (freeVars ctx x) (freeVars ctx f)
+  SigM f      -> freeVars ctx f
   All a b     -> S.union (freeVars ctx a) (freeVars ctx b)
   Lam n t f   -> S.union (freeVars (S.insert n ctx) (f (Var n 0))) (foldMap (freeVars ctx) t)
   App f x     -> S.union (freeVars ctx f) (freeVars ctx x)
   Eql t a b   -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
-  EqlM x f    -> S.union (freeVars ctx x) (freeVars ctx f)
+  EqlM p f    -> S.union (freeVars ctx p) (freeVars ctx f)
   Met _ t c   -> S.unions (freeVars ctx t : map (freeVars ctx) c)
-  Ind t       -> freeVars ctx t
-  Frz t       -> freeVars ctx t
   Sup _ a b   -> S.union (freeVars ctx a) (freeVars ctx b)
-  SupM x l f  -> S.unions [freeVars ctx x, freeVars ctx l, freeVars ctx f]
+  SupM l f    -> S.union (freeVars ctx l) (freeVars ctx f)
   Frk l a b   -> S.unions [freeVars ctx l, freeVars ctx a, freeVars ctx b]
   Log s x     -> S.union (freeVars ctx s) (freeVars ctx x)
   Loc _ t     -> freeVars ctx t
-  Rwt a b x   -> S.unions [freeVars ctx a, freeVars ctx b, freeVars ctx x]
   Pat s m c   -> S.unions ((map (freeVars ctx) s) ++ (map (\(_,m) -> freeVars ctx m) m) ++ (map (\(_,c) -> freeVars ctx c) c))
   _           -> S.empty
 
@@ -472,31 +882,28 @@ hasMet term = case term of
     Just t  -> hasMet t || hasMet v || hasMet (f (Var k 0))
     Nothing -> hasMet v || hasMet (f (Var k 0))
   Chk x t -> hasMet x || hasMet t
-  EmpM x -> hasMet x
+  EmpM -> False
   UniM x f -> hasMet x || hasMet f
-  BitM x f t -> hasMet x || hasMet f || hasMet t
+  BitM f t -> hasMet f || hasMet t
   Suc n -> hasMet n
-  NatM x z s -> hasMet x || hasMet z || hasMet s
+  NatM z s -> hasMet z || hasMet s
   Lst t -> hasMet t
   Con h t -> hasMet h || hasMet t
-  LstM x n c -> hasMet x || hasMet n || hasMet c
-  EnuM x cs e -> hasMet x || any (hasMet . snd) cs || hasMet e
+  LstM n c -> hasMet n || hasMet c
+  EnuM cs e -> any (hasMet . snd) cs || hasMet e
   Op2 _ a b -> hasMet a || hasMet b
   Op1 _ a -> hasMet a
   Sig a b -> hasMet a || hasMet b
   Tup a b -> hasMet a || hasMet b
-  SigM x f -> hasMet x || hasMet f
+  SigM f -> hasMet f
   All a b -> hasMet a || hasMet b
   Lam _ t f -> maybe False hasMet t || hasMet (f (Var "" 0))
   App f x -> hasMet f || hasMet x
   Eql t a b -> hasMet t || hasMet a || hasMet b
-  EqlM x f -> hasMet x || hasMet f
-  Ind t -> hasMet t
-  Frz t -> hasMet t
+  EqlM p f -> hasMet p || hasMet f
   Sup _ a b -> hasMet a || hasMet b
-  SupM x l f -> hasMet x || hasMet l || hasMet f
+  SupM l f -> hasMet l || hasMet f
   Loc _ t -> hasMet t
-  Rwt a b x -> hasMet a || hasMet b || hasMet x
   Log s x -> hasMet s || hasMet x
   Pat s m c -> any hasMet s || any (hasMet . snd) m || any (\(p,b) -> any hasMet p || hasMet b) c
   Frk l a b -> hasMet l || hasMet a || hasMet b
