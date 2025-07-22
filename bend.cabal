@@ -31,6 +31,7 @@ library
                       Core.EtaForm,
                       Core.Flatten,
                       Core.Import,
+                      Core.LHS,
                       Core.Parse,
                       Core.Parse.Book,
                       Core.Parse.Term,

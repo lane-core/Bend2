@@ -31,7 +31,7 @@ collectDeps bound term = case term of
   EmpM        -> S.empty
   Uni         -> S.empty
   One         -> S.empty
-  UniM x f    -> S.union (collectDeps bound x) (collectDeps bound f)
+  UniM f      -> collectDeps bound f
   Bit         -> S.empty
   Bt0         -> S.empty
   Bt1         -> S.empty
@@ -51,10 +51,14 @@ collectDeps bound term = case term of
   Val _       -> S.empty
   Op2 _ a b   -> S.union (collectDeps bound a) (collectDeps bound b)
   Op1 _ a     -> collectDeps bound a
-  Sig a b     -> S.union (collectDeps bound a) (collectDeps bound b)
+  Sig a b     -> S.union (collectDeps bound a) (case b of
+                    Lam k _ f -> collectDeps (S.insert k bound) (f (Var k 0))
+                    _ -> collectDeps bound b)
   Tup a b     -> S.union (collectDeps bound a) (collectDeps bound b)
   SigM f      -> collectDeps bound f
-  All a b     -> S.union (collectDeps bound a) (collectDeps bound b)
+  All a b     -> S.union (collectDeps bound a) (case b of
+                    Lam k _ f -> collectDeps (S.insert k bound) (f (Var k 0))
+                    _ -> collectDeps bound b)
   Lam k t f   -> S.union (collectDeps (S.insert k bound) (f (Var k 0))) (foldMap (collectDeps bound) t)
   App f x     -> S.union (collectDeps bound f) (collectDeps bound x)
   Eql t a b   -> S.unions [collectDeps bound t, collectDeps bound a, collectDeps bound b]

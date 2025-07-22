@@ -95,7 +95,7 @@ termToCT book term dep = case term of
   Val v        -> CVal v
   Lam k _ f    -> CLam k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
   App f x      -> CApp (termToCT book f dep) (termToCT book x dep)
-  UniM x f     -> CLam "x$" (\x -> CApp (CUse (termToCT book f dep)) x)
+  UniM f       -> CLam "x$" (\x -> CApp (CUse (termToCT book f dep)) x)
   BitM f t     -> CLam "x$" (\x -> CApp (CBif (termToCT book f dep) (termToCT book t dep)) x)
   NatM z s     -> CLam "x$" (\x -> CApp (CSwi (termToCT book z dep) (termToCT book s dep)) x)
   LstM n c     -> CLam "x$" (\x -> CApp (CMat (termToCT book n dep) (termToCT book c dep)) x)

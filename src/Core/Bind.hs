@@ -26,7 +26,7 @@ binder lv term ctx vars = case term of
   EmpM        -> EmpM
   Uni         -> Uni
   One         -> One
-  UniM x f    -> UniM (binder lv x ctx vars) (binder lv f ctx vars)
+  UniM f      -> UniM (binder lv f ctx vars)
   Bit         -> Bit
   Bt0         -> Bt0
   Bt1         -> Bt1

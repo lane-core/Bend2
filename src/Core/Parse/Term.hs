@@ -858,7 +858,7 @@ parseLamMatch = label "lambda match" $ do
         return ()
       f <- parseTerm
       _ <- parseSemi
-      return (UniM (Sub Era) f)
+      return (UniM f)
 
     -- λ{False: term; True: term}
     parseBitMForm = do
@@ -991,7 +991,7 @@ parseUniMCases scrut = do
     return ()
   f <- parseTerm
   _ <- parseSemi
-  return (UniM scrut f)
+  return (App (UniM f) scrut)
 
 -- | Syntax: False: term; True: term;
 parseBitMCases :: Term -> Parser Term

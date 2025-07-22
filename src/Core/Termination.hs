@@ -30,7 +30,7 @@ subterms d term = case term of
   Loc _ t       -> [t]
   NatM z s      -> [z, s]
   BitM f t      -> [f, t]
-  UniM _ f      -> [f]
+  UniM f        -> [f]
   LstM n c      -> [n, c]
   SigM f        -> [f]
   Rwt e g f     -> [e, g, f]

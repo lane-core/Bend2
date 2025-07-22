@@ -119,10 +119,9 @@ collapse dep book term = case term of
   -- Unit
   Uni       -> return Uni
   One       -> return One
-  UniM x f  -> do
-    x' <- collapse dep book x
+  UniM f    -> do
     f' <- collapse dep book f
-    return $ UniM x' f'
+    return $ UniM f'
 
   -- Bool
   Bit         -> return Bit

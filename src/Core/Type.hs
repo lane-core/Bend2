@@ -169,9 +169,9 @@ data Term
   | EmpM -- λ{}
 
   -- Unit
-  | Uni            -- Unit
-  | One            -- ()
-  | UniM Term Term -- λ{():f}
+  | Uni       -- Unit
+  | One       -- ()
+  | UniM Term -- λ{():f}
 
   -- Bool
   | Bit            -- Bool
@@ -565,12 +565,92 @@ data Term
 --     case 1n+K:
 --       [] # won't happen
 -- 
--- Note: since Haskell doesn't have dependent types, in order to implement the
--- LHS type and functions, we use Term lambdas instead of native lambdas. That
--- is, the LHS type will hold an Int and a Term, and, whenever we used a native
--- lambda previously (like `lhs_ctr(lhs, 2n, λa.λb.@Tup{a,b})`), we will simply
--- use a Term lambda instead (like `lhsCtr lhs 2 (Lam(\a->Lam(\b->Tup a b)))`)
--- This will simplify type-checking, as we'll avoid GADTs and similar.
+-- NOTE: below is an example implementation of the LHS type.
+-- take it as inspiration. implement it *inside* WHNF.hs
+-- (not on Type.hs)
+
+-- {-# LANGUAGE DataKinds #-}
+-- {-# LANGUAGE GADTs #-}
+-- {-# LANGUAGE KindSignatures #-}
+-- {-# LANGUAGE TypeFamilies #-}
+-- {-# LANGUAGE TypeOperators #-}
+-- {-# LANGUAGE RankNTypes #-}
+-- {-# LANGUAGE PolyKinds #-}
+-- {-# LANGUAGE ScopedTypeVariables #-}
+-- 
+-- module Main where
+-- 
+-- import Data.Kind (Type)
+-- 
+-- -- Peano naturals at both type‑ and value‑level
+-- data Nat = Z | S Nat
+-- 
+-- data SNat :: Nat -> Type where
+--   SZ :: SNat Z
+--   SS :: SNat n -> SNat (S n)
+-- 
+-- -- Type‑level addition
+-- type family Add (n :: Nat) (m :: Nat) :: Nat where
+--   Add Z     m = m
+--   Add (S n) m = S (Add n m)
+-- 
+-- addSNat :: SNat n -> SNat m -> SNat (Add n m)
+-- addSNat SZ     m = m
+-- addSNat (SS n) m = SS (addSNat n m)
+-- 
+-- -- A minimal term language
+-- data Term = Var String | App Term Term | Emp deriving Show
+-- 
+-- -- Arg<n>  =  n‑ary function returning Term
+-- type family Arg (n :: Nat) :: Type where
+--   Arg Z     = Term
+--   Arg (S p) = Term -> Arg p
+-- 
+-- -- LHS = pair of arity and a constructor taking exactly that many args
+-- data LHS where
+--   LHS :: SNat k -> (Term -> Arg k) -> LHS
+-- 
+-- -- lhs_ctr_new --------
+-- lhs_ctr_new :: (Term -> Term) -> SNat n -> Arg n -> (Term -> Arg n)
+-- lhs_ctr_new l SZ       ctr = \k -> App (l k) ctr
+-- lhs_ctr_new l (SS n')  ctr = \x -> lhs_ctr_new l n' (ctr x)
+-- 
+-- -- lhs_ctr_ext --------
+-- lhs_ctr_ext :: SNat k -> (Term -> Arg (S k)) -> SNat n -> Arg n -> Arg (S (Add n k))
+-- lhs_ctr_ext _ l SZ      ctr = l ctr
+-- lhs_ctr_ext k l (SS n') ctr = \x -> lhs_ctr_ext k l n' (ctr x)
+-- 
+-- -- lhs_ctr ------------ 
+-- lhs_ctr :: LHS -> SNat n -> Arg n -> LHS
+-- lhs_ctr (LHS k l) n ctr = case k of
+--   SZ    -> LHS n               (lhs_ctr_new l n ctr)
+--   SS k' -> LHS (addSNat n k')  (lhs_ctr_ext k' l n ctr)
+-- 
+-- -- helper to flatten a chain of App nodes
+-- getArgs :: Term -> [Term] -> [Term]
+-- getArgs (App f a) acc = getArgs f (a:acc)
+-- getArgs t         acc = t:acc
+-- 
+-- -- lhs_to_list -------
+-- lhs_to_list :: LHS -> [Term]
+-- lhs_to_list (LHS k l) = case k of
+--   SZ     -> getArgs (l Emp) []
+--   SS _   -> []  -- unreachable per original spec
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 -- Book of Definitions
 type Inj  = Bool -- "is injective" flag. improves pretty printing
@@ -631,7 +711,7 @@ instance Show Term where
   show (EmpM)         = "λ{}"
   show (Uni)          = "Unit"
   show (One)          = "()"
-  show (UniM x f)     = "λ{():" ++ show x ++ "." ++ show f ++ "}"
+  show (UniM f)       = "λ{():" ++ show f ++ "}"
   show (Bit)          = "Bool"
   show (Bt0)          = "False"
   show (Bt1)          = "True"
@@ -795,8 +875,8 @@ instance Show Ctx where
 -- Utils
 -- -----
 
-deref :: Book -> Name -> Maybe Defn
-deref (Book defs) name = M.lookup name defs
+getDefn :: Book -> Name -> Maybe Defn
+getDefn (Book defs) name = M.lookup name defs
 
 cut :: Term -> Term
 cut (Loc _ t) = cut t
@@ -851,7 +931,7 @@ freeVars ctx tm = case tm of
   Let k t v f -> S.unions [foldMap (freeVars ctx) t, freeVars ctx v, freeVars (S.insert k ctx) (f (Var k 0))]
   Chk v t     -> S.union (freeVars ctx v) (freeVars ctx t)
   EmpM        -> S.empty
-  UniM x f    -> S.union (freeVars ctx x) (freeVars ctx f)
+  UniM f      -> freeVars ctx f
   BitM f t    -> S.union (freeVars ctx f) (freeVars ctx t)
   Suc n       -> freeVars ctx n
   NatM z s    -> S.union (freeVars ctx z) (freeVars ctx s)
@@ -881,40 +961,36 @@ freeVars ctx tm = case tm of
 -- | Check if a term contains a Metavar
 hasMet :: Term -> Bool
 hasMet term = case term of
-  Met {} -> True
-  Sub t -> hasMet t
-  Fix _ f -> hasMet (f (Var "" 0))
+  Met {}      -> True
+  Sub t       -> hasMet t
+  Fix _ f     -> hasMet (f (Var "" 0))
   Let k t v f -> case t of
-    Just t  -> hasMet t || hasMet v || hasMet (f (Var k 0))
-    Nothing -> hasMet v || hasMet (f (Var k 0))
-  Chk x t -> hasMet x || hasMet t
-  EmpM -> False
-  UniM x f -> hasMet x || hasMet f
-  BitM f t -> hasMet f || hasMet t
-  Suc n -> hasMet n
-  NatM z s -> hasMet z || hasMet s
-  Lst t -> hasMet t
-  Con h t -> hasMet h || hasMet t
-  LstM n c -> hasMet n || hasMet c
-  EnuM cs e -> any (hasMet . snd) cs || hasMet e
-  Op2 _ a b -> hasMet a || hasMet b
-  Op1 _ a -> hasMet a
-  Sig a b -> hasMet a || hasMet b
-  Tup a b -> hasMet a || hasMet b
-  SigM f -> hasMet f
-  All a b -> hasMet a || hasMet b
-  Lam _ t f -> maybe False hasMet t || hasMet (f (Var "" 0))
-  App f x -> hasMet f || hasMet x
-  Eql t a b -> hasMet t || hasMet a || hasMet b
-  Rwt e g f -> hasMet e || hasMet g || hasMet f
-  Sup _ a b -> hasMet a || hasMet b
-  SupM l f -> hasMet l || hasMet f
-  Loc _ t -> hasMet t
-  Log s x -> hasMet s || hasMet x
-  Pat s m c -> any hasMet s || any (hasMet . snd) m || any (\(p,b) -> any hasMet p || hasMet b) c
-  Frk l a b -> hasMet l || hasMet a || hasMet b
-  _ -> False
-
--- Left-Hand Side patterns for guarded deref
-data LHS = LHS Int Term
-  deriving Show
+    Just t    -> hasMet t || hasMet v || hasMet (f (Var k 0))
+    Nothing   -> hasMet v || hasMet (f (Var k 0))
+  Chk x t     -> hasMet x || hasMet t
+  EmpM        -> False
+  UniM f      -> hasMet f
+  BitM f t    -> hasMet f || hasMet t
+  Suc n       -> hasMet n
+  NatM z s    -> hasMet z || hasMet s
+  Lst t       -> hasMet t
+  Con h t     -> hasMet h || hasMet t
+  LstM n c    -> hasMet n || hasMet c
+  EnuM cs e   -> any (hasMet . snd) cs || hasMet e
+  Op2 _ a b   -> hasMet a || hasMet b
+  Op1 _ a     -> hasMet a
+  Sig a b     -> hasMet a || hasMet b
+  Tup a b     -> hasMet a || hasMet b
+  SigM f      -> hasMet f
+  All a b     -> hasMet a || hasMet b
+  Lam _ t f   -> maybe False hasMet t || hasMet (f (Var "" 0))
+  App f x     -> hasMet f || hasMet x
+  Eql t a b   -> hasMet t || hasMet a || hasMet b
+  Rwt e g f   -> hasMet e || hasMet g || hasMet f
+  Sup _ a b   -> hasMet a || hasMet b
+  SupM l f    -> hasMet l || hasMet f
+  Loc _ t     -> hasMet t
+  Log s x     -> hasMet s || hasMet x
+  Pat s m c   -> any hasMet s || any (hasMet . snd) m || any (\(p,b) -> any hasMet p || hasMet b) c
+  Frk l a b   -> hasMet l || hasMet a || hasMet b
+  _           -> False

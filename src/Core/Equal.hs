@@ -20,7 +20,7 @@ import Debug.Trace
 -- ========
 
 equal :: Int -> Book -> Term -> Term -> Bool
-equal d book a b = eql 3 d book a b
+equal d book a b = trace ("- equal: " ++ show (normal d book a) ++ " == " ++ show (normal d book b)) $ eql 3 d book a b
 
 eql :: Int -> Int -> Book -> Term -> Term -> Bool
 eql 0  d book a b = cmp 0 d book (cut a) (cut b)
@@ -35,8 +35,8 @@ cmp lv d book a b =
     (Fix ka fa      , b              ) -> eql lv d book (fa b) b
     (a              , Fix kb fb      ) -> eql lv d book a (fb (Fix kb fb))
     (Ref ka         , Ref kb         ) -> ka == kb
-    (Ref ka         , b              ) -> case deref book ka of { Just (_, term, _) -> eql lv d book term b ; Nothing -> False }
-    (a              , Ref kb         ) -> case deref book kb of { Just (_, term, _) -> eql lv d book a term ; Nothing -> False }
+    (Ref ka         , b              ) -> case getDefn book ka of { Just (_, term, _) -> eql lv d book term b ; Nothing -> False }
+    (a              , Ref kb         ) -> case getDefn book kb of { Just (_, term, _) -> eql lv d book a term ; Nothing -> False }
     (Var ka ia      , Var kb ib      ) -> ia == ib
     (Sub ta         , Sub tb         ) -> eql lv d book ta tb
     (Let ka ta va fa, Let kb tb vb fb) -> eql lv d book va vb && eql lv (d+1) book (fa (Var ka d)) (fb (Var kb d)) && fromMaybe True (liftA2 (eql lv d book) ta tb)
@@ -46,7 +46,7 @@ cmp lv d book a b =
     (EmpM           , EmpM           ) -> True
     (Uni            , Uni            ) -> True
     (One            , One            ) -> True
-    (UniM xa fa     , UniM xb fb     ) -> eql lv d book xa xb && eql lv d book fa fb
+    (UniM fa        , UniM fb        ) -> eql lv d book fa fb
     (Bit            , Bit            ) -> True
     (Bt0            , Bt0            ) -> True
     (Bt1            , Bt1            ) -> True

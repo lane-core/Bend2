@@ -1,12 +1,15 @@
 {-./Type.hs-}
+{-./LHS.hs-}
 
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE GADTs #-}
 
 module Core.WHNF where
 
 import Debug.Trace
 
 import Core.Type
+import Core.LHS
 
 import System.IO.Unsafe
 import Data.IORef
@@ -23,7 +26,9 @@ data EvalLevel
 
 -- Reduction
 whnf :: EvalLevel -> Book -> Term -> Term
-whnf lv book term = whnfGo lv book term
+whnf lv book term = 
+  -- trace ("whnf: " ++ show term) $
+  whnfGo lv book term
 
 whnfGo :: EvalLevel -> Book -> Term -> Term
 whnfGo lv book term =
@@ -50,8 +55,9 @@ whnfLet lv book v f = whnf lv book (f v)
 -- Normalizes a reference using guarded deref
 whnfRef :: EvalLevel -> Book -> Name -> Term
 whnfRef lv book k =
-  case deref book k of
-    Just (False, term, _) -> guardedDeref lv book k (LHS 0 (Lam "k" Nothing id)) term
+  
+  case getDefn book k of
+    Just (False, term, _) -> trace ("whnfRef " ++ show term) $ deref k (LHS SZ id) term
     otherwise             -> Ref k
 
 -- Normalizes a fixpoint
@@ -66,7 +72,7 @@ whnfApp lv book f x =
     Pri p      -> whnfAppPri lv book p x
     Sup l a b  -> whnfAppSup lv book l a b x
     -- λ-Match applications
-    UniM _ f   -> whnfUniM lv book x f
+    UniM f     -> whnfUniM lv book x f
     BitM f t   -> whnfBitM lv book x f t
     NatM z s   -> whnfNatM lv book x z s
     LstM n c   -> whnfLstM lv book x n c
@@ -96,9 +102,9 @@ whnfUniM :: EvalLevel -> Book -> Term -> Term -> Term
 whnfUniM lv book x f =
   case whnf Full book x of
     One       -> whnf lv book f
-    Sup l a b -> whnf lv book $ Sup l (App (UniM (Sub Era) f0) a) (App (UniM (Sub Era) f1) b)
+    Sup l a b -> whnf lv book $ Sup l (App (UniM f0) a) (App (UniM f1) b)
       where (f0, f1) = dup book l f
-    x'  -> App (UniM (Sub Era) f) x'
+    x'  -> App (UniM f) x'
 
 -- Normalizes a boolean match
 whnfBitM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
@@ -330,7 +336,7 @@ whnfOp1 lv book op a =
 -- ------------------------------------------
 whnfEql :: EvalLevel -> Book -> Term -> Term -> Term -> Term
 whnfEql lv book t a b =
-  case whnf Full book t of
+  case force book t of
     Uni -> case (whnf Full book a, whnf Full book b) of
       (One, One) -> Uni
       (a', b')   -> Eql Uni a' b'
@@ -397,9 +403,8 @@ dup book l Emp           = (Emp, Emp)
 dup book l EmpM          = (EmpM, EmpM)
 dup book l Uni           = (Uni, Uni)
 dup book l One           = (One, One)
-dup book l (UniM x f)    = (UniM x0 f0, UniM x1 f1)
-  where (x0,x1)          = dup book l x
-        (f0,f1)          = dup book l f
+dup book l (UniM f)      = (UniM f0, UniM f1)
+  where (f0,f1)          = dup book l f
 dup book l Bit           = (Bit, Bit)
 dup book l Bt0           = (Bt0, Bt0)
 dup book l Bt1           = (Bt1, Bt1)
@@ -503,7 +508,7 @@ normal d book term =
     EmpM        -> EmpM
     Uni         -> Uni
     One         -> One
-    UniM x f    -> UniM (normal d book x) (normal d book f)
+    UniM f      -> UniM (normal d book f)
     Bit         -> Bit
     Bt0         -> Bt0
     Bt1         -> Bt1
@@ -554,9 +559,10 @@ normalCtx d book (Ctx ctx) = Ctx (map normalAnn ctx)
 -- - Injective Refs (whnf skips them for pretty printing)
 force :: Book -> Term -> Term
 force book term =
+  -- trace ("force: " ++ show term) $
   case whnf Full book term of
     term' -> case fn of
-      Ref k -> case deref book k of
+      Ref k -> case getDefn book k of
         Just (_,fn',_) -> force book $ foldl App fn' xs
         otherwise      -> term'
       _ -> term'
@@ -579,97 +585,47 @@ ieql book a b = case (termToInt book a, termToInt book b) of
   (Just x, Just y) -> x == y
   _                -> False
 
--- Guarded Deref Implementation
--- ----------------------------
+-- Guarded Deref
+-- -------------
 
--- Converts the Ref's body into a "guarded matcher" that eliminates received args
--- until it either succeeds, or gets stuck against a var. This emulates Agda-like
--- clauses, giving us recursive Refs that don't unroll infinitely.
-guardedDeref :: EvalLevel -> Book -> Name -> LHS -> Term -> Term
-guardedDeref lv book k lhs@(LHS n l) body =
-  case body of
-    EmpM ->
-      Lam "x" Nothing (\x -> derefUndo lv book k lhs EmpM x)
-    
-    UniM _ f ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          One -> guardedDeref lv book k (lhsCtr lhs 0 One) f
-          x'  -> derefUndo lv book k lhs (UniM (Sub Era) f) x'
-    
-    BitM f t ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          Bt0 -> guardedDeref lv book k (lhsCtr lhs 0 Bt0) f
-          Bt1 -> guardedDeref lv book k (lhsCtr lhs 0 Bt1) t
-          x'  -> derefUndo lv book k lhs (BitM f t) x'
-    
-    NatM z s ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          Zer     -> guardedDeref lv book k (lhsCtr lhs 0 Zer) z
-          Suc xp  -> App (guardedDeref lv book k (lhsCtr lhs 1 (Lam "p" Nothing Suc)) s) xp
-          x'      -> derefUndo lv book k lhs (NatM z s) x'
-    
-    LstM n c ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          Nil       -> guardedDeref lv book k (lhsCtr lhs 0 Nil) n
-          Con h t   -> App (App (guardedDeref lv book k (lhsCtr lhs 2 (Lam "h" Nothing (\h -> Lam "t" Nothing (\t -> Con h t)))) c) h) t
-          x'        -> derefUndo lv book k lhs (LstM n c) x'
-    
-    SigM f ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          Tup a b -> App (App (guardedDeref lv book k (lhsCtr lhs 2 (Lam "a" Nothing (\a -> Lam "b" Nothing (\b -> Tup a b)))) f) a) b
-          x'      -> derefUndo lv book k lhs (SigM f) x'
-    
-    
-    SupM l f ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          Sup l' a b | ieql book l l' ->
-            App (App (guardedDeref lv book k (lhsCtr lhs 2 (Lam "a" Nothing (\a -> Lam "b" Nothing (\b -> Sup l a b)))) f) a) b
-          x' -> derefUndo lv book k lhs (SupM l f) x'
-    
-    EnuM cs e ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          Sym s -> case lookup s cs of
-            Just t -> guardedDeref lv book k (lhsCtr lhs 0 (Sym s)) t
-            Nothing -> guardedDeref lv book k lhs e
-          x' -> derefUndo lv book k lhs (EnuM cs e) x'
-    
-    Lam k' t f ->
-      Lam "x" Nothing $ \x ->
-        guardedDeref lv book k (lhsCtr lhs 0 x) (f x)
-    
-    _ -> body
+deref :: String -> LHS -> Term -> Term
+deref k lhs body = case body of
+  EmpM ->
+    Lam "x" Nothing $ \x -> derefUndo k lhs EmpM x
 
--- Undo the deref when stuck on a variable
-derefUndo :: EvalLevel -> Book -> Name -> LHS -> Term -> Term -> Term
-derefUndo lv book k (LHS n l) body x =
-  case n of
-    0 -> App (App l (Ref k)) x
-    _ -> guardedDeref lv book k (LHS (n-1) (App l x)) body
+  UniM f ->
+    Lam "x" Nothing $ \x -> case x of
+      One -> deref k (lhs_ctr lhs SZ One) f
+      x'  -> derefUndo k lhs (UniM f) x'
 
--- Add a constructor to the LHS pattern
-lhsCtr :: LHS -> Int -> Term -> LHS
-lhsCtr (LHS k l) n ctr = 
-  if k == 0
-  then LHS n (lhsCtrNew l n ctr)
-  else LHS (n + k) (lhsCtrExt k l n ctr)
+  BitM f t ->
+    Lam "x" Nothing $ \x -> case x of
+      Bt0 -> deref k (lhs_ctr lhs SZ Bt0) f
+      Bt1 -> deref k (lhs_ctr lhs SZ Bt1) t
+      x'  -> derefUndo k lhs (BitM f t) x'
 
--- Create a new LHS with a constructor
-lhsCtrNew :: Term -> Int -> Term -> Term
-lhsCtrNew l 0 ctr = Lam "k" Nothing (\k -> App (App l k) ctr)
-lhsCtrNew l n ctr = case ctr of
-  Lam k t f -> Lam "x" Nothing (\x -> lhsCtrNew l (n-1) (f x))
-  _         -> error "lhsCtrNew: expected lambda"
+  NatM z s ->
+    Lam "x" Nothing $ \x -> case x of
+      Zer    -> deref k (lhs_ctr lhs SZ Zer) z
+      Suc xp -> App (deref k (lhs_ctr lhs (SS SZ) (\p -> Suc p)) s) xp
+      x'     -> derefUndo k lhs (NatM z s) x'
 
--- Extend an existing LHS with a constructor
-lhsCtrExt :: Int -> Term -> Int -> Term -> Term
-lhsCtrExt k l 0 ctr = App l ctr
-lhsCtrExt k l n ctr = case ctr of
-  Lam k' t f -> Lam "x" Nothing (\x -> lhsCtrExt k l (n-1) (f x))
-  _          -> error "lhsCtrExt: expected lambda"
+  LstM n c ->
+    Lam "x" Nothing $ \x -> case x of
+      Nil      -> deref k (lhs_ctr lhs SZ Nil) n
+      Con h t' -> App (App (deref k (lhs_ctr lhs (SS (SS SZ)) (\h' -> \t'' -> Con h' t'')) c) h) t'
+      x'       -> derefUndo k lhs (LstM n c) x'
+
+  SigM f ->
+    Lam "x" Nothing $ \x -> case x of
+      Tup a b -> App (App (deref k (lhs_ctr lhs (SS (SS SZ)) (\a' b' -> Tup a' b')) f) a) b
+      x'      -> derefUndo k lhs (SigM f) x'
+
+  Lam n t f ->
+    Lam n t $ \x -> deref k (lhs_ctr lhs SZ x) (f x)
+
+  t -> t
+
+derefUndo :: String -> LHS -> Term -> Term -> Term
+derefUndo k (LHS SZ     l) _    x = App (l (Ref k)) x
+derefUndo k (LHS (SS n) l) body x = deref k (LHS n (l x)) body

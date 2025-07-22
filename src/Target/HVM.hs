@@ -122,7 +122,7 @@ termToHVM book ctx term = go term where
   go EmpM         = HVM.Lam "x$" HVM.Era
   go Uni          = HVM.Era
   go One          = HVM.U32 1
-  go (UniM x f)   = HVM.Lam "x$" $ HVM.Mat HVM.SWI (HVM.Var "x$") [] [("1", [], termToHVM book ctx f), ("_", [], HVM.App (termToHVM book ctx $ UniM x f) (HVM.Var "x$"))]
+  go (UniM f)     = HVM.Lam "x$" $ HVM.Mat HVM.SWI (HVM.Var "x$") [] [("1", [], termToHVM book ctx f), ("_", [], HVM.App (termToHVM book ctx $ UniM f) (HVM.Var "x$"))]
   go Bit          = HVM.Era
   go Bt0          = HVM.U32 0
   go Bt1          = HVM.U32 1
@@ -211,7 +211,7 @@ refAppToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Maybe HVM.Core
 refAppToHVM book ctx term =
   case collectApps term [] of
     (Ref k, args) ->
-      let (_,tm,ty)   = fromJust (deref book k)
+      let (_,tm,ty)   = fromJust (getDefn book k)
           (era,arg,_) = collectLamArgs tm ty [] []
           argsHVM     = map (termToHVM book ctx) (drop (length era) args)
           ari         = length arg

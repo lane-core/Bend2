@@ -42,7 +42,7 @@ infer d span book@(Book defs) ctx term =
              in Done typ
         else Fail $ CantInfer span (formatCtx d book ctx)
     Ref k -> do
-      case deref book k of
+      case getDefn book k of
         Just (_, _, typ) -> Done typ
         Nothing          -> Fail $ Undefined span (formatCtx d book ctx) k
     Sub x -> do
@@ -69,7 +69,7 @@ infer d span book@(Book defs) ctx term =
       Done Set
     One -> do
       Done Uni
-    UniM _ _ -> do
+    UniM _ -> do
       Fail $ CantInfer span (formatCtx d book ctx)
     Bit -> do
       Done Set
@@ -273,6 +273,7 @@ inferOp1Type d span book ctx op a ta = case op of
 -- Check if a term has the expected type
 check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 check d span book ctx term goal =
+  trace "A!" $
   trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
   case (term, force book goal) of
     (Era, _) -> do
@@ -310,8 +311,8 @@ check d span book ctx term goal =
       Done ()
     (EmpM, _) -> do
       Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book (All Emp (Lam "_" Nothing (\_ -> Set))))
-    (UniM x f, _) -> do
-      check d span book ctx (UniM x f) (All Uni (Lam "x$" Nothing (\x -> goal)))
+    (UniM f, _) -> do
+      check d span book ctx (UniM f) (All Uni (Lam "x$" Nothing (\x -> goal)))
       Done ()
     (BitM f t, All (force book -> Bit) rT) -> do
       check d span book ctx f (App rT Bt0)
@@ -361,11 +362,12 @@ check d span book ctx term goal =
       check d span book ctx a aT
       check d span book ctx b (bT a)
     (Rfl, Eql t a b) -> do
-      check d span book ctx a t
-      check d span book ctx b t
-      if equal d book a b
-        then Done ()
-        else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
+      trace ("- check Rfl :: Eql " ++ show (format d book t) ++ " " ++ show (format d book a) ++ " " ++ show (format d book b)) $ do
+        check d span book ctx a t
+        check d span book ctx b t
+        if equal d book a b
+          then Done ()
+          else Fail $ TermMismatch span (formatCtx d book ctx) (format d book a) (format d book b)
     (Fix k f, _) -> do
       check (d+1) span book (extend ctx k (Fix k f) goal) (f (Fix k f)) goal
     (Loc l t, _) -> do
@@ -408,7 +410,8 @@ check d span book ctx term goal =
     (Pat _ _ _, _) -> do
       error "not-supported"
     (App f x, _) -> do
-      verify d span book ctx term goal
+      trace ("- check App: " ++ show (App f x) ++ " :: " ++ show goal) $ do
+        verify d span book ctx term goal
     (Log s x, _) -> do
       check d span book ctx s (Lst (Num CHR_T))
       check d span book ctx x goal
@@ -433,5 +436,6 @@ checkBook :: Book -> Result ()
 checkBook book@(Book defs) = mapM_ checkDef (M.toList defs)
   where
     checkDef (name, (_, term, typ)) = do
-      check 0 noSpan book (Ctx []) term typ
+      trace ("CHECKING DEF: " ++ name) $ do
+        check 0 noSpan book (Ctx []) term typ
 

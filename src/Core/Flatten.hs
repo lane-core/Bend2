@@ -63,7 +63,7 @@ flatten d book term = case term of
   EmpM          -> EmpM
   Uni           -> Uni
   One           -> One
-  (UniM x f)    -> UniM (flatten d book x) (flatten d book f)
+  (UniM f)      -> UniM (flatten d book f)
   Bit           -> Bit
   Bt0           -> Bt0
   Bt1           -> Bt1
@@ -257,7 +257,7 @@ unpat d Emp             = Emp
 unpat d EmpM            = EmpM
 unpat d Uni             = Uni
 unpat d One             = One
-unpat d (UniM x f)      = UniM (unpat d x) (unpat d f)
+unpat d (UniM f)        = UniM (unpat d f)
 unpat d Bit             = Bit
 unpat d Bt0             = Bt0
 unpat d Bt1             = Bt1
@@ -392,7 +392,7 @@ match d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
 -- -----------------
 -- ~x { (): u }
 match d x ms cs@(([(cut -> One)], u) : _) =
-  apps d (map snd ms) $ App (UniM (Sub Era) (lam d (map fst ms) $ unpat d u)) x
+  apps d (map snd ms) $ App (UniM (lam d (map fst ms) $ unpat d u)) x
 
 -- match x { (a,b): p }
 -- --------------------
@@ -479,7 +479,7 @@ unfrkGo d ctx Emp           = Emp
 unfrkGo d ctx EmpM          = EmpM
 unfrkGo d ctx Uni           = Uni
 unfrkGo d ctx One           = One
-unfrkGo d ctx (UniM x f)    = UniM (unfrkGo d ctx x) (unfrkGo d ctx f)
+unfrkGo d ctx (UniM f)      = UniM (unfrkGo d ctx f)
 unfrkGo d ctx Bit           = Bit
 unfrkGo d ctx Bt0           = Bt0
 unfrkGo d ctx Bt1           = Bt1
@@ -607,7 +607,7 @@ subst name val term = go name val term where
     EmpM        -> EmpM
     Uni         -> Uni
     One         -> One
-    UniM x f    -> UniM (go name val x) (go name val f)
+    UniM f      -> UniM (go name val f)
     Bit         -> Bit
     Bt0         -> Bt0
     Bt1         -> Bt1

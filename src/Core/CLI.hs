@@ -28,6 +28,8 @@ import Core.Parse.Book (doParseBook)
 import Core.Type
 import Core.WHNF
 
+import Debug.Trace
+
 import qualified Target.JavaScript as JS
 import qualified Target.HVM as HVM
 
@@ -49,16 +51,19 @@ parseFile file = do
 -- | Type-check all definitions in a book
 checkDefinitions :: Book -> IO ()
 checkDefinitions book@(Book defs) = do
+  print "CHECK_DEFS_A"
   success <- checkAll book (M.toList defs)
+  print "CHECK_DEFS_B"
   unless success exitFailure
   where
-    checkDef book term typ = do
-      check 0 noSpan book (Ctx []) typ Set
-      check 0 noSpan book (Ctx []) term typ
-      return ()
+    checkDef book term typ = trace "checkDef" $ do
+      trace "cA" $ check 0 noSpan book (Ctx []) typ Set
+      trace "cB" $ check 0 noSpan book (Ctx []) term typ
+      trace "cC" $ return ()
     checkAll :: Book -> [(Name, Defn)] -> IO Bool
     checkAll _ [] = return True
     checkAll bBook ((name, (_, term, typ)):rest) = do
+      print "AAAAAAA"
       case checkDef bBook term typ of
         Done () -> do
           putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
@@ -72,7 +77,7 @@ checkDefinitions book@(Book defs) = do
 -- | Run the main function from a book
 runMain :: Book -> IO ()
 runMain book = do
-  case deref book "main" of
+  case getDefn book "main" of
     Nothing -> do
       return ()
     Just _ -> do
@@ -92,9 +97,12 @@ runMain book = do
 processFile :: FilePath -> IO ()
 processFile file = do
   book <- parseFile file
+  print "AAA"
   let bookAdj = adjustBook book
-  -- putStrLn $ show bookAdj
+  putStrLn $ "ADJUSTED BOOK:"
+  putStrLn $ show bookAdj
   checkDefinitions bookAdj
+  print "BBB"
   runMain bookAdj
 
 -- | Try to format JavaScript code using prettier if available

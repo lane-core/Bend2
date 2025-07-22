@@ -19,12 +19,6 @@ import Core.WHNF
 -- It uses a book of already-adjusted definitions for context during flattening.
 adjust :: Book -> Term -> Term
 adjust book term =
-  trace (">> term  = " ++ show term) $
-  trace (">> flat  = " ++ show flat) $
-  trace (">> nopat = " ++ show nopat) $
-  trace (">> nofrk = " ++ show nofrk) $
-  trace (">> etas  = " ++ show etas) $
-  trace (">> done  = " ++ show done) $
   done
   where
     flat  = flatten 0 book term
@@ -36,7 +30,6 @@ adjust book term =
 -- | Adjusts a term. simplifying patterns but leaving terms as Pats.
 adjustWithPats :: Book -> Term -> Term
 adjustWithPats book term =
-  -- trace (">> parsed: " ++ show ret) $
   ret
   where ret = bind (unfrk 0 (flatten 0 book term))
 
@@ -70,7 +63,7 @@ adjustDef book visiting adjustFn name = do
   -- and has not been adjusted yet (for memoization).
   if name `S.member` visiting || name `S.member` adjustedSet
     then return ()
-    else case deref book name of
+    else case getDefn book name of
       -- This case should not be reachable if `name` comes from `M.keys defs`.
       Nothing -> return ()
       Just (inj, term, typ) -> do
