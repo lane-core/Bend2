@@ -34,7 +34,7 @@ library
                       Core.Parse.Book,
                       Core.Parse.Term,
                       Core.Parse.WithSpan,
-                      Core.Rewrite,
+                      Core.Termination,
                       Core.WHNF,
                       Target.HVM,
                       Target.JavaScript

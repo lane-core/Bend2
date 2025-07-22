@@ -34,6 +34,7 @@ parseTermIni :: Parser Term
 parseTermIni = choice
   [ parseFix
   , parseLam
+  , parseLamMatch
   , parseBifIf
   , parsePat
   , parseRewrite
@@ -821,6 +822,144 @@ parseFix = label "fixed point" $ do
   _ <- symbol "."
   f <- parseTerm
   return (Fix k (\v -> f))
+
+-- | Parse λ-match forms: λ{...}
+parseLamMatch :: Parser Term
+parseLamMatch = label "lambda match" $ do
+  _ <- try $ do
+    _ <- choice [symbol "λ", keyword "lambda"]
+    _ <- symbol "{"
+    return ()
+  -- Check for empty match first
+  mb_close <- optional (lookAhead (symbol "}"))
+  case mb_close of
+    Just _ -> do
+      _ <- symbol "}"
+      return EmpM
+    Nothing -> do
+      term <- choice
+        [ parseUniMForm
+        , parseBitMForm
+        , parseNatMForm
+        , parseLstMForm
+        , parseSigMForm
+        , parseEqlMForm
+        , parseEnuMForm
+        , parseSupMForm
+        ]
+      _ <- symbol "}"
+      return term
+  where
+    -- λ{(): term}
+    parseUniMForm = do
+      _ <- try $ do
+        _ <- symbol "()"
+        _ <- symbol ":"
+        return ()
+      f <- parseTerm
+      _ <- parseSemi
+      return (UniM (Sub Era) f)
+
+    -- λ{False: term; True: term}
+    parseBitMForm = do
+      _ <- try $ do
+        _ <- symbol "False"
+        _ <- symbol ":"
+        return ()
+      f <- parseTerm
+      _ <- parseSemi
+      _ <- symbol "True"
+      _ <- symbol ":"
+      t <- parseTerm
+      _ <- parseSemi
+      return (BitM f t)
+
+    -- λ{0n: term; 1n+: term}
+    parseNatMForm = do
+      _ <- try $ do
+        _ <- symbol "0n"
+        _ <- symbol ":"
+        return ()
+      z <- parseTerm
+      _ <- parseSemi
+      _ <- symbol "1n+"
+      _ <- symbol ":"
+      s <- parseTerm
+      _ <- parseSemi
+      return (NatM z s)
+
+    -- λ{[]: term; <>: term}
+    parseLstMForm = do
+      _ <- try $ do
+        _ <- symbol "[]"
+        _ <- symbol ":"
+        return ()
+      n <- parseTerm
+      _ <- parseSemi
+      _ <- symbol "<>"
+      _ <- symbol ":"
+      c <- parseTerm
+      _ <- parseSemi
+      return (LstM n c)
+
+    -- λ{(,): term}
+    parseSigMForm = do
+      _ <- try $ do
+        _ <- symbol "(,)"
+        _ <- symbol ":"
+        return ()
+      f <- parseTerm
+      _ <- parseSemi
+      return (SigM f)
+
+    -- λ{{==}: term}: P
+    parseEqlMForm = do
+      _ <- try $ do
+        _ <- symbol "{"
+        _ <- symbol "=="
+        _ <- symbol "}"
+        _ <- symbol ":"
+        return ()
+      f <- parseTerm
+      _ <- parseSemi
+      -- Optional motive annotation
+      p <- option Era $ do
+        _ <- symbol ":"
+        parseTerm
+      return (EqlM p f)
+
+    -- λ{&tag1: term1; &tag2: term2; ...; default}
+    parseEnuMForm = do
+      _ <- try (lookAhead (choice [symbol "@", symbol "&"]))
+      cases <- many $ try $ do
+        _ <- choice [symbol "@", symbol "&"]
+        s <- some (satisfy isNameChar)
+        _ <- symbol ":"
+        t <- parseTerm
+        _ <- parseSemi
+        return (s, t)
+      def <- option One $ try $ do
+        notFollowedBy (symbol "}")
+        notFollowedBy (symbol "@")
+        notFollowedBy (symbol "&")
+        term <- parseTerm
+        _ <- parseSemi
+        return term
+      return (EnuM cases def)
+
+    -- λ{&L{,}: term}
+    parseSupMForm = do
+      l <- try $ do
+        _ <- symbol "&"
+        l <- parseTermBefore "{"
+        _ <- symbol "{"
+        _ <- symbol ","
+        _ <- symbol "}"
+        _ <- symbol ":"
+        return l
+      f <- parseTerm
+      _ <- parseSemi
+      return (SupM l f)
 
 -- | Syntax: ~{term} | ~term | ~ term { cases... }
 parseTildeExpr :: Parser Term

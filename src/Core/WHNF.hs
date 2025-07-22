@@ -37,6 +37,7 @@ whnfGo lv book term =
     Op2 o a b   -> whnfOp2 lv book o a b
     Op1 o a     -> whnfOp1 lv book o a
     Pri p       -> Pri p
+    Eql t a b   -> whnfEql lv book t a b
     -- λ-Match constructors are values, they only reduce when applied
     Log s x     -> whnfLog lv book s x
     _           -> term
@@ -45,11 +46,11 @@ whnfGo lv book term =
 whnfLet :: EvalLevel -> Book -> Term -> Body -> Term
 whnfLet lv book v f = whnf lv book (f v)
 
--- Normalizes a reference
+-- Normalizes a reference using guarded deref
 whnfRef :: EvalLevel -> Book -> Name -> Term
 whnfRef lv book k =
   case deref book k of
-    Just (False, term, _) -> whnf lv book term
+    Just (False, term, _) -> guardedDeref lv book k (LHS 0 (Lam "k" Nothing id)) term
     otherwise             -> Ref k
 
 -- Normalizes a fixpoint
@@ -333,6 +334,47 @@ whnfOp1 lv book op a =
         NEG -> Val (F64_V (-x))
       _ -> Op1 op a'
 
+-- Equality reduction (observational equality)
+-- ------------------------------------------
+whnfEql :: EvalLevel -> Book -> Term -> Term -> Term -> Term
+whnfEql lv book t a b =
+  case whnf Full book t of
+    Uni -> case (whnf Full book a, whnf Full book b) of
+      (One, One) -> Uni
+      (a', b')   -> Eql Uni a' b'
+    
+    Bit -> case (whnf Full book a, whnf Full book b) of
+      (Bt0, Bt0) -> Uni
+      (Bt1, Bt1) -> Uni
+      (Bt0, Bt1) -> Emp
+      (Bt1, Bt0) -> Emp
+      (a', b')   -> Eql Bit a' b'
+    
+    Nat -> case (whnf Full book a, whnf Full book b) of
+      (Zer, Zer)       -> Uni
+      (Zer, Suc _)     -> Emp
+      (Suc _, Zer)     -> Emp
+      (Suc a', Suc b') -> whnf lv book (Eql Nat a' b')
+      (a', b')         -> Eql Nat a' b'
+    
+    Lst t' -> case (whnf Full book a, whnf Full book b) of
+      (Nil, Nil)           -> Uni
+      (Nil, Con _ _)       -> Emp
+      (Con _ _, Nil)       -> Emp
+      (Con ah at, Con bh bt) -> 
+        whnf lv book (Sig (Eql t' ah bh) (Lam "_" Nothing (\_ -> Eql (Lst t') at bt)))
+      (a', b') -> Eql (Lst t') a' b'
+    
+    Sig x y -> case (whnf Full book a, whnf Full book b) of
+      (Tup ax ay, Tup bx by) ->
+        whnf lv book (Sig (Eql x ax bx) (Lam "_" Nothing (\_ -> Eql (App y ax) ay by)))
+      (a', b') -> Eql (Sig x y) a' b'
+    
+    All x y ->
+      All x (Lam "x" (Just x) (\x -> Eql (App y x) (App a x) (App b x)))
+    
+    t' -> Eql t' a b
+
 -- Duplication
 -- -----------
 
@@ -533,3 +575,103 @@ ieql :: Book -> Term -> Term -> Bool
 ieql book a b = case (termToInt book a, termToInt book b) of
   (Just x, Just y) -> x == y
   _                -> False
+
+-- Guarded Deref Implementation
+-- ----------------------------
+
+-- Converts the Ref's body into a "guarded matcher" that eliminates received args
+-- until it either succeeds, or gets stuck against a var. This emulates Agda-like
+-- clauses, giving us recursive Refs that don't unroll infinitely.
+guardedDeref :: EvalLevel -> Book -> Name -> LHS -> Term -> Term
+guardedDeref lv book k lhs@(LHS n l) body =
+  case body of
+    EmpM ->
+      Lam "x" Nothing (\x -> derefUndo lv book k lhs EmpM x)
+    
+    UniM _ f ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          One -> guardedDeref lv book k (lhsCtr lhs 0 One) f
+          x'  -> derefUndo lv book k lhs (UniM (Sub Era) f) x'
+    
+    BitM f t ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          Bt0 -> guardedDeref lv book k (lhsCtr lhs 0 Bt0) f
+          Bt1 -> guardedDeref lv book k (lhsCtr lhs 0 Bt1) t
+          x'  -> derefUndo lv book k lhs (BitM f t) x'
+    
+    NatM z s ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          Zer     -> guardedDeref lv book k (lhsCtr lhs 0 Zer) z
+          Suc xp  -> App (guardedDeref lv book k (lhsCtr lhs 1 (Lam "p" Nothing Suc)) s) xp
+          x'      -> derefUndo lv book k lhs (NatM z s) x'
+    
+    LstM n c ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          Nil       -> guardedDeref lv book k (lhsCtr lhs 0 Nil) n
+          Con h t   -> App (App (guardedDeref lv book k (lhsCtr lhs 2 (Lam "h" Nothing (\h -> Lam "t" Nothing (\t -> Con h t)))) c) h) t
+          x'        -> derefUndo lv book k lhs (LstM n c) x'
+    
+    SigM f ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          Tup a b -> App (App (guardedDeref lv book k (lhsCtr lhs 2 (Lam "a" Nothing (\a -> Lam "b" Nothing (\b -> Tup a b)))) f) a) b
+          x'      -> derefUndo lv book k lhs (SigM f) x'
+    
+    EqlM p f ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          Rfl -> guardedDeref lv book k (lhsCtr lhs 0 Rfl) f
+          x'  -> derefUndo lv book k lhs (EqlM p f) x'
+    
+    SupM l f ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          Sup l' a b | ieql book l l' ->
+            App (App (guardedDeref lv book k (lhsCtr lhs 2 (Lam "a" Nothing (\a -> Lam "b" Nothing (\b -> Sup l a b)))) f) a) b
+          x' -> derefUndo lv book k lhs (SupM l f) x'
+    
+    EnuM cs e ->
+      Lam "x" Nothing $ \x ->
+        case whnf Full book x of
+          Sym s -> case lookup s cs of
+            Just t -> guardedDeref lv book k (lhsCtr lhs 0 (Sym s)) t
+            Nothing -> guardedDeref lv book k lhs e
+          x' -> derefUndo lv book k lhs (EnuM cs e) x'
+    
+    Lam k' t f ->
+      Lam "x" Nothing $ \x ->
+        guardedDeref lv book k (lhsCtr lhs 0 x) (f x)
+    
+    _ -> body
+
+-- Undo the deref when stuck on a variable
+derefUndo :: EvalLevel -> Book -> Name -> LHS -> Term -> Term -> Term
+derefUndo lv book k (LHS n l) body x =
+  case n of
+    0 -> App (App l (Ref k)) x
+    _ -> guardedDeref lv book k (LHS (n-1) (App l x)) body
+
+-- Add a constructor to the LHS pattern
+lhsCtr :: LHS -> Int -> Term -> LHS
+lhsCtr (LHS k l) n ctr = 
+  if k == 0
+  then LHS n (lhsCtrNew l n ctr)
+  else LHS (n + k) (lhsCtrExt k l n ctr)
+
+-- Create a new LHS with a constructor
+lhsCtrNew :: Term -> Int -> Term -> Term
+lhsCtrNew l 0 ctr = Lam "k" Nothing (\k -> App (App l k) ctr)
+lhsCtrNew l n ctr = case ctr of
+  Lam k t f -> Lam "x" Nothing (\x -> lhsCtrNew l (n-1) (f x))
+  _         -> error "lhsCtrNew: expected lambda"
+
+-- Extend an existing LHS with a constructor
+lhsCtrExt :: Int -> Term -> Int -> Term -> Term
+lhsCtrExt k l 0 ctr = App l ctr
+lhsCtrExt k l n ctr = case ctr of
+  Lam k' t f -> Lam "x" Nothing (\x -> lhsCtrExt k l (n-1) (f x))
+  _          -> error "lhsCtrExt: expected lambda"

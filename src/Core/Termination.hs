@@ -16,8 +16,8 @@ subterms d term = case term of
   Ref _         -> []
   Sub x         -> [x]
   Fix k b       -> [b (Var k d)]
-  Lam x b       -> [b (Var x d)]
-  Let v f       -> [v, f]
+  Lam x _ b     -> [b (Var x d)]
+  Let k t v f   -> maybe [] (:[]) t ++ [v, f (Var k d)]
   Chk v t       -> [v, t]
   Suc n         -> [n]
   Con h t       -> [h, t]
@@ -28,15 +28,14 @@ subterms d term = case term of
   Sup _ a b     -> [a, b]
   Frk _ a b     -> [a, b]
   Loc _ t       -> [t]
-  Rwt a b x     -> [a, b, x]
-  NatM m z s    -> [m, z, s]
-  BitM m f t    -> [m, f, t]
-  UniM u t      -> [u, t]
-  LstM m n c    -> [m, n, c]
-  SigM m t      -> [m, t]
-  EqlM m e      -> [m, e]
-  EnuM m bs d   -> m : map snd bs ++ [d]
-  SupM m s t    -> [m, s, t]
+  NatM z s      -> [z, s]
+  BitM f t      -> [f, t]
+  UniM _ f      -> [f]
+  LstM n c      -> [n, c]
+  SigM f        -> [f]
+  EqlM m f      -> [m, f]
+  EnuM bs d     -> map snd bs ++ [d]
+  SupM l f      -> [l, f]
   Log s x       -> [s, x]
   Pat ms mv cs  -> ms ++ map snd mv ++ concatMap (\(as, b) -> as ++ [b]) cs
   _             -> []
@@ -54,8 +53,8 @@ countVar vname vlevel term = case term of
 
 checkLinearity :: Int -> Term -> Result ()
 checkLinearity d term = case term of
-  Lam k f -> let body = (f (Var k d))
-             in if (countVar k d body <= 1) then checkLinearity (d+1) body else Fail (UnknownTermination term) 
+  Lam k _ f -> let body = (f (Var k d))
+               in if (countVar k d body <= 1) then checkLinearity (d+1) body else Fail (UnknownTermination term) 
   Fix k b -> let body = b (Var k d)
              in if (countVar k d body <= 1) then checkLinearity (d+1) body else Fail (UnknownTermination term) 
   _ -> sequence_ [checkLinearity d sub | sub <- subterms d term]

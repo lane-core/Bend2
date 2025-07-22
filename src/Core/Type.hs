@@ -594,6 +594,7 @@ data Error
   | TypeMismatch Span Ctx Term Term
   | TermMismatch Span Ctx Term Term
   | IncompleteMatch Span Ctx
+  | UnknownTermination Term
 
 data Result a
   = Done a
@@ -908,3 +909,7 @@ hasMet term = case term of
   Pat s m c -> any hasMet s || any (hasMet . snd) m || any (\(p,b) -> any hasMet p || hasMet b) c
   Frk l a b -> hasMet l || hasMet a || hasMet b
   _ -> False
+
+-- Left-Hand Side patterns for guarded deref
+data LHS = LHS Int Term
+  deriving Show
