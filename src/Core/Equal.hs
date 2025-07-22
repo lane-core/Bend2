@@ -20,7 +20,9 @@ import Debug.Trace
 -- ========
 
 equal :: Int -> Book -> Term -> Term -> Bool
-equal d book a b = trace ("- equal: " ++ show (normal d book a) ++ " == " ++ show (normal d book b)) $ eql 3 d book a b
+equal d book a b =
+  -- trace ("- equal: " ++ show (normal d book a) ++ " == " ++ show (normal d book b)) $
+  eql 3 d book a b
 
 eql :: Int -> Int -> Book -> Term -> Term -> Bool
 eql 0  d book a b = cmp 0 d book (cut a) (cut b)

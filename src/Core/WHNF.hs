@@ -55,9 +55,8 @@ whnfLet lv book v f = whnf lv book (f v)
 -- Normalizes a reference using guarded deref
 whnfRef :: EvalLevel -> Book -> Name -> Term
 whnfRef lv book k =
-  
   case getDefn book k of
-    Just (False, term, _) -> trace ("whnfRef " ++ show term) $ deref k (LHS SZ id) term
+    Just (False, term, _) -> deref book k (LHS SZ id) term
     otherwise             -> Ref k
 
 -- Normalizes a fixpoint
@@ -495,7 +494,7 @@ dup book l (Pat _ _ _)   = error "unreachable"
 
 normal :: Int -> Book -> Term -> Term
 normal d book term =
-  -- trace ("normal: " ++ show ++ " " ++ show term) $
+  -- trace ("normal: " ++ show term ++ " ~> " ++ show (whnf Soft book term)) $
   case whnf Soft book term of
     Var k i     -> Var k i
     Ref k       -> Ref k
@@ -588,44 +587,38 @@ ieql book a b = case (termToInt book a, termToInt book b) of
 -- Guarded Deref
 -- -------------
 
-deref :: String -> LHS -> Term -> Term
-deref k lhs body = case body of
-  EmpM ->
-    Lam "x" Nothing $ \x -> derefUndo k lhs EmpM x
+deref :: Book -> String -> LHS -> Term -> Term
+deref book k lhs body =
+  case body of
+    EmpM ->
+      Lam "x" Nothing $ \x -> derefUndo book k lhs EmpM x
+    UniM f ->
+      Lam "x" Nothing $ \x -> case whnf Full book x of
+        One -> deref book k (lhs_ctr lhs SZ One) f
+        x'  -> derefUndo book k lhs (UniM f) x'
+    BitM f t ->
+      Lam "x" Nothing $ \x -> case whnf Full book x of
+        Bt0 -> deref book k (lhs_ctr lhs SZ Bt0) f
+        Bt1 -> deref book k (lhs_ctr lhs SZ Bt1) t
+        x'  -> derefUndo book k lhs (BitM f t) x'
+    NatM z s ->
+      Lam "x" Nothing $ \x -> case whnf Full book x of
+        Zer    -> deref book k (lhs_ctr lhs SZ Zer) z
+        Suc xp -> App (deref book k (lhs_ctr lhs (SS SZ) (\p -> Suc p)) s) xp
+        x'     -> derefUndo book k lhs (NatM z s) x'
+    LstM n c ->
+      Lam "x" Nothing $ \x -> case whnf Full book x of
+        Nil      -> deref book k (lhs_ctr lhs SZ Nil) n
+        Con h t' -> App (App (deref book k (lhs_ctr lhs (SS (SS SZ)) (\h' -> \t'' -> Con h' t'')) c) h) t'
+        x'       -> derefUndo book k lhs (LstM n c) x'
+    SigM f ->
+      Lam "x" Nothing $ \x -> case whnf Full book x of
+        Tup a b -> App (App (deref book k (lhs_ctr lhs (SS (SS SZ)) (\a' b' -> Tup a' b')) f) a) b
+        x'      -> derefUndo book k lhs (SigM f) x'
+    Lam n t f ->
+      Lam n t $ \x -> deref book k (lhs_ctr lhs SZ x) (f x)
+    t -> t
 
-  UniM f ->
-    Lam "x" Nothing $ \x -> case x of
-      One -> deref k (lhs_ctr lhs SZ One) f
-      x'  -> derefUndo k lhs (UniM f) x'
-
-  BitM f t ->
-    Lam "x" Nothing $ \x -> case x of
-      Bt0 -> deref k (lhs_ctr lhs SZ Bt0) f
-      Bt1 -> deref k (lhs_ctr lhs SZ Bt1) t
-      x'  -> derefUndo k lhs (BitM f t) x'
-
-  NatM z s ->
-    Lam "x" Nothing $ \x -> case x of
-      Zer    -> deref k (lhs_ctr lhs SZ Zer) z
-      Suc xp -> App (deref k (lhs_ctr lhs (SS SZ) (\p -> Suc p)) s) xp
-      x'     -> derefUndo k lhs (NatM z s) x'
-
-  LstM n c ->
-    Lam "x" Nothing $ \x -> case x of
-      Nil      -> deref k (lhs_ctr lhs SZ Nil) n
-      Con h t' -> App (App (deref k (lhs_ctr lhs (SS (SS SZ)) (\h' -> \t'' -> Con h' t'')) c) h) t'
-      x'       -> derefUndo k lhs (LstM n c) x'
-
-  SigM f ->
-    Lam "x" Nothing $ \x -> case x of
-      Tup a b -> App (App (deref k (lhs_ctr lhs (SS (SS SZ)) (\a' b' -> Tup a' b')) f) a) b
-      x'      -> derefUndo k lhs (SigM f) x'
-
-  Lam n t f ->
-    Lam n t $ \x -> deref k (lhs_ctr lhs SZ x) (f x)
-
-  t -> t
-
-derefUndo :: String -> LHS -> Term -> Term -> Term
-derefUndo k (LHS SZ     l) _    x = App (l (Ref k)) x
-derefUndo k (LHS (SS n) l) body x = deref k (LHS n (l x)) body
+derefUndo :: Book -> String -> LHS -> Term -> Term -> Term
+derefUndo book k (LHS SZ     l) _    x = App (l (Var k 0)) x
+derefUndo book k (LHS (SS n) l) body x = deref book k (LHS n (l x)) body
