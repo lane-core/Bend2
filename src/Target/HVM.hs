@@ -157,7 +157,7 @@ termToHVM book ctx term = go term where
       Nothing -> HVM.App (termToHVM book ctx f) (termToHVM book ctx x)
   go (Eql _ _ _)  = HVM.Era
   go Rfl          = HVM.Era
-  go (EqlM p f)   = termToHVM book ctx f
+  go (Rwt e g f)  = termToHVM book ctx f
   go (Met n t ts) = HVM.Era -- TODO: Met
   go Era          = HVM.Era
   go (Sup l a b)  =

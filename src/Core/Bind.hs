@@ -50,7 +50,7 @@ binder lv term ctx vars = case term of
   App f x     -> App (binder lv f ctx vars) (binder lv x ctx vars)
   Eql t a b   -> Eql (binder lv t ctx vars) (binder lv a ctx vars) (binder lv b ctx vars)
   Rfl         -> Rfl
-  EqlM p f    -> EqlM (binder lv p ctx vars) (binder lv f ctx vars)
+  Rwt e g f   -> Rwt (binder lv e ctx vars) (binder lv g ctx vars) (binder lv f ctx vars)
   Loc s t     -> Loc s (binder lv t ctx vars)
   Era         -> Era
   Sup l a b   -> Sup (binder lv l ctx vars) (binder lv a ctx vars) (binder lv b ctx vars)

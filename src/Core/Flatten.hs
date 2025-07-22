@@ -87,7 +87,7 @@ flatten d book term = case term of
   (App f x)     -> App (flatten d book f) (flatten d book x)
   (Eql t a b)   -> Eql (flatten d book t) (flatten d book a) (flatten d book b)
   Rfl           -> Rfl
-  (EqlM p f)    -> EqlM (flatten d book p) (flatten d book f)
+  (Rwt e g f)   -> Rwt (flatten d book e) (flatten d book g) (flatten d book f)
   (Met i t x)   -> Met i (flatten d book t) (map (flatten d book) x)
   Era           -> Era
   (Sup l a b)   -> Sup (flatten d book l) (flatten d book a) (flatten d book b)
@@ -281,7 +281,7 @@ unpat d (Lam n t f)     = Lam n (fmap (unpat d) t) (\x -> unpat (d+1) (f x))
 unpat d (App f x)       = App (unpat d f) (unpat d x)
 unpat d (Eql t a b)     = Eql (unpat d t) (unpat d a) (unpat d b)
 unpat d Rfl             = Rfl
-unpat d (EqlM p f)      = EqlM (unpat d p) (unpat d f)
+unpat d (Rwt e g f)     = Rwt (unpat d e) (unpat d g) (unpat d f)
 unpat d (Met i t x)     = Met i (unpat d t) (map (unpat d) x)
 unpat d Era             = Era
 unpat d (Sup l a b)     = Sup (unpat d l) (unpat d a) (unpat d b)
@@ -421,7 +421,7 @@ match d x ms cs@(([(cut -> Sym _)], _) : _) =
 -- --------------------
 -- ~x { {==}: r }
 match d x ms (([(cut -> Rfl)], r) : _) =
-  apps d (map snd ms) $ App (EqlM Era (lam d (map fst ms) $ unpat d r)) x
+  apps d (map snd ms) $ lam d (map fst ms) $ unpat d r
 
 -- match x { &L{a,b}: s }
 -- ---------------------------
@@ -503,7 +503,7 @@ unfrkGo d ctx (Lam n t f)   = Lam n (fmap (unfrkGo d ctx) t) (\x -> unfrkGo (d+1
 unfrkGo d ctx (App f x)     = App (unfrkGo d ctx f) (unfrkGo d ctx x)
 unfrkGo d ctx (Eql t a b)   = Eql (unfrkGo d ctx t) (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx Rfl           = Rfl
-unfrkGo d ctx (EqlM p f)    = EqlM (unfrkGo d ctx p) (unfrkGo d ctx f)
+unfrkGo d ctx (Rwt e g f)   = Rwt (unfrkGo d ctx e) (unfrkGo d ctx g) (unfrkGo d ctx f)
 unfrkGo d ctx (Met i t x)   = Met i (unfrkGo d ctx t) (map (unfrkGo d ctx) x)
 unfrkGo d ctx Era           = Era
 unfrkGo d ctx (Sup l a b)   = Sup (unfrkGo d ctx l) (unfrkGo d ctx a) (unfrkGo d ctx b)
@@ -631,7 +631,7 @@ subst name val term = go name val term where
     App f x     -> App (go name val f) (go name val x)
     Eql t a b   -> Eql (go name val t) (go name val a) (go name val b)
     Rfl         -> Rfl
-    EqlM p f    -> EqlM (go name val p) (go name val f)
+    Rwt e g f   -> Rwt (go name val e) (go name val g) (go name val f)
     Met i t x   -> Met i (go name val t) (map (go name val) x)
     Era         -> Era
     Sup l a b   -> Sup (go name val l) (go name val a) (go name val b)

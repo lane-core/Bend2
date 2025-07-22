@@ -211,10 +211,11 @@ collapse dep book term = case term of
     b' <- collapse dep book b
     return $ Eql t' a' b'
   Rfl         -> return Rfl
-  EqlM p f    -> do
-    p' <- collapse dep book p
+  Rwt e g f   -> do
+    e' <- collapse dep book e
+    g' <- collapse dep book g
     f' <- collapse dep book f
-    return $ EqlM p' f'
+    return $ Rwt e' g' f'
 
   -- MetaVar
   Met k t c   -> do

@@ -33,7 +33,7 @@ subterms d term = case term of
   UniM _ f      -> [f]
   LstM n c      -> [n, c]
   SigM f        -> [f]
-  EqlM m f      -> [m, f]
+  Rwt e g f     -> [e, g, f]
   EnuM bs d     -> map snd bs ++ [d]
   SupM l f      -> [l, f]
   Log s x       -> [s, x]

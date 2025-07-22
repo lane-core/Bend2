@@ -9,8 +9,9 @@ import qualified Data.Set as S
 import Debug.Trace
 
 import Core.Bind
-import Core.Flatten
 import Core.Deps
+import Core.EtaForm
+import Core.Flatten
 import Core.Type
 import Core.WHNF
 
@@ -18,17 +19,19 @@ import Core.WHNF
 -- It uses a book of already-adjusted definitions for context during flattening.
 adjust :: Book -> Term -> Term
 adjust book term =
-  -- trace (">> term  = " ++ show term) $
-  -- trace (">> flat  = " ++ show flat) $
-  -- trace (">> nopat = " ++ show nopat) $
-  -- trace (">> nofrk = " ++ show nofrk) $
-  -- trace (">> done  = " ++ show done) $
+  trace (">> term  = " ++ show term) $
+  trace (">> flat  = " ++ show flat) $
+  trace (">> nopat = " ++ show nopat) $
+  trace (">> nofrk = " ++ show nofrk) $
+  trace (">> etas  = " ++ show etas) $
+  trace (">> done  = " ++ show done) $
   done
   where
     flat  = flatten 0 book term
     nopat = unpat 0 flat
     nofrk = unfrk 0 nopat
-    done  = bind nofrk
+    etas  = etaForm 0 nofrk
+    done  = bind etas
 
 -- | Adjusts a term. simplifying patterns but leaving terms as Pats.
 adjustWithPats :: Book -> Term -> Term

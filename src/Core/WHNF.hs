@@ -38,6 +38,7 @@ whnfGo lv book term =
     Op1 o a     -> whnfOp1 lv book o a
     Pri p       -> Pri p
     Eql t a b   -> whnfEql lv book t a b
+    Rwt e g f   -> whnfRwt lv book e g f
     -- λ-Match constructors are values, they only reduce when applied
     Log s x     -> whnfLog lv book s x
     _           -> term
@@ -71,7 +72,6 @@ whnfApp lv book f x =
     LstM n c   -> whnfLstM lv book x n c
     EnuM c e   -> whnfEnuM lv book x c e
     SigM f     -> whnfSigM lv book x f
-    EqlM p f   -> whnfEqlM lv book x f  -- p is the motive, not used in reduction
     SupM l f   -> whnfSupM lv book x l f
     Frk _ _ _  -> error "unreachable"
     f'         -> App f' x
@@ -154,14 +154,6 @@ whnfEnuM lv book x c f =
             (f0, f1) = dup book l f
     x' -> App (EnuM c f) x'
 
--- Normalizes an equality match
-whnfEqlM :: EvalLevel -> Book -> Term -> Term -> Term
-whnfEqlM lv book x f =
-  case whnf Full book x of
-    Rfl       -> whnf lv book f
-    Sup l a b -> whnf lv book $ Sup l (EqlM a f0) (EqlM b f1)
-      where (f0, f1) = dup book l f
-    x' -> EqlM x' f
 
 -- Normalizes a superposition match
 whnfSupM :: EvalLevel -> Book -> Term -> Term -> Term -> Term
@@ -375,6 +367,16 @@ whnfEql lv book t a b =
     
     t' -> Eql t' a b
 
+-- Rewrite reduction
+-- -----------------
+whnfRwt :: EvalLevel -> Book -> Term -> Term -> Term -> Term
+whnfRwt lv book e g f =
+  case whnf Full book e of
+    Rfl -> whnf lv book f
+    -- We reduce to f when the equality is Unit (trivially true)
+    Uni -> whnf lv book f
+    e' -> Rwt e' g f
+
 -- Duplication
 -- -----------
 
@@ -447,8 +449,9 @@ dup book l (Eql t a b)   = (Eql t0 a0 b0, Eql t1 a1 b1)
         (a0,a1)          = dup book l a
         (b0,b1)          = dup book l b
 dup book l Rfl           = (Rfl, Rfl)
-dup book l (EqlM p f)    = (EqlM p0 f0, EqlM p1 f1)
-  where (p0,p1)          = dup book l p
+dup book l (Rwt e g f)   = (Rwt e0 g0 f0, Rwt e1 g1 f1)
+  where (e0,e1)          = dup book l e
+        (g0,g1)          = dup book l g
         (f0,f1)          = dup book l f
 dup book l Era           = (Era, Era)
 dup book l (Sup r a b)
@@ -525,7 +528,7 @@ normal d book term =
       where (fn,xs) = collectApps (App f x) []
     Eql t a b   -> Eql (normal d book t) (normal d book a) (normal d book b)
     Rfl         -> Rfl
-    EqlM x f    -> EqlM (normal d book x) (normal d book f)
+    Rwt e g f   -> Rwt (normal d book e) (normal d book g) (normal d book f)
     Loc l t     -> Loc l (normal d book t)
     Log s x     -> Log (normal d book s) (normal d book x)
     Era         -> Era
@@ -621,11 +624,6 @@ guardedDeref lv book k lhs@(LHS n l) body =
           Tup a b -> App (App (guardedDeref lv book k (lhsCtr lhs 2 (Lam "a" Nothing (\a -> Lam "b" Nothing (\b -> Tup a b)))) f) a) b
           x'      -> derefUndo lv book k lhs (SigM f) x'
     
-    EqlM p f ->
-      Lam "x" Nothing $ \x ->
-        case whnf Full book x of
-          Rfl -> guardedDeref lv book k (lhsCtr lhs 0 Rfl) f
-          x'  -> derefUndo lv book k lhs (EqlM p f) x'
     
     SupM l f ->
       Lam "x" Nothing $ \x ->

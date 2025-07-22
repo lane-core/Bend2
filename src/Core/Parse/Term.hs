@@ -590,15 +590,16 @@ parseRfl = label "reflexivity ({==} or finally)" $ choice
       _ <- try $ keyword "finally"
       return Rfl
 
--- | Syntax: rewrite expr body
--- Desugars to: match expr: case {==}: body
+-- | Syntax: rewrite expr : goal; body
 parseRewrite :: Parser Term
 parseRewrite = label "rewrite" $ do
-  srcPos <- getSourcePos
   _ <- try $ keyword "rewrite"
-  scrut <- parseTerm
-  body <- expectBody "rewrite" parseTerm
-  return (Pat [scrut] [] [([Rfl], body)])
+  e <- parseTerm
+  _ <- symbol ":"
+  g <- parseTerm
+  _ <- parseSemi
+  f <- parseTerm
+  return (Rwt e (Lam "_" Nothing (\_ -> g)) f)
 
 -- | Syntax: absurd expr
 -- Desugars to: match expr {}
@@ -843,7 +844,6 @@ parseLamMatch = label "lambda match" $ do
         , parseNatMForm
         , parseLstMForm
         , parseSigMForm
-        , parseEqlMForm
         , parseEnuMForm
         , parseSupMForm
         ]
@@ -912,21 +912,6 @@ parseLamMatch = label "lambda match" $ do
       _ <- parseSemi
       return (SigM f)
 
-    -- λ{{==}: term}: P
-    parseEqlMForm = do
-      _ <- try $ do
-        _ <- symbol "{"
-        _ <- symbol "=="
-        _ <- symbol "}"
-        _ <- symbol ":"
-        return ()
-      f <- parseTerm
-      _ <- parseSemi
-      -- Optional motive annotation
-      p <- option Era $ do
-        _ <- symbol ":"
-        parseTerm
-      return (EqlM p f)
 
     -- λ{&tag1: term1; &tag2: term2; ...; default}
     parseEnuMForm = do
@@ -986,7 +971,6 @@ parseTildeExpr = label "tilde expression (induction or match)" $ do
                   , parseNatMCases scrut
                   , parseLstMCases scrut
                   , parseSigMCases scrut
-                  , parseEqlMCases scrut
                   , parseEnuMCases scrut
                   , parseSupMCases scrut
                   ]
@@ -1065,18 +1049,6 @@ parseSigMCases scrut = do
   _ <- parseSemi
   return (App (SigM f) scrut)
 
--- | Syntax: {==}: term;
-parseEqlMCases :: Term -> Parser Term
-parseEqlMCases scrut = do
-  _ <- try $ do
-    _ <- symbol "{"
-    _ <- symbol "=="
-    _ <- symbol "}"
-    _ <- symbol ":"
-    return ()
-  f <- parseTerm
-  _ <- parseSemi
-  return (App (EqlM Era f) scrut)
 
 -- | Syntax: &tag1: term1; &tag2: term2; ...; default; (also accepts @tag for compatibility)
 parseEnuMCases :: Term -> Parser Term

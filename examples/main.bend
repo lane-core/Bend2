@@ -1,6 +1,7 @@
-# Identity
-def id<A>(x: A) -> A:
-  x
+
+## Identity
+#def id<A>(x: A) -> A:
+  #x
 
 ## Type Negation
 #def Not(A: Set) -> Set:
@@ -15,24 +16,24 @@ def id<A>(x: A) -> A:
   #, f: A -> B
   #, e: A{a == b}
   #) -> B{f(a) == f(b)}:
-  #rewrite e
+  #rewrite e : B{f(_) == f(b)}
   #finally
 
-## Negation on booleans
-## - neg(True)  = False
-## - neg(False) = True
-#def neg(x: Bool) -> Bool:
-  #if x:
-    #False
-  #else:
-    #True
+# Negation on booleans
+# - neg(True)  = False
+# - neg(False) = True
+def neg(x: Bool) -> Bool:
+  if x:
+    False
+  else:
+    True
 
-## Proof: double negation is identity
-#def double_neg_theo(x: Bool) -> Bool{neg(neg(x)) == x}:
-  #if x:
-    #finally
-  #else:
-    #finally
+# Proof: double negation is identity
+def double_neg_theo(x: Bool) -> Bool{neg(neg(x)) == x}:
+  if x:
+    finally
+  else:
+    finally
 
 ## Double of a Nat
 ## - mul2(3) = 6

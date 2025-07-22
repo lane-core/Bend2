@@ -215,7 +215,7 @@ data Term
   -- Equality
   | Eql Type Term Term -- T{a==b}
   | Rfl                -- {==}
-  | EqlM Term Term     -- λ{{==}:f}:T
+  | Rwt Term Term Term -- rewrite e : goal; f
 
   -- MetaVar
   | Met Name Type [Term] -- ?N:T{x0,x1,...}
@@ -257,8 +257,11 @@ data Term
 -- 
 -- ## Rewrites have been refactored:
 -- 
--- The Rwt constructor has been removed.
--- The Rewrite.hs file will also be removed.
+-- The EqlM (equality match) constructor λ{{==}:...} has been removed.
+-- Instead, we now have the Rwt constructor for rewriting with equality proofs:
+--   rewrite e : goal; f
+-- where e : Eql T a b, goal : ∀x:T. P(x), f : P(a), result type: P(b)
+-- The Rewrite.hs file has also been removed.
 -- Instead, when checking dependent eliminations like λ{ 0n:Z 1n+:S }, we will
 -- substitute 0n and 1n+p on the *existing goal*, rather than using rewrite.
 -- For example:
@@ -671,7 +674,7 @@ instance Show Term where
           All _ (Lam k _ _) | k /= "_"  -> "(" ++ show t ++ ")"
           _                           -> show t
   show (Lam k t f)      = case t of
-    Just t  -> "λ" ++ k ++ " : " ++ show t ++ " . " ++ show (f (Var k 0))
+    Just t  -> "λ" ++ k ++ ":" ++ show t ++ ". " ++ show (f (Var k 0))
     Nothing -> "λ" ++ k ++ ". " ++ show (f (Var k 0))
   show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
            (fn, args) = collectApps app []
@@ -684,7 +687,7 @@ instance Show Term where
     (All _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
     _         ->        show t ++        "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)           = "{==}"
-  show (EqlM p f)      = "λ{{==}:" ++ show f ++ "}:" ++ show p
+  show (Rwt e g f)     = "rewrite " ++ show e ++ " : " ++ show g ++ "; " ++ show f
   show (Loc _ t)       = show t
   show (Era)           = "*"
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
@@ -770,6 +773,8 @@ instance Show Error where
     "\x1b[1mIncompleteMatch:\x1b[0m" ++
     "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
+  show (UnknownTermination term) =
+    "\x1b[1mUnknownTermination:\x1b[0m " ++ show term
 
 instance Show Ctx where
   show (Ctx ctx)
@@ -863,7 +868,7 @@ freeVars ctx tm = case tm of
   Lam n t f   -> S.union (freeVars (S.insert n ctx) (f (Var n 0))) (foldMap (freeVars ctx) t)
   App f x     -> S.union (freeVars ctx f) (freeVars ctx x)
   Eql t a b   -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
-  EqlM p f    -> S.union (freeVars ctx p) (freeVars ctx f)
+  Rwt e g f   -> S.unions [freeVars ctx e, freeVars ctx g, freeVars ctx f]
   Met _ t c   -> S.unions (freeVars ctx t : map (freeVars ctx) c)
   Sup _ a b   -> S.union (freeVars ctx a) (freeVars ctx b)
   SupM l f    -> S.union (freeVars ctx l) (freeVars ctx f)
@@ -901,7 +906,7 @@ hasMet term = case term of
   Lam _ t f -> maybe False hasMet t || hasMet (f (Var "" 0))
   App f x -> hasMet f || hasMet x
   Eql t a b -> hasMet t || hasMet a || hasMet b
-  EqlM p f -> hasMet p || hasMet f
+  Rwt e g f -> hasMet e || hasMet g || hasMet f
   Sup _ a b -> hasMet a || hasMet b
   SupM l f -> hasMet l || hasMet f
   Loc _ t -> hasMet t

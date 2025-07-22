@@ -72,7 +72,7 @@ cmp lv d book a b =
     -- (Eql ta _  _  , b            ) -> eql lv d book ta b
     -- (a            , Eql tb _  _  ) -> eql lv d book a tb
     (Rfl            , Rfl            ) -> True
-    (EqlM pa fa     , EqlM pb fb     ) -> eql lv d book pa pb && eql lv d book fa fb
+    (Rwt ea ga fa   , Rwt eb gb fb   ) -> eql lv d book ea eb && eql lv d book ga gb && eql lv d book fa fb
     (Loc _ ta       , b              ) -> eql lv d book ta b
     (a              , Loc _ tb       ) -> eql lv d book a tb
     (Era            , Era            ) -> True

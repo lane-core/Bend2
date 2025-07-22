@@ -101,7 +101,7 @@ termToCT book term dep = case term of
   LstM n c     -> CLam "x$" (\x -> CApp (CMat (termToCT book n dep) (termToCT book c dep)) x)
   EnuM c d     -> CLam "x$" (\x -> CApp (CCse (map (\(s,t) -> (s, termToCT book t dep)) c) (termToCT book d dep)) x)
   SigM f       -> CLam "x$" (\x -> CApp (CGet (termToCT book f dep)) x)
-  EqlM p f     -> CLam "x$" (\x -> CApp (CEql (termToCT book f dep)) x)
+  Rwt e g f     -> CLam "x$" (\x -> CApp (CEql (termToCT book f dep)) x)
   Op2 o a b    -> COp2 o (termToCT book a dep) (termToCT book b dep)
   Op1 o a      -> COp1 o (termToCT book a dep)
   Log s x      -> termToCT book x dep  -- For JavaScript, just return the result expression

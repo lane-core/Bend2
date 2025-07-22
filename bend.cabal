@@ -28,6 +28,7 @@ library
                       Core.Collapse,
                       Core.Deps,
                       Core.Equal,
+                      Core.EtaForm,
                       Core.Flatten,
                       Core.Import,
                       Core.Parse,
