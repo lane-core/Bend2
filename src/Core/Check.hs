@@ -86,7 +86,7 @@ infer d span book@(Book defs _) ctx term =
       Done Nat
     Suc n -> do
       nT <- infer d span book ctx n
-      case force book nT of
+      case whnf book nT of
         Nat ->
           Done $ Nat
         _ ->
@@ -142,7 +142,7 @@ infer d span book@(Book defs _) ctx term =
           infer (d+1) span book (extend ctx k x xT) (body x)
         _ -> do
           fT <- infer d span book ctx f
-          case force book fT of
+          case whnf book fT of
             All fA fB -> do
               check d span book ctx x fA
               Done $ App fB x
@@ -157,7 +157,7 @@ infer d span book@(Book defs _) ctx term =
       Fail $ CantInfer span (formatCtx d book ctx)
     Rwt e g f -> do
       eT <- infer d span book ctx e
-      case force book eT of
+      case whnf book eT of
         Eql t a b -> do
           check d span book ctx g (All t (Lam "_" Nothing (\_ -> Set)))
           check d span book ctx f (App g b)
@@ -228,25 +228,25 @@ inferOp2Type d span book ctx op a b ta tb = do
     SHL -> integerOp ta tb
     SHR -> integerOp ta tb
   where
-    numericOp ta tb = case (force book ta, force book tb) of
+    numericOp ta tb = case (whnf book ta, whnf book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done (Num t1)
       (Nat, Nat) -> Done Nat  -- Allow Nat arithmetic operations
       _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)
     
-    comparisonOp ta tb = case (force book ta, force book tb) of
+    comparisonOp ta tb = case (whnf book ta, whnf book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done Bit
       (Bit, Bit) -> Done Bit  -- Allow Bool comparison
       (Nat, Nat) -> Done Bit  -- Allow Nat comparison
       _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book ta) (format d book tb)
     
-    integerOp ta tb = case (force book ta, force book tb) of
+    integerOp ta tb = case (whnf book ta, whnf book tb) of
       (Num U64_T, Num U64_T) -> Done (Num U64_T)
       (Num I64_T, Num I64_T) -> Done (Num U64_T)  -- Bitwise on I64 returns U64
       (Num F64_T, Num F64_T) -> Done (Num U64_T)  -- Bitwise on F64 returns U64
       (Num CHR_T, Num CHR_T) -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)  -- Bitwise not supported for CHR
       _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)
     
-    boolOrIntegerOp ta tb = case (force book ta, force book tb) of
+    boolOrIntegerOp ta tb = case (whnf book ta, whnf book tb) of
       (Bit, Bit) -> Done Bit  -- Logical operations on booleans
       (Num U64_T, Num U64_T) -> Done (Num U64_T)  -- Bitwise operations on integers
       (Num I64_T, Num I64_T) -> Done (Num U64_T)
@@ -256,14 +256,14 @@ inferOp2Type d span book ctx op a b ta tb = do
 -- Infer the result type of a unary numeric operation
 inferOp1Type :: Int -> Span -> Book -> Ctx -> NOp1 -> Term -> Term -> Result Term
 inferOp1Type d span book ctx op a ta = case op of
-  NOT -> case force book ta of
+  NOT -> case whnf book ta of
     Bit       -> Done Bit  -- Logical NOT on Bool
     Num U64_T -> Done (Num U64_T)
     Num I64_T -> Done (Num U64_T)  -- Bitwise NOT on I64 returns U64
     Num F64_T -> Done (Num U64_T)  -- Bitwise NOT on F64 returns U64
     Num CHR_T -> Fail $ CantInfer span (formatCtx d book ctx)  -- Bitwise NOT not supported for CHR
     _         -> Fail $ CantInfer span (formatCtx d book ctx)
-  NEG -> case force book ta of
+  NEG -> case whnf book ta of
     Num I64_T -> Done (Num I64_T)
     Num F64_T -> Done (Num F64_T)
     Num CHR_T -> Fail $ CantInfer span (formatCtx d book ctx)  -- Negation not supported for CHR
@@ -273,7 +273,7 @@ inferOp1Type d span book ctx op a ta = case op of
 check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 check d span book ctx term goal =
   -- trace ("- check: " ++ show (format d book term) ++ " :: " ++ show (format d book goal)) $
-  case (term, force book goal) of
+  case (term, whnf book goal) of
     (Era, _) -> do
       Done ()
     (Let k t v f, _) -> case t of
@@ -291,7 +291,7 @@ check d span book ctx term goal =
       Done ()
     (Zer, Nat) -> do
       Done ()
-    (Suc n, Eql t (force book -> Suc a) (force book -> Suc b)) -> do
+    (Suc n, Eql t (whnf book -> Suc a) (whnf book -> Suc b)) -> do
       check d span book ctx n (Eql t a b)
     (Suc n, Nat) -> do
       check d span book ctx n Nat
@@ -305,26 +305,26 @@ check d span book ctx term goal =
     (Lam k t f, All a (Lam _ _ b)) -> do
       let x = Var k d
       check (d+1) span book (extend ctx k x a) (f x) (b x)
-    (EmpM, All (force book -> Emp) rT) -> do
+    (EmpM, All (whnf book -> Emp) rT) -> do
       Done ()
     (EmpM, _) -> do
       Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book (All Emp (Lam "_" Nothing (\_ -> Set))))
     (UniM f, _) -> do
       check d span book ctx (UniM f) (All Uni (Lam "x$" Nothing (\x -> goal)))
       Done ()
-    (BitM f t, All (force book -> Bit) rT) -> do
+    (BitM f t, All (whnf book -> Bit) rT) -> do
       check d span book ctx f (App rT Bt0)
       check d span book ctx t (App rT Bt1)
       Done ()
     (BitM f t, _) -> do
       Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book (All Bit (Lam "_" Nothing (\_ -> Set))))
-    (NatM z s, All (force book -> Nat) rT) -> do
+    (NatM z s, All (whnf book -> Nat) rT) -> do
       check d span book ctx z (App rT Zer)
       check d span book ctx s (All Nat (Lam "p" Nothing (\p -> App rT (Suc p))))
       Done ()
     (NatM z s, _) -> do
       Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book (All Nat (Lam "_" Nothing (\_ -> Set))))
-    (LstM n c, All (force book -> Lst a) rT) -> do
+    (LstM n c, All (whnf book -> Lst a) rT) -> do
       check d span book ctx n (App rT Nil)
       check d span book ctx c $ All a (Lam "h" Nothing (\h -> All (Lst a) (Lam "t" Nothing (\t -> App rT (Con h t)))))
       Done ()
@@ -334,7 +334,7 @@ check d span book ctx term goal =
       if s `elem` y
         then Done ()
         else Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Enu y)) (format d book (Sym s))
-    (EnuM cs df, All (force book -> Enu syms) rT) -> do
+    (EnuM cs df, All (whnf book -> Enu syms) rT) -> do
       mapM_ (\(s, t) -> check d span book ctx t (App rT (Sym s))) cs
       let covered_syms = map fst cs
       let all_covered = length covered_syms >= length syms
@@ -351,7 +351,7 @@ check d span book ctx term goal =
         else Done ()
     (EnuM cs df, _) -> do
       Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (format d book (All (Enu []) (Lam "_" Nothing (\_ -> Set))))
-    (SigM f, All (force book -> Sig a b) rT) -> do
+    (SigM f, All (whnf book -> Sig a b) rT) -> do
       check d span book ctx f $ All a (Lam "x" Nothing (\h -> All (App b h) (Lam "y" Nothing (\t -> App rT (Tup h t)))))
       Done ()
     (SigM f, _) -> do
@@ -396,7 +396,7 @@ check d span book ctx term goal =
       check d span book ctx b goal
     (SupM l f, _) -> do
       check d span book ctx l (Num U64_T)
-      case force book goal of
+      case whnf book goal of
         All xT rT -> do
           check d span book ctx f (All xT (Lam "p" Nothing (\p -> All xT (Lam "q" Nothing (\q -> App rT (Sup l p q))))))
           Done ()
@@ -407,9 +407,9 @@ check d span book ctx term goal =
       check d span book ctx b goal
     (Pat _ _ _, _) -> do
       error "not-supported"
-    (App f x, _) -> do
-      trace ("- check App: " ++ show (App f x) ++ " :: " ++ show goal) $ do
-        verify d span book ctx term goal
+    -- (App f x, _) -> do
+      -- trace ("- check App: " ++ show (App f x) ++ " :: " ++ show goal) $ do
+        -- verify d span book ctx term goal
     (Log s x, _) -> do
       check d span book ctx s (Lst (Num CHR_T))
       check d span book ctx x goal

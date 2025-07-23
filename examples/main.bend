@@ -174,10 +174,13 @@ def succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
 def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
   match a:
     case 0n:
-      ()
-      #zero_right(b)
+      zero_right(b)
     case 1n+ap:
-      ()
+      e0 = comm(ap, b)
+      e1 = succ_right(b, ap)
+      rewrite e0 : Nat{1n+_ == add(b,1n+ap)}
+      rewrite e1 : Nat{1n+add(ap,b) == _}
+      finally
       #rewrite comm(ap,b)
       #rewrite succ_right(b,ap)
       #finally
