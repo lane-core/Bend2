@@ -6,6 +6,7 @@ module Core.Check where
 
 import qualified Data.Map as M
 import Data.List (find)
+import Data.Maybe (fromJust)
 
 import Debug.Trace
 
@@ -32,7 +33,7 @@ formatCtx d book (Ctx ctx) = Ctx (map formatAnn ctx)
 
 -- Infer the type of a term
 infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
-infer d span book@(Book defs) ctx term =
+infer d span book@(Book defs _) ctx term =
   -- trace ("- infer: " ++ show (format d book term)) $
   case term of
     Var _ i -> do
@@ -430,7 +431,7 @@ verify d span book ctx term goal = do
 
 -- Check all definitions in a Book
 checkBook :: Book -> Result ()
-checkBook book@(Book defs) = mapM_ checkDef (M.toList defs)
+checkBook book@(Book defs names) = mapM_ checkDef [(name, fromJust (M.lookup name defs)) | name <- names]
   where
     checkDef (name, (_, term, typ)) = do
       trace ("CHECKING DEF: " ++ name) $ do

@@ -7,7 +7,7 @@ import Debug.Trace
 import Highlight (highlightError)
 import Data.Int (Int32, Int64)
 import Data.Word (Word32, Word64)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import qualified Data.Map as M
 import qualified Data.Set as S
 
@@ -241,7 +241,7 @@ data Term
 -- Book of Definitions
 type Inj  = Bool -- "is injective" flag. improves pretty printing
 type Defn = (Inj, Term, Type)
-data Book = Book (M.Map Name Defn)
+data Book = Book (M.Map Name Defn) [Name]
 
 -- Substitution Map
 type Subs = [(Term,Term)]
@@ -406,7 +406,7 @@ instance Show Term where
              showPat p = "(" ++ show p ++ ")"
 
 instance Show Book where
-  show (Book defs) = unlines (map defn (M.toList defs))
+  show (Book defs names) = unlines (map defn [(name, fromJust (M.lookup name defs)) | name <- names])
     where defn (k,(_,x,t)) = k ++ " : " ++ show t ++ " = " ++ show x
 
 instance Show Span where
@@ -462,7 +462,7 @@ instance Show Ctx where
 -- -----
 
 getDefn :: Book -> Name -> Maybe Defn
-getDefn (Book defs) name = M.lookup name defs
+getDefn (Book defs _) name = M.lookup name defs
 
 cut :: Term -> Term
 cut (Loc _ t) = cut t

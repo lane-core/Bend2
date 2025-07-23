@@ -46,14 +46,14 @@ type AdjustState = (Book, S.Set Name)
 -- all definitions it depends on have already been adjusted.
 -- This is crucial for functions like `flatten` which may look up references.
 adjustBook :: Book -> Book
-adjustBook book@(Book defs) =
+adjustBook book@(Book defs names) =
   -- The final adjusted book is extracted from the state after processing all definitions.
-  fst $ execState (mapM_ (adjustDef book S.empty adjust) (M.keys defs)) (Book M.empty, S.empty)
+  fst $ execState (mapM_ (adjustDef book S.empty adjust) (M.keys defs)) (Book M.empty names, S.empty)
 
 -- | Adjusts the entire book, simplifying patterns but without removing Pat terms.
 adjustBookWithPats :: Book -> Book
-adjustBookWithPats book@(Book defs) =
-  fst $ execState (mapM_ (adjustDef book S.empty adjustWithPats) (M.keys defs)) (Book M.empty, S.empty)
+adjustBookWithPats book@(Book defs names) =
+  fst $ execState (mapM_ (adjustDef book S.empty adjustWithPats) (M.keys defs)) (Book M.empty names, S.empty)
 
 -- | The recursive worker function that adjusts a single definition.adjustBook
 -- It takes a set of names currently in the recursion stack to detect cycles.
@@ -89,8 +89,8 @@ adjustDef book visiting adjustFn name = do
 
         -- 4. Update the state with the newly adjusted definition.
         -- The name is added to the `adjustedSet` to mark it as complete.
-        modify $ \(Book adjMap, doneSet) ->
+        modify $ \(Book adjMap names, doneSet) ->
           let newAdjMap  = M.insert name (inj, adjTerm, adjType) adjMap
               newDoneSet = S.insert name doneSet
-          in (Book newAdjMap, newDoneSet)
+          in (Book newAdjMap names, newDoneSet)
 

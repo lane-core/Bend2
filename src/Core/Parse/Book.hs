@@ -105,7 +105,8 @@ parseBook = do
   _ <- many (try parseImport)
   -- Then parse definitions
   defs <- many parseDefinition
-  return $ Book (M.fromList defs)
+  let names = map fst defs
+  return $ Book (M.fromList defs) names
 
 -- | Syntax: type Name<T, U>(i: Nat) -> Type: case @Tag1: field1: T1 case @Tag2: field2: T2
 parseType :: Parser (Name, Defn)

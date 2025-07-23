@@ -26,7 +26,7 @@ autoImport _ book = do
 
 -- Collect all unbound references from a Book
 -- collectUnboundRefs :: Book -> S.Set Name
--- collectUnboundRefs (Book defs) = S.unions $ map collectRefsFromDefn (M.elems defs) where
+-- collectUnboundRefs (Book defs _) = S.unions $ map collectRefsFromDefn (M.elems defs) where
   -- collectRefsFromDefn (_, term, typ) = S.union (collectRefs term) (collectRefs typ)
 
 -- Auto-import references with cycle detection
@@ -45,7 +45,7 @@ autoImportRefs book refs visited = do
 -- FIXME: simplify this ugly code
 autoImportRef :: S.Set FilePath -> Either String (Book, S.Set Name) -> Name -> IO (Either String (Book, S.Set Name))
 autoImportRef _ (Left err) _ = return (Left err)
-autoImportRef visited (Right (book@(Book defs), newRefs)) refName = do
+autoImportRef visited (Right (book@(Book defs _), newRefs)) refName = do
   -- Check if the reference already exists in the book
   if M.member refName defs
     then return (Right (book, newRefs))
@@ -88,4 +88,5 @@ autoImportRef visited (Right (book@(Book defs), newRefs)) refName = do
 
 -- Merge two books, preferring definitions from the first book
 mergeBooks :: Book -> Book -> Book
-mergeBooks (Book defs1) (Book defs2) = Book (M.union defs1 defs2)
+mergeBooks (Book defs1 names1) (Book defs2 names2) = 
+  Book (M.union defs1 defs2) (names1 ++ filter (`notElem` names1) names2)

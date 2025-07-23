@@ -12,6 +12,7 @@ module Core.CLI
 import Control.Monad (unless, forM_)
 import qualified Data.Map as M
 import qualified Data.Set as S
+import Data.Maybe (fromJust)
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.Process (readProcessWithExitCode)
@@ -48,8 +49,9 @@ parseFile file = do
 
 -- | Type-check all definitions in a book
 checkDefinitions :: Book -> IO ()
-checkDefinitions book@(Book defs) = do
-  success <- checkAll book (M.toList defs)
+checkDefinitions book@(Book defs names) = do
+  let orderedDefs = [(name, fromJust (M.lookup name defs)) | name <- names]
+  success <- checkAll book orderedDefs
   unless success exitFailure
   where
     checkDef book term typ = do
@@ -144,7 +146,7 @@ listDependencies file = do
 getGenDeps :: FilePath -> IO ()
 getGenDeps file = do
   book <- parseFile file
-  let bookAdj@(Book defs) = adjustBook book
+  let bookAdj@(Book defs names) = adjustBook book
   
   -- Find all definitions that are `try` definitions (i.e., contain a Met)
   let tryDefs = M.filter (\(_, term, _) -> hasMet term) defs
@@ -164,14 +166,15 @@ getGenDeps file = do
 
   -- Filter the book to get the definitions we want to print
   let finalDefs = M.filterWithKey (\k _ -> k `S.member` finalDepNames) defs
+  let finalNames = filter (`S.member` finalDepNames) names
   
   -- Print the resulting book
-  print $ Book finalDefs
+  print $ Book finalDefs finalNames
 
 
 -- | Collect all refs from a Book
 collectAllRefs :: Book -> S.Set Name
-collectAllRefs (Book defs) = 
+collectAllRefs (Book defs _) = 
   S.unions $ map collectRefsFromDefn (M.elems defs)
   where
     collectRefsFromDefn (_, term, typ) = S.union (getDeps term) (getDeps typ)

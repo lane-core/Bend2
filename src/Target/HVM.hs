@@ -16,7 +16,7 @@ import qualified Data.Set as S
 import qualified HVM.Type as HVM
 
 compile :: Book -> String
-compile book@(Book defs) =
+compile book@(Book defs _) =
   -- TODO: Error handling
   if M.notMember "main" defs then
     error "No main function found"
