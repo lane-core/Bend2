@@ -86,7 +86,6 @@ flatten d book term = case term of
   (Lam n t f)   -> Lam n (fmap (flatten d book) t) (\x -> flatten (d+1) book (f x))
   (App f x)     -> App (flatten d book f) (flatten d book x)
   (Eql t a b)   -> Eql (flatten d book t) (flatten d book a) (flatten d book b)
-  Rfl           -> Rfl
   (Rwt e g f)   -> Rwt (flatten d book e) (flatten d book g) (flatten d book f)
   (Met i t x)   -> Met i (flatten d book t) (map (flatten d book) x)
   Era           -> Era
@@ -180,8 +179,6 @@ peelCtrCol d book (cut->k) ((((cut->p):ps),rhs):cs) =
     (Sym s    , Sym s' )
                | s == s'   -> ((ps, rhs) : picks , drops)
     (Sym s    , Var k _)   -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
-    (Rfl      , Rfl    )   -> ((ps, rhs) : picks , drops)
-    (Rfl      , Var k _)   -> ((ps, subst k Rfl rhs) : picks , ((p:ps),rhs) : drops)
     (Sup l _ _, Sup r a b) -> (((a:b:ps), rhs) : picks , drops)
     (Sup l _ _, Var k _)   -> (((Var (k++"a") 0:Var (k++"b") 0:ps), subst k (Sup l (Var (k++"a") 0) (Var (k++"b") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Var _ _  , p      )   -> unsupported
@@ -197,7 +194,7 @@ callPatternSugar :: Int -> Book -> Term -> Term -> Term -> Term -> [Term] -> Ter
 callPatternSugar d book k f x p ps rhs cs =
   peelCtrCol d book k (((exp:ps),rhs):cs)
   where (fn,xs) = collectApps (App f x)  []
-        exp     = normal d book $ foldl App ref xs
+        exp     = normal book $ foldl App ref xs
         ref     = case fn of
           Ref k i   -> Ref k i
           Var k _   -> Ref k 1
@@ -280,7 +277,6 @@ unpat d (All a b)       = All (unpat d a) (unpat d b)
 unpat d (Lam n t f)     = Lam n (fmap (unpat d) t) (\x -> unpat (d+1) (f x))
 unpat d (App f x)       = App (unpat d f) (unpat d x)
 unpat d (Eql t a b)     = Eql (unpat d t) (unpat d a) (unpat d b)
-unpat d Rfl             = Rfl
 unpat d (Rwt e g f)     = Rwt (unpat d e) (unpat d g) (unpat d f)
 unpat d (Met i t x)     = Met i (unpat d t) (map (unpat d) x)
 unpat d Era             = Era
@@ -417,12 +413,6 @@ match d x ms cs@(([(cut -> Sym _)], _) : _) =
       ([], Lam k Nothing $ \_ -> lam d (map fst ms) $ unpat (d+1) rhs)
     collect (c:_) = error $ "match:invalid-Sym-case:" ++ show c
 
--- match x { {==}: r }
--- --------------------
--- ~x { {==}: r }
-match d x ms (([(cut -> Rfl)], r) : _) =
-  apps d (map snd ms) $ lam d (map fst ms) $ unpat d r
-
 -- match x { &L{a,b}: s }
 -- ---------------------------
 -- ~ x { &L{,}: λa. λb. s }
@@ -502,7 +492,7 @@ unfrkGo d ctx (All a b)     = All (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx (Lam n t f)   = Lam n (fmap (unfrkGo d ctx) t) (\x -> unfrkGo (d+1) ((n,d):ctx) (f x))
 unfrkGo d ctx (App f x)     = App (unfrkGo d ctx f) (unfrkGo d ctx x)
 unfrkGo d ctx (Eql t a b)   = Eql (unfrkGo d ctx t) (unfrkGo d ctx a) (unfrkGo d ctx b)
-unfrkGo d ctx Rfl           = Rfl
+-- unfrkGo d ctx Rfl           = Rfl
 unfrkGo d ctx (Rwt e g f)   = Rwt (unfrkGo d ctx e) (unfrkGo d ctx g) (unfrkGo d ctx f)
 unfrkGo d ctx (Met i t x)   = Met i (unfrkGo d ctx t) (map (unfrkGo d ctx) x)
 unfrkGo d ctx Era           = Era
@@ -588,7 +578,6 @@ ctrOf d (Con h t)   = (Con (pat d h) (pat (d+1) t), [pat d h, pat (d+1) t])
 ctrOf d One         = (One , [])
 ctrOf d (Tup a b)   = (Tup (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
 ctrOf d (Sym s)     = (Sym s, [])
-ctrOf d Rfl         = (Rfl , [])
 ctrOf d (Sup l a b) = (Sup l (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
 ctrOf d x           = (var d , [var d])
 
@@ -630,7 +619,6 @@ subst name val term = go name val term where
     Lam k t f   -> if k == name then term else Lam k (fmap (go name val) t) (\x -> go name val (f x))
     App f x     -> App (go name val f) (go name val x)
     Eql t a b   -> Eql (go name val t) (go name val a) (go name val b)
-    Rfl         -> Rfl
     Rwt e g f   -> Rwt (go name val e) (go name val g) (go name val f)
     Met i t x   -> Met i (go name val t) (map (go name val) x)
     Era         -> Era

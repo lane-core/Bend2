@@ -116,7 +116,6 @@ data PriF
 
   -- -- Equality
   -- | Eql Type Term Term -- T{a==b}
-  -- | Rfl                -- {==}
   -- | EqlM Term Term     -- ~x{{==}:f}
 
   -- -- MetaVar
@@ -214,7 +213,7 @@ data Term
 
   -- Equality
   | Eql Type Term Term -- T{a==b}
-  | Rfl                -- {==}
+  -- | Rfl                -- {==}
   | Rwt Term Term Term -- rewrite e : goal; f
 
   -- MetaVar
@@ -352,7 +351,7 @@ instance Show Term where
     (Sig _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
     (All _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
     _         ->        show t ++        "{" ++ show a ++ "==" ++ show b ++ "}"
-  show (Rfl)           = "{==}"
+  -- show (Rfl)           = "{==}"
   show (Rwt e g f)     = "rewrite " ++ show e ++ " : " ++ show g ++ "; " ++ show f
   show (Loc _ t)       = show t
   show (Era)           = "*"

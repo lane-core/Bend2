@@ -106,7 +106,7 @@ termToCT book term dep = case term of
   Op1 o a      -> COp1 o (termToCT book a dep)
   Log s x      -> termToCT book x dep  -- For JavaScript, just return the result expression
   Pri p        -> CPri p
-  Rfl          -> CEra
+  -- Rfl          -> CEra
   Era          -> CEra
   Sup l a b    -> CSup (termToCT book l dep) (termToCT book a dep) (termToCT book b dep)
   SupM l f     -> CSupM CEra (termToCT book l dep) (termToCT book f dep)

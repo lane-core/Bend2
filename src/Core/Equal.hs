@@ -28,7 +28,7 @@ eql :: Bool -> Int -> Book -> Term -> Term -> Bool
 eql False d book a b = cmp False d book (cut a) (cut b)
 eql True  d book a b = identical || similar where
   identical = eql False d book a b
-  similar   = cmp True  d book (whnf book a) (whnf book b)
+  similar   = cmp True  d book (force book a) (force book b)
 
 cmp :: Bool -> Int -> Book -> Term -> Term -> Bool
 cmp red d book a b =
@@ -73,7 +73,7 @@ cmp red d book a b =
     (Eql ta aa ba   , Eql tb ab bb   ) -> eql red d book ta tb && eql red d book aa ab && eql red d book ba bb
     -- (Eql ta _  _  , b            ) -> eql red d book ta b
     -- (a            , Eql tb _  _  ) -> eql red d book a tb
-    (Rfl            , Rfl            ) -> True
+    -- (Rfl            , Rfl            ) -> True
     (Rwt ea ga fa   , Rwt eb gb fb   ) -> eql red d book ea eb && eql red d book ga gb && eql red d book fa fb
     (Loc _ ta       , b              ) -> eql red d book ta b
     (a              , Loc _ tb       ) -> eql red d book a tb

@@ -209,7 +209,7 @@ collapse dep book term = case term of
     a' <- collapse dep book a
     b' <- collapse dep book b
     return $ Eql t' a' b'
-  Rfl         -> return Rfl
+  -- Rfl         -> return Rfl
   Rwt e g f   -> do
     e' <- collapse dep book e
     g' <- collapse dep book g
