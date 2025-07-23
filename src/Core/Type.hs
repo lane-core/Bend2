@@ -151,7 +151,7 @@ data PriF
 data Term
   -- Variables
   = Var Name Int -- x
-  | Ref Name     -- x
+  | Ref Name Int -- x, Reduce?
   | Sub Term     -- x
 
   -- Definitions
@@ -285,7 +285,7 @@ instance Monad Result where
 
 instance Show Term where
   show (Var k i)      = k -- ++ "^" ++ show i
-  show (Ref k)        = k
+  show (Ref k i)      = k
   show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let k t v f)  = case t of
@@ -346,7 +346,7 @@ instance Show Term where
            (fn, args) = collectApps app []
            fnStr      = case cut fn of
               Var k i -> show (Var k i)
-              Ref k   -> show (Ref k)
+              Ref k i -> show (Ref k i)
               fn      -> "(" ++ show fn ++ ")"
   show (Eql t a b)     = case t of
     (Sig _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"

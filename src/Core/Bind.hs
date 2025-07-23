@@ -15,8 +15,8 @@ bind term = bound where
 
 binder :: Int -> Term -> [Term] -> M.Map Name Term -> Term
 binder lv term ctx vars = case term of
-  Var k i     -> case M.lookup k vars of { Just t -> t ; Nothing -> Ref k }
-  Ref k       -> Ref k
+  Var k i     -> case M.lookup k vars of { Just t -> t ; Nothing -> Ref k 1}
+  Ref k i     -> Ref k i
   Sub t       -> t
   Let k t v f -> Let k (fmap (\u -> binder lv u ctx vars) t) (binder lv v ctx vars) (\x -> binder lv (f (Sub x)) (ctx++[x]) (M.insert k x vars))
   Fix k f     -> Fix k (\x -> binder (lv+1) (f (Sub x)) (ctx++[x]) (M.insert k x vars))

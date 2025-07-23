@@ -88,7 +88,7 @@ collapse :: Int -> Book -> Term -> Collapse Term
 collapse dep book term = case term of
   -- Variables
   Var k i -> return $ Var k i
-  Ref k   -> return $ Ref k
+  Ref k i -> return $ Ref k i
   Sub t   -> do
     t' <- collapse dep book t
     return $ Sub t'

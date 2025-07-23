@@ -21,7 +21,7 @@ getBookDeps (Book defs _) = S.unions $ map getDefnDeps (M.toList defs) where
 collectDeps :: S.Set Name -> Term -> S.Set Name
 collectDeps bound term = case term of
   Var k _     -> if k `S.member` bound then S.empty else S.singleton k
-  Ref k       -> S.singleton k
+  Ref k i     -> S.singleton k
   Sub t       -> collectDeps bound t
   Fix k f     -> collectDeps (S.insert k bound) (f (Var k 0))
   Let k t v f -> S.unions [foldMap (collectDeps bound) t ,collectDeps bound v, collectDeps (S.insert k bound) (f (Var k 0))]
@@ -85,7 +85,7 @@ collectCaseDeps bound (patterns, body) =
 -- In a pattern `f(x,y)`, `f` is a dependency, but `x` and `y` are binders.
 getPatternDeps :: S.Set Name -> Term -> S.Set Name
 getPatternDeps bound term = case cut term of
-  Ref k     -> S.singleton k
+  Ref k i   -> S.singleton k
   -- For an application in a pattern, only the function part can be a dependency.
   -- The arguments are binders, not expressions to be evaluated.
   App f _   -> collectDeps bound f

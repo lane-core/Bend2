@@ -53,7 +53,7 @@ import Core.WHNF
 flatten :: Int -> Book -> Term -> Term
 flatten d book term = case term of
   (Var n i)     -> Var n i
-  (Ref n)       -> Ref n
+  (Ref n i)     -> Ref n  i
   (Sub t)       -> Sub (flatten d book t)
   (Fix n f)     -> Fix n (\x -> flatten (d+1) book (f x))
   (Let k t v f) -> Let k (fmap (flatten d book) t) (flatten d book v) (\x -> flatten (d+1) book (f x))
@@ -199,8 +199,8 @@ callPatternSugar d book k f x p ps rhs cs =
   where (fn,xs) = collectApps (App f x)  []
         exp     = normal d book $ foldl App ref xs
         ref     = case fn of
-          Ref k     -> Ref k
-          Var k _   -> Ref k
+          Ref k i   -> Ref k i
+          Var k _   -> Ref k 1
           otherwise -> error $ "invalid-call-pattern:" ++ show (App f x)
 
 -- Simplify
@@ -247,7 +247,7 @@ decay d pat                       = pat
 
 unpat :: Int -> Term -> Term
 unpat d (Var n i)       = Var n i
-unpat d (Ref n)         = Ref n
+unpat d (Ref n i)       = Ref n i
 unpat d (Sub t)         = Sub (unpat d t)
 unpat d (Fix n f)       = Fix n (\x -> unpat (d+1) (f x))
 unpat d (Let k t v f)   = Let k (fmap (unpat d) t) (unpat d v) (\x -> unpat (d+1) (f x))
@@ -469,7 +469,7 @@ unfrk d term = unfrkGo d [] term
 
 unfrkGo :: Int -> [(Name, Int)] -> Term -> Term
 unfrkGo d ctx (Var n i)     = Var n i
-unfrkGo d ctx (Ref n)       = Ref n
+unfrkGo d ctx (Ref n i)     = Ref n i
 unfrkGo d ctx (Sub t)       = Sub (unfrkGo d ctx t)
 unfrkGo d ctx (Fix n f)     = Fix n (\x -> unfrkGo (d+1) ((n,d):ctx) (f x))
 unfrkGo d ctx (Let k t v f) = Let k (fmap (unfrkGo d ctx) t) (unfrkGo d ctx v) (\x -> unfrkGo (d+1) ((k,d):ctx) (f x))
@@ -597,7 +597,7 @@ subst :: Name -> Term -> Term -> Term
 subst name val term = go name val term where
   go name val term = case term of
     Var k _     -> if k == name then val else term
-    Ref k       -> Ref k
+    Ref k i     -> Ref k i
     Sub t       -> Sub (go name val t)
     Fix k f     -> if k == name then term else Fix k (\x -> go name val (f x))
     Let k t v f -> if k == name then term else Let k (fmap (go name val) t) (go name val v) (\x -> go name val (f x))

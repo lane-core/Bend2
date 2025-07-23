@@ -13,7 +13,7 @@ import Core.Type
 subterms :: Int -> Term -> [Term]
 subterms d term = case term of
   Var _ _       -> []
-  Ref _         -> []
+  Ref _ _       -> []
   Sub x         -> [x]
   Fix k b       -> [b (Var k d)]
   Lam x _ b     -> [b (Var x d)]
@@ -41,7 +41,7 @@ subterms d term = case term of
   _             -> []
 
 hasSelfRef :: Book -> S.Set String -> String -> Term -> Bool
-hasSelfRef book@(Book defs _) visited name (Ref n)
+hasSelfRef book@(Book defs _) visited name (Ref n i)
   | name `elem` visited = True
   | otherwise = any (\(nam, trm) -> hasSelfRef book (S.insert nam visited) name trm) [(nam,trm) | (nam,(_,trm,typ)) <- M.toList defs, nam `elem` visited]
 hasSelfRef book visited name term = any (hasSelfRef book visited name) (subterms 0 term)

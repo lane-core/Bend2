@@ -42,7 +42,7 @@ infer d span book@(Book defs _) ctx term =
         then let (_, _, typ) = ks !! i
              in Done typ
         else Fail $ CantInfer span (formatCtx d book ctx)
-    Ref k -> do
+    Ref k i -> do
       case getDefn book k of
         Just (_, _, typ) -> Done typ
         Nothing          -> Fail $ Undefined span (formatCtx d book ctx) k
@@ -231,7 +231,7 @@ inferOp2Type d span book ctx op a b ta tb = do
     numericOp ta tb = case (whnf book ta, whnf book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done (Num t1)
       (Nat, Nat) -> Done Nat  -- Allow Nat arithmetic operations
-      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)
+      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num" 1)) (format d book ta)
     
     comparisonOp ta tb = case (whnf book ta, whnf book tb) of
       (Num t1, Num t2) | t1 == t2 -> Done Bit
@@ -243,8 +243,8 @@ inferOp2Type d span book ctx op a b ta tb = do
       (Num U64_T, Num U64_T) -> Done (Num U64_T)
       (Num I64_T, Num I64_T) -> Done (Num U64_T)  -- Bitwise on I64 returns U64
       (Num F64_T, Num F64_T) -> Done (Num U64_T)  -- Bitwise on F64 returns U64
-      (Num CHR_T, Num CHR_T) -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)  -- Bitwise not supported for CHR
-      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num")) (format d book ta)
+      (Num CHR_T, Num CHR_T) -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num" 1)) (format d book ta)  -- Bitwise not supported for CHR
+      _ -> Fail $ TypeMismatch span (formatCtx d book ctx) (format d book (Ref "Num" 1)) (format d book ta)
     
     boolOrIntegerOp ta tb = case (whnf book ta, whnf book tb) of
       (Bit, Bit) -> Done Bit  -- Logical operations on booleans
@@ -414,7 +414,7 @@ check d span book ctx term goal =
       check d span book ctx s (Lst (Num CHR_T))
       check d span book ctx x goal
     (Lam f t x, _) ->
-      Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (Ref "Function")
+      Fail $ TypeMismatch span (formatCtx d book ctx) (format d book goal) (Ref "Function" 1)
     (_, _) -> do
       verify d span book ctx term goal
 

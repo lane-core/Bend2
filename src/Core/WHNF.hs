@@ -29,7 +29,7 @@ whnfGo :: Book -> Term -> Term
 whnfGo book term =
   case term of
     Let k t v f -> whnfLet book v f
-    Ref k       -> whnfRef book k
+    Ref k i     -> whnfRef book k i
     Fix k f     -> whnfFix book k f
     Chk x _     -> whnf book x
     App f x     -> whnfApp book f x
@@ -48,11 +48,13 @@ whnfLet :: Book -> Term -> Body -> Term
 whnfLet book v f = whnf book (f v)
 
 -- Normalizes a reference using guarded deref
-whnfRef :: Book -> Name -> Term
-whnfRef book k =
-  case getDefn book k of
-    Just (False, term, _) -> deref book k (LHS SZ id) term
-    otherwise             -> Ref k
+whnfRef :: Book -> Name -> Int -> Term
+whnfRef book k i =
+  if i == 0
+  then Ref k i
+  else case getDefn book k of
+    Just (False, term, _) -> deref book k i (LHS SZ id) term
+    otherwise             -> Ref k 0
 
 -- Normalizes a fixpoint
 whnfFix :: Book -> String -> Body -> Term
@@ -263,18 +265,18 @@ whnfOp2 book op a b =
     _                -> Op2 op a' b'
   where
     natOp op a b = case op of
-      ADD -> whnf book $ App (App (Ref "Nat/add") a) b
-      SUB -> whnf book $ App (App (Ref "Nat/sub") a) b
-      MUL -> whnf book $ App (App (Ref "Nat/mul") a) b
-      DIV -> whnf book $ App (App (Ref "Nat/div") a) b
-      MOD -> whnf book $ App (App (Ref "Nat/mod") a) b
-      POW -> whnf book $ App (App (Ref "Nat/pow") a) b
-      EQL -> whnf book $ App (App (Ref "Nat/eql") a) b
-      NEQ -> whnf book $ App (App (Ref "Nat/neq") a) b
-      LST -> whnf book $ App (App (Ref "Nat/lst") a) b
-      GRT -> whnf book $ App (App (Ref "Nat/grt") a) b
-      LEQ -> whnf book $ App (App (Ref "Nat/leq") a) b
-      GEQ -> whnf book $ App (App (Ref "Nat/geq") a) b
+      ADD -> whnf book $ App (App (Ref "Nat/add" 1) a) b
+      SUB -> whnf book $ App (App (Ref "Nat/sub" 1) a) b
+      MUL -> whnf book $ App (App (Ref "Nat/mul" 1) a) b
+      DIV -> whnf book $ App (App (Ref "Nat/div" 1) a) b
+      MOD -> whnf book $ App (App (Ref "Nat/mod" 1) a) b
+      POW -> whnf book $ App (App (Ref "Nat/pow" 1) a) b
+      EQL -> whnf book $ App (App (Ref "Nat/eql" 1) a) b
+      NEQ -> whnf book $ App (App (Ref "Nat/neq" 1) a) b
+      LST -> whnf book $ App (App (Ref "Nat/lst" 1) a) b
+      GRT -> whnf book $ App (App (Ref "Nat/grt" 1) a) b
+      LEQ -> whnf book $ App (App (Ref "Nat/leq" 1) a) b
+      GEQ -> whnf book $ App (App (Ref "Nat/geq" 1) a) b
       _   -> Op2 op a b
 
 whnfOp1 :: Book -> NOp1 -> Term -> Term
@@ -365,7 +367,7 @@ normal d book term =
   -- trace ("normal: " ++ show term ++ " ~> " ++ show (whnf book term)) $
   case whnf book term of
     Var k i     -> Var k i
-    Ref k       -> Ref k
+    Ref k i     -> Ref k i
     Sub t       -> t
     Fix k f     -> Fix k (\x -> normal (d+1) book (f (Sub x)))
     Let k t v f -> Let k (fmap (normal d book) t) (normal d book v) (\x -> normal d book (f (Sub x)))
@@ -442,38 +444,38 @@ ieql book a b = case (termToInt book a, termToInt book b) of
 -- Guarded Deref
 -- -------------
 
-deref :: Book -> String -> LHS -> Term -> Term
-deref book k lhs body =
+deref :: Book -> String -> Int -> LHS -> Term -> Term
+deref book k i lhs body =
   case body of
     EmpM ->
-      Lam "x" Nothing $ \x -> derefUndo book k lhs EmpM x
+      Lam "x" Nothing $ \x -> derefUndo book k i lhs EmpM x
     UniM f ->
       Lam "x" Nothing $ \x -> case whnf book x of
-        One -> deref book k (lhs_ctr lhs SZ One) f
-        x'  -> derefUndo book k lhs (UniM f) x'
+        One -> deref book k i (lhs_ctr lhs SZ One) f
+        x'  -> derefUndo book k i lhs (UniM f) x'
     BitM f t ->
       Lam "x" Nothing $ \x -> case whnf book x of
-        Bt0 -> deref book k (lhs_ctr lhs SZ Bt0) f
-        Bt1 -> deref book k (lhs_ctr lhs SZ Bt1) t
-        x'  -> derefUndo book k lhs (BitM f t) x'
+        Bt0 -> deref book k i (lhs_ctr lhs SZ Bt0) f
+        Bt1 -> deref book k i (lhs_ctr lhs SZ Bt1) t
+        x'  -> derefUndo book k i lhs (BitM f t) x'
     NatM z s ->
       Lam "x" Nothing $ \x -> case whnf book x of
-        Zer    -> deref book k (lhs_ctr lhs SZ Zer) z
-        Suc xp -> App (deref book k (lhs_ctr lhs (SS SZ) (\p -> Suc p)) s) xp
-        x'     -> derefUndo book k lhs (NatM z s) x'
+        Zer    -> deref book k i (lhs_ctr lhs SZ Zer) z
+        Suc xp -> App (deref book k i (lhs_ctr lhs (SS SZ) (\p -> Suc p)) s) xp
+        x'     -> derefUndo book k i lhs (NatM z s) x'
     LstM n c ->
       Lam "x" Nothing $ \x -> case whnf book x of
-        Nil      -> deref book k (lhs_ctr lhs SZ Nil) n
-        Con h t' -> App (App (deref book k (lhs_ctr lhs (SS (SS SZ)) (\h' -> \t'' -> Con h' t'')) c) h) t'
-        x'       -> derefUndo book k lhs (LstM n c) x'
+        Nil      -> deref book k i (lhs_ctr lhs SZ Nil) n
+        Con h t' -> App (App (deref book k i (lhs_ctr lhs (SS (SS SZ)) (\h' -> \t'' -> Con h' t'')) c) h) t'
+        x'       -> derefUndo book k i lhs (LstM n c) x'
     SigM f ->
       Lam "x" Nothing $ \x -> case whnf book x of
-        Tup a b -> App (App (deref book k (lhs_ctr lhs (SS (SS SZ)) (\a' b' -> Tup a' b')) f) a) b
-        x'      -> derefUndo book k lhs (SigM f) x'
+        Tup a b -> App (App (deref book k i (lhs_ctr lhs (SS (SS SZ)) (\a' b' -> Tup a' b')) f) a) b
+        x'      -> derefUndo book k i lhs (SigM f) x'
     Lam n t f ->
-      Lam n t $ \x -> deref book k (lhs_ctr lhs SZ x) (f x)
+      Lam n t $ \x -> deref book k i (lhs_ctr lhs SZ x) (f x)
     t -> t
 
-derefUndo :: Book -> String -> LHS -> Term -> Term -> Term
-derefUndo book k (LHS SZ     l) _    x = App (l (Var k 0)) x
-derefUndo book k (LHS (SS n) l) body x = deref book k (LHS n (l x)) body
+derefUndo :: Book -> String -> Int -> LHS -> Term -> Term -> Term
+derefUndo book k i (LHS SZ     l) _    x = if i == 0 then (Ref k 0) else App (l (Var k 0)) x
+derefUndo book k i (LHS (SS n) l) body x = deref book k i (LHS n (l x)) body

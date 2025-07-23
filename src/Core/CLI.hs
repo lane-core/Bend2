@@ -78,7 +78,7 @@ runMain book = do
     Nothing -> do
       return ()
     Just _ -> do
-      let mainCall = Ref "main"
+      let mainCall = Ref "main" 1
       case infer 0 noSpan book (Ctx []) mainCall of
         Fail e -> do
           putStrLn $ show e

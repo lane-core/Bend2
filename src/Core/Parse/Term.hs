@@ -705,7 +705,7 @@ parseEql t = label "equality type" $ do
   b <- parseTerm
   _ <- symbol "}"
   let eql = Eql t a b
-  return $ if op then eql else App (Ref "Not") eql
+  return $ if op then eql else App (Ref "Not" 1) eql
 
 -- | Parse numeric binary operations
 parseNumOp :: Term -> Parser Term

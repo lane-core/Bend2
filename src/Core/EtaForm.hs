@@ -70,7 +70,7 @@ etaForm d t = case t of
   
   -- Recursive cases for all other constructors
   Var n i      -> Var n i
-  Ref n        -> Ref n
+  Ref n i      -> Ref n i
   Sub t'       -> Sub (etaForm d t')
   Fix n f      -> Fix n (\v -> etaForm (d+1) (f v))
   Let k mt v f -> Let k (fmap (etaForm d) mt) (etaForm d v) (\v' -> etaForm (d+1) (f v'))

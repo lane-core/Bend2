@@ -64,7 +64,7 @@ ctToTerm _ = error "ctToTerm: only variables can be converted back"
 termToCT :: Book -> Term -> Int -> CT
 termToCT book term dep = case term of
   Var k i      -> CVar k i
-  Ref k        -> CRef k
+  Ref k i      -> CRef k
   Sub t        -> termToCT book t dep
   Fix k f      -> CFix k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
   Let k t v f  -> CLet (termToCT book v dep) (\x -> termToCT book (f (ctToTerm x)) (dep+1))

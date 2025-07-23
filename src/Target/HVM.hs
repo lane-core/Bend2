@@ -23,7 +23,7 @@ compile book@(Book defs _) =
   else
     let ds      = map (compileDef book) (M.toList defs)
         (ts,fs) = partitionEithers ds
-        main    = "@main = " ++ showHVM 1 (termToHVM book MS.empty (Ref "main")) ++ "\n\n"
+        main    = "@main = " ++ showHVM 1 (termToHVM book MS.empty (Ref "main" 1)) ++ "\n\n"
     in prelude ++ main ++ unlines ts ++ unlines fs
 
 prelude :: String
@@ -112,7 +112,7 @@ termToHVM book ctx term = go term where
     case MS.lookup n ctx of
       Just n  -> HVM.Var n
       Nothing -> HVM.Var n
-  go (Ref k)       = fromJust (refAppToHVM book ctx (Ref k))
+  go (Ref k i)       = fromJust (refAppToHVM book ctx (Ref k i))
   go (Sub t)       = termToHVM book ctx t
   go (Fix n f)     = HVM.Ref "fix" 0 [HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))]
   go (Let k t v f) = HVM.Let HVM.LAZY (bindNam k) (termToHVM book ctx v) (termToHVM book (MS.insert k k ctx) (f (Var k 0)))
@@ -210,7 +210,7 @@ op1ToHVM book ctx op a = case op of
 refAppToHVM :: Book -> MS.Map Name HVM.Name -> Term -> Maybe HVM.Core
 refAppToHVM book ctx term =
   case collectApps term [] of
-    (Ref k, args) ->
+    (Ref k i, args) ->
       let (_,tm,ty)   = fromJust (getDefn book k)
           (era,arg,_) = collectLamArgs tm ty [] []
           argsHVM     = map (termToHVM book ctx) (drop (length era) args)
