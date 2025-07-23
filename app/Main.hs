@@ -5,6 +5,7 @@ import qualified Data.Map as M
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import Core.CLI (processFile, processFileToJS, processFileToHVM, listDependencies, getGenDeps)
+import Core.EtaForm
 
 -- | Show usage information
 showUsage :: IO ()
@@ -34,3 +35,6 @@ main = do
     [file] | ".bend.py" `isSuffixOf` file -> processFile file
     otherwise                             -> showUsage
   where isSuffixOf suffix str = reverse suffix == take (length suffix) (reverse str)
+
+-- main :: IO ()
+-- main = testEtaForm

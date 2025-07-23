@@ -64,9 +64,7 @@ def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
     case 0n:
       ()
     case 1n + p:
-      ind = div2_mul2_theo(p)
-      prf = app(Nat, Nat, div2(mul2(p)), p, λx. 1n + x, ind)
-      prf
+      div2_mul2_theo(p)
 
 # Nat Predecessor
 def pred(n: Nat) -> Nat:
@@ -76,9 +74,6 @@ def pred(n: Nat) -> Nat:
     case 1n + p:
       return p
 
-#done: λa:Nat. λb:Nat. (λ{0n:b;1n+:λp:Nat.1n+add(p,b)})(a)
-# λa. λb. (λ{...} a)
-
 # Nat Addition
 def add(a: Nat, b: Nat) -> Nat:
   match a:
@@ -87,67 +82,69 @@ def add(a: Nat, b: Nat) -> Nat:
     case 1n + p:
       1n + add(p, b)
 
-## Nat multiplication
-#def mul(a: Nat, b: Nat) -> Nat:
-  #match a:
-    #case 0n:
-      #0n
-    #case 1n + ap:
-      #add(b, mul(ap, b))
+# Nat multiplication
+def mul(a: Nat, b: Nat) -> Nat:
+  match a:
+    case 0n:
+      0n
+    case 1n + ap:
+      add(b, mul(ap, b))
 
-## Nat Equality
-#def eql(a: Nat, b: Nat) -> Bool:
-  #match a b:
-    #case 0n   0n  : True
-    #case 1n+a 0n  : False
-    #case 0n   1n+b: False
-    #case 1n+a 1n+b: eql(a, b)
+# Nat Equality
+def eql(a: Nat, b: Nat) -> Bool:
+  match a b:
+    case 0n   0n  : True
+    case 1n+a 0n  : False
+    case 0n   1n+b: False
+    case 1n+a 1n+b: eql(a, b)
 
-## Proof: n*2/2 = n (simpler method)
-#def div2_mul2_theo_2(n: Nat) -> Nat{div2(mul2(n)) == n}:
-  #match n:
-    #case 0n:
-      #finally
-    #case 1n + p:
-      #1n + div2_mul2_theo_2(p)
+# Proof: n*2/2 = n (simpler method)
+def div2_mul2_theo_2(n: Nat) -> Nat{div2(mul2(n)) == n}:
+  match n:
+    case 0n:
+      ()
+    case 1n + p:
+      div2_mul2_theo_2(p)
 
-## Nat Parity (with nested match)
-## - is_even_b(3) = False
-## - is_even_b(4) = True
-## - is_even_b(5) = False
-## - is_even_b(6) = True
-#def is_even_a(n: Nat) -> Bool:
-  #match n:
-    #case 0n:
-      #True
-    #case 1n:
-      #False
-    #case 2n + p:
-      #is_even_a(p)
+# Nat Parity (with nested match)
+# - is_even_b(3) = False
+# - is_even_b(4) = True
+# - is_even_b(5) = False
+# - is_even_b(6) = True
+def is_even_a(n: Nat) -> Bool:
+  match n:
+    case 0n:
+      True
+    case 1n:
+      False
+    case 2n + p:
+      is_even_a(p)
 
-## Nat Parity (calling 'not')
-## - is_even_b(3) = False
-## - is_even_b(4) = True
-## - is_even_b(5) = False
-## - is_even_b(6) = True
-#def is_even_b(n: Nat) -> Bool:
-  #match n:
-    #case 0n:
-      #True
-    #case 1n + p:
-      #neg(is_even_b(p))
+# Nat Parity (calling 'not')
+# - is_even_b(3) = False
+# - is_even_b(4) = True
+# - is_even_b(5) = False
+# - is_even_b(6) = True
+def is_even_b(n: Nat) -> Bool:
+  match n:
+    case 0n:
+      True
+    case 1n + p:
+      neg(is_even_b(p))
 
-## Proof that both is_even implementations are identical
-## (Can we have FunExt?)
-#def is_even_ab_theo(n: Nat) -> Bool{is_even_a(n) == is_even_b(n)}:
-  #match n:
-    #case 0n:
-      #finally
-    #case 1n:
-      #finally
-    #case 2n + p:
-      #rewrite double_neg_theo(is_even_b(p))
-      #is_even_ab_theo(p)
+# Proof that both is_even implementations are identical
+# (Can we have FunExt?)
+def is_even_ab_theo(n: Nat) -> Bool{is_even_a(n) == is_even_b(n)}:
+  match n:
+    case 0n:
+      ()
+    case 1n:
+      ()
+    case 2n + p:
+      ind = is_even_ab_theo(p)
+      aux = double_neg_theo(is_even_b(p))
+      rewrite aux : Bool{is_even_a(p) == _}
+      ind
 
 ## List Map
 #def map<A,B>(f: A -> B, xs: A[]) -> B[]:
