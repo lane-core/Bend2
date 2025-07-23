@@ -88,8 +88,6 @@ infer d span book@(Book defs) ctx term =
       case force book nT of
         Nat ->
           Done $ Nat
-        Eql Nat a b ->
-          Done $ Eql Nat (Suc a) (Suc b)
         _ ->
           Fail $ TypeMismatch span (formatCtx d book ctx) (format d book Nat) (format d book nT)
     NatM _ _ -> do

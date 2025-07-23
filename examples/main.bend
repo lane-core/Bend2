@@ -146,36 +146,38 @@ def is_even_ab_theo(n: Nat) -> Bool{is_even_a(n) == is_even_b(n)}:
       rewrite aux : Bool{is_even_a(p) == _}
       ind
 
-## List Map
-#def map<A,B>(f: A -> B, xs: A[]) -> B[]:
-  #match xs:
-    #case []:
-      #[]
-    #case x <> xs:
-      #f(x) <> map<A,B>(f, xs)
+# List Map
+def map<A,B>(f: A -> B, xs: A[]) -> B[]:
+  match xs:
+    case []:
+      []
+    case x <> xs:
+      f(x) <> map<A,B>(f, xs)
 
-## Add: reduce zero on right
-#def zero_right(a: Nat) -> Nat{a == add(a,0n)}:
-  #match a:
-    #case 0n:
-      #finally
-    #case 1n + ap:
-      #1n + zero_right(ap)
+# Add: reduce zero on right
+def zero_right(a: Nat) -> Nat{a == add(a,0n)}:
+  match a:
+    case 0n:
+      ()
+    case 1n + ap:
+      zero_right(ap)
 
-## Add: reduce succ on right
-#def succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
-  #match a:
-    #case 0n:
-      #finally
-    #case 1n + ap:
-      #1n + succ_right(ap,b)
+# Add: reduce succ on right
+def succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
+  match a:
+    case 0n:
+      finally
+    case 1n + ap:
+      succ_right(ap,b)
 
-## Add commutes
-#def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
-  #match a:
-    #case 0n:
+# Add commutes
+def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
+  match a:
+    case 0n:
+      ()
       #zero_right(b)
-    #case 1n+ap:
+    case 1n+ap:
+      ()
       #rewrite comm(ap,b)
       #rewrite succ_right(b,ap)
       #finally
