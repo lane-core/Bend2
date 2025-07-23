@@ -179,7 +179,7 @@ def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
       e0 = comm(ap, b)
       e1 = succ_right(b, ap)
       rewrite e0 : Nat{1n+_ == add(b,1n+ap)}
-      rewrite e1 : Nat{1n+add(ap,b) == _}
+      rewrite e1 : Nat{1n+add(b,ap) == _}
       finally
       #rewrite comm(ap,b)
       #rewrite succ_right(b,ap)

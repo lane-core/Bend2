@@ -477,5 +477,5 @@ deref book k i lhs body =
     t -> t
 
 derefUndo :: Book -> String -> Int -> LHS -> Term -> Term -> Term
-derefUndo book k i (LHS SZ     l) _    x = if i == 0 then (Ref k 0) else App (l (Var k 0)) x
+derefUndo book k i (LHS SZ     l) _    x = App (l (Ref k 0)) x
 derefUndo book k i (LHS (SS n) l) body x = deref book k i (LHS n (l x)) body
