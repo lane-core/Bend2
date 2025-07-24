@@ -106,7 +106,7 @@ etaForm d t = case t of
   All a b      -> All (etaForm d a) (etaForm d b)
   App f x      -> App (etaForm d f) (etaForm d x)
   Eql t' a b   -> Eql (etaForm d t') (etaForm d a) (etaForm d b)
-  -- Rfl          -> Rfl
+  Rfl          -> Rfl
   Rwt e g h    -> Rwt (etaForm d e) (etaForm d g) (etaForm d h)
   Met n t' cs  -> Met n (etaForm d t') (map (etaForm d) cs)
   Era          -> Era

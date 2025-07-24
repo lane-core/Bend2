@@ -178,8 +178,13 @@ def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
       rewrite succ_right(b, ap) : Nat{1n+add(b,ap) == _}
       1n + add(b,ap)
 
-## 0 != 1+n
-#def succ_neq_zero(n: Nat) -> Nat{0n != (1n+n)}:
+
+
+# 0 != 1+n
+def succ_neq_zero(n: Nat) -> Nat{0n != (1n+n)}:
+  λe. absurd e
+    ##rewrite e : Nat{_ != (1n+n)}
+    #()
   #lambda e. match e {}
 
 ## 1n+n = 1n+m implies n = m
@@ -194,45 +199,46 @@ def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
     #case 1n+n 1n+m e:
       #e
 
-## Inductive Datatype
-## ------------------
+# Inductive Datatype
+# ------------------
 
-## data Vec (A : Set) : Nat → Set where
-##   nil  : Vec A zero
-##   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
-#type Vec<A: Set>(N: Nat) -> Set:
-  #case @Nil:
-    #e: Nat{N == 0n}
-  #case @Cons:
-    #n: Nat
-    #h: A
-    #t: Vec(A,n)
-    #e: Nat{N == (1n+n)}
+# data Vec (A : Set) : Nat → Set where
+#   nil  : Vec A zero
+#   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
+type Vec<A: Set>(N: Nat) -> Set:
+  case @Nil:
+    e: Nat{N == 0n}
+  case @Cons:
+    n: Nat
+    h: A
+    t: Vec(A,n)
+    e: Nat{N == (1n+n)}
 
-##λA:Set. λN:Nat.
-##  Σenum{&Nil,&Cons}.
-##  λ{
-##    &Nil: Σe:Nat{N==0n}. Unit;
-##    &Cons: Σn:Nat. Σh:A. Σt:Vec(A,n). Σe:Nat{N==1n+n}. Unit
-##    ;λ_. ()
-##  }
+#λA:Set. λN:Nat.
+#  Σenum{&Nil,&Cons}.
+#  λ{
+#    &Nil: Σe:Nat{N==0n}. Unit;
+#    &Cons: Σn:Nat. Σh:A. Σt:Vec(A,n). Σe:Nat{N==1n+n}. Unit
+#    ;λ_. ()
+#  }
 
-#def VecInd
-  #( A: Set
-  #, P: all n:Nat xs:Vec(A,n). Set
-  #, N: P(0n,(&Nil,(),()))
-  #, C: all s:Nat x:A xs:Vec(A,s) p:P(s,xs). P(1n+s,@Cons{s,x,xs,()})
-  #, n: Nat
-  #, x: Vec(A,n)
-  #) -> P(n,x):
-  #match x:
-    #case @Nil{e}:
-      #rewrite e : 
-      ##N
-    #case @Cons{n,h,t,e}:
-      #()
-      ##rewrite e
-      ##C(n,h,t,VecInd(A,P,N,C,n,t))
+def VecInd
+  ( A: Set
+  , P: all n:Nat xs:Vec(A,n). Set
+  , N: P(0n,@Nil{0n})
+  , C: all s:Nat x:A xs:Vec(A,s) p:P(s,xs). P(1n+s,@Cons{s,x,xs,1n+s})
+  , n: Nat
+  , x: Vec(A,n)
+  ) -> P(n,x):
+  match x:
+    case @Nil{e}:
+      rewrite e : P(_,@Nil{e})
+      #N
+      ()
+    case @Cons{n,h,t,e}:
+      ()
+      #rewrite e
+      #C(n,h,t,VecInd(A,P,N,C,n,t))
 
 ### Proofs by o3
 ### ------------

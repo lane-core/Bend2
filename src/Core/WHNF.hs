@@ -308,22 +308,28 @@ whnfEql :: Book -> Term -> Term -> Term -> Term
 whnfEql book t a b =
   case whnf book t of
     Uni -> case (whnf book a, whnf book b) of
-      (One, One) -> One
+      (One, One) -> Uni
       (a', b')   -> Eql Uni a' b'
     
     Bit -> case (whnf book a, whnf book b) of
-      (Bt0, Bt0) -> Bt0
-      (Bt1, Bt1) -> Bt1
+      (Bt0, Bt0) -> Uni
+      (Bt0, Bt1) -> Emp
+      (Bt1, Bt0) -> Emp
+      (Bt1, Bt1) -> Uni
       (a', b')   -> Eql Bit a' b'
     
     Nat -> case (whnf book a, whnf book b) of
-      (Zer   , Zer)    -> Zer
-      (Suc a', Suc b') -> Suc (Eql Nat a' b')
+      (Zer   , Zer)    -> Uni
+      (Zer   , Suc b') -> Emp
+      (Suc a', Zer)    -> Emp
+      (Suc a', Suc b') -> Eql Nat a' b'
       (a'    , b')     -> Eql Nat a' b'
     
     Lst t' -> case (whnf book a, whnf book b) of
-      (Nil      , Nil)       -> Nil
-      (Con ah at, Con bh bt) -> Con (Eql t' ah bh) (Eql (Lst t') at bt)
+      (Nil      , Nil)       -> Uni
+      (Nil      , Con _ _)   -> Emp
+      (Con _ _  , Nil)       -> Emp
+      (Con ah at, Con bh bt) -> Sig (Eql t' ah bh) (Lam "_" Nothing (\_ -> Eql (Lst t') at bt))
       (a'       , b')        -> Eql (Lst t') a' b'
     
     Sig x y -> case (whnf book a, whnf book b) of
@@ -340,7 +346,7 @@ whnfEql book t a b =
 whnfRwt :: Book -> Term -> Term -> Term -> Term
 whnfRwt book e g f =
   case whnf book e of
-    -- Rfl -> whnf book f
+    Rfl -> whnf book f
     e'  -> Rwt e' g f
 
 -- Duplication
@@ -391,7 +397,7 @@ normal book term =
     App f x     -> foldl (\f' x' -> App f' (normal book x')) fn xs
       where (fn,xs) = collectApps (App f x) []
     Eql t a b   -> Eql (normal book t) (normal book a) (normal book b)
-    -- Rfl         -> Rfl
+    Rfl         -> Rfl
     Rwt e g f   -> Rwt (normal book e) (normal book g) (normal book f)
     Loc l t     -> Loc l (normal book t)
     Log s x     -> Log (normal book s) (normal book x)

@@ -149,7 +149,7 @@ infer d span book@(Book defs _) ctx term =
       eT <- infer d span book ctx e
       case force book eT of
         Eql t a b -> do
-          check d span book ctx g (All t (Lam "_" Nothing (\_ -> Set)))
+          -- check d span book ctx g (All t (Lam "_" Nothing (\_ -> Set)))
           check d span book ctx f (App g b)
           Done (App g a)
         _ ->
@@ -268,7 +268,6 @@ check d span book ctx term      goal =
     -- FIXME: implement a proper refl?
     (x, Eql t a b) | equal d book x a && equal d book x b -> do
       Done ()
-
       -- checks if x == a and x == b
       -- if equal d book x a && equal d book x b
         -- then Done ()
@@ -312,6 +311,10 @@ check d span book ctx term      goal =
     (Lam k t f, All a b) -> do
       let x = Var k d
       check (d+1) span book (extend ctx k x a) (f x) (App b x)
+    (EmpM, All (force book -> Eql t (force book -> Zer) (force book -> Suc x)) rT) -> do
+      Done ()
+    (EmpM, All (force book -> Eql t (force book -> Suc x) (force book -> Zer)) rT) -> do
+      Done ()
     (EmpM, All (force book -> Emp) rT) -> do
       Done ()
     (EmpM, _) -> do

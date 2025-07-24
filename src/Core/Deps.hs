@@ -62,7 +62,7 @@ collectDeps bound term = case term of
   Lam k t f   -> S.union (collectDeps (S.insert k bound) (f (Var k 0))) (foldMap (collectDeps bound) t)
   App f x     -> S.union (collectDeps bound f) (collectDeps bound x)
   Eql t a b   -> S.unions [collectDeps bound t, collectDeps bound a, collectDeps bound b]
-  -- Rfl         -> S.empty
+  Rfl         -> S.empty
   Rwt e g f   -> S.unions [collectDeps bound e, collectDeps bound g, collectDeps bound f]
   Met _ t ctx -> S.unions (collectDeps bound t : map (collectDeps bound) ctx)
   Era         -> S.empty

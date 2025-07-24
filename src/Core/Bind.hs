@@ -49,7 +49,7 @@ binder lv term ctx vars = case term of
   Lam k t f   -> Lam k (fmap (\t -> binder lv t ctx vars) t) (\x -> binder (lv+1) (f (Sub x)) (ctx++[x]) (M.insert k x vars))
   App f x     -> App (binder lv f ctx vars) (binder lv x ctx vars)
   Eql t a b   -> Eql (binder lv t ctx vars) (binder lv a ctx vars) (binder lv b ctx vars)
-  -- Rfl         -> Rfl
+  Rfl         -> Rfl
   Rwt e g f   -> Rwt (binder lv e ctx vars) (binder lv g ctx vars) (binder lv f ctx vars)
   Loc s t     -> Loc s (binder lv t ctx vars)
   Era         -> Era

@@ -56,7 +56,7 @@ parseTermIni = choice
   , parseStringLit
   , parseLstLit
   , parseNil
-  -- , parseRfl
+  , parseRfl
   , parseEnu
   , parseSym
   , parseTupApp
@@ -571,24 +571,24 @@ parseReturn = label "return statement" $ do
   t <- parseTerm
   return t
 
--- -- | Syntax: {==} | finally
--- parseRfl :: Parser Term
--- parseRfl = label "reflexivity ({==} or finally)" $ choice
-  -- [ parseBraces
-  -- , parseFinally
-  -- ]
-  -- where
-    -- parseBraces = do
-      -- _ <- try $ do
-        -- _ <- symbol "{"
-        -- _ <- symbol "=="
-        -- return ()
-      -- _ <- symbol "}"
-      -- return Rfl
+-- | Syntax: {==} | finally
+parseRfl :: Parser Term
+parseRfl = label "reflexivity ({==} or finally)" $ choice
+  [ parseBraces
+  , parseFinally
+  ]
+  where
+    parseBraces = do
+      _ <- try $ do
+        _ <- symbol "{"
+        _ <- symbol "=="
+        return ()
+      _ <- symbol "}"
+      return Rfl
     
-    -- parseFinally = do
-      -- _ <- try $ keyword "finally"
-      -- return Rfl
+    parseFinally = do
+      _ <- try $ keyword "finally"
+      return Rfl
 
 -- | Syntax: rewrite expr : goal; body
 parseRewrite :: Parser Term
