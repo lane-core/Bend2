@@ -20,7 +20,7 @@ import Core.WHNF
 adjust :: Book -> Term -> Term
 adjust book term =
   -- trace ("nfrk: " ++ show nfrk) $
-  trace ("done: " ++ show done) $
+  -- trace ("done: " ++ show done) $
   done
   where
     flat  = flatten 0 book term

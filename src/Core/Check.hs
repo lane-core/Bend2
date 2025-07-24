@@ -27,7 +27,7 @@ extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 -- Infer the type of a term
 infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
 infer d span book@(Book defs _) ctx term =
-  trace ("- infer: " ++ show (normal book term)) $
+  -- trace ("- infer: " ++ show (normal book term)) $
   case term of
     Var _ i -> do
       let Ctx ks = ctx
@@ -150,7 +150,7 @@ infer d span book@(Book defs _) ctx term =
       Fail $ CantInfer span (normalCtx book ctx)
     EqlM f -> do
       Fail $ CantInfer span (normalCtx book ctx)
-    Rwt e f -> trace "rwt" $ do
+    Rwt e f -> do
       eT <- infer d span book ctx e
       case force book eT of
         Eql t a b -> do
@@ -265,10 +265,11 @@ inferOp1Type d span book ctx op a ta = case op of
     _         -> Fail $ CantInfer span (normalCtx book ctx)
 
 -- Check if a term has the expected type
+-- TODO: review the NEW CASES
 check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 check d span book ctx (Loc l t) goal = check d l book ctx t goal 
 check d span book ctx term      goal =
-  trace ("- check: " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
+  -- trace ("- check: " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
   case (term, force book goal) of
     (Era, _) -> do
       Done ()
@@ -289,6 +290,7 @@ check d span book ctx term      goal =
       Done ()
     (Suc n, Nat) -> do
       check d span book ctx n Nat
+    -- NEW CASE:
     (Suc n, Eql t (force book -> Suc a) (force book -> Suc b)) ->
       check d span book ctx n (Eql t a b)
     (Nil, Lst _) -> do
@@ -298,6 +300,10 @@ check d span book ctx term      goal =
     (Con h t, Lst tT) -> do
       check d span book ctx h tT
       check d span book ctx t (Lst tT)
+    -- NEW CASE:
+    (Con h t, Eql (force book -> Lst tT) (force book -> Con h1 t1) (force book -> Con h2 t2)) -> do
+      check d span book ctx h (Eql tT h1 h2)
+      check d span book ctx t (Eql (Lst tT) t1 t2)
     (Lam k t f, All a b) -> do
       let x = Var k d
       check (d+1) span book (extend ctx k x a) (f x) (App b x)
@@ -311,28 +317,56 @@ check d span book ctx term      goal =
       Done ()
     (EmpM, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Emp (Lam "_" Nothing (\_ -> Set))))
-    -- OTT allows typing Eql ↓
-    -- (UniM f, All (force book -> Eql t a b) rT) -> do
-      -- check d span book ctx a t
-      -- check d span book ctx b t
-      -- check d span book ctx f (App rT One)
+    -- NEW CASE:
+    (UniM f, All (force book -> Eql (force book -> Uni) (force book -> One) (force book -> One)) rT) -> do
+      check d span book ctx f (App rT Rfl)
     (UniM f, All (force book -> Uni) rT) -> do
       check d span book ctx f (App rT One)
       Done ()
     (UniM f, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Uni (Lam "_" Nothing (\_ -> Set))))
+    (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt0) (force book -> Bt0)) rT) -> do
+      check d span book ctx f (App rT Rfl)
+    (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt1) (force book -> Bt1)) rT) -> do
+      check d span book ctx t (App rT Rfl)
+    (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt0) (force book -> Bt1)) rT) -> do
+      Done ()
+    (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt1) (force book -> Bt0)) rT) -> do
+      Done ()
     (BitM f t, All (force book -> Bit) rT) -> do
       check d span book ctx f (App rT Bt0)
       check d span book ctx t (App rT Bt1)
       Done ()
     (BitM f t, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Bit (Lam "_" Nothing (\_ -> Set))))
+    (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Zer) (force book -> Zer)) rT) -> do
+      check d span book ctx z (App rT Rfl)
+    (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Suc a) (force book -> Suc b)) rT) -> do
+      check d span book ctx s (All (Eql Nat a b) (Lam "p" Nothing (\p -> App rT (Suc p))))
+    (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Zer) (force book -> Suc _)) rT) -> do
+      Done ()
+    (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Suc _) (force book -> Zer)) rT) -> do
+      Done ()
     (NatM z s, All (force book -> Nat) rT) -> do
       check d span book ctx z (App rT Zer)
       check d span book ctx s (All Nat (Lam "p" Nothing (\p -> App rT (Suc p))))
       Done ()
     (NatM z s, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Nat (Lam "_" Nothing (\_ -> Set))))
+    -- NEW CASE:
+    (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Nil) (force book -> Nil)) rT) -> do
+      check d span book ctx n (App rT Rfl)
+    -- NEW CASE:
+    (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Con h1 t1) (force book -> Con h2 t2)) rT) -> do
+      check d span book ctx c (All (Eql a h1 h2) (Lam "hp" Nothing (\hp -> 
+        All (Eql (Lst a) t1 t2) (Lam "tp" Nothing (\tp -> 
+          App rT (Con hp tp))))))
+    -- NEW CASE:
+    (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Nil) (force book -> Con _ _)) rT) -> do
+      Done ()
+    -- NEW CASE:
+    (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Con _ _) (force book -> Nil)) rT) -> do
+      Done ()
     (LstM n c, All (force book -> Lst a) rT) -> do
       check d span book ctx n (App rT Nil)
       check d span book ctx c $ All a (Lam "h" Nothing (\h -> All (Lst a) (Lam "t" Nothing (\t -> App rT (Con h t)))))
@@ -343,6 +377,18 @@ check d span book ctx term      goal =
       if s `elem` y
         then Done ()
         else Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Enu y)) (normal book (Sym s))
+    -- NEW CASE:
+    (Sym s, Eql (force book -> Enu syms) (force book -> Sym s1) (force book -> Sym s2)) -> do
+      if s `elem` syms && s == s1 && s1 == s2
+        then Done ()
+        else Fail $ TermMismatch span (normalCtx book ctx) (normal book (Sym s1)) (normal book (Sym s2))
+    -- NEW CASE:
+    (EnuM cs df, All (force book -> Eql (force book -> Enu syms) (force book -> Sym s1) (force book -> Sym s2)) rT) -> do
+      if s1 == s2
+        then case lookup s1 cs of
+          Just t -> check d span book ctx t (App rT Rfl)
+          Nothing -> check d span book ctx df (All (Enu syms) (Lam "_" Nothing (\v -> App rT v)))
+        else Done ()
     (EnuM cs df, All (force book -> Enu syms) rT) -> do
       mapM_ (\(s, t) -> check d span book ctx t (App rT (Sym s))) cs
       let covered_syms = map fst cs
@@ -360,6 +406,11 @@ check d span book ctx term      goal =
         else Done ()
     (EnuM cs df, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All (Enu []) (Lam "_" Nothing (\_ -> Set))))
+    -- NEW CASE:
+    (SigM f, All (force book -> Eql (force book -> Sig a b) (force book -> Tup x1 y1) (force book -> Tup x2 y2)) rT) -> do
+      check d span book ctx f (All (Eql a x1 x2) (Lam "xp" Nothing (\xp -> 
+        All (Eql (App b x1) y1 y2) (Lam "yp" Nothing (\yp -> 
+          App rT (Tup xp yp))))))
     (SigM f, All (force book -> Sig a b) rT) -> do
       check d span book ctx f $ All a (Lam "x" Nothing (\h -> All (App b h) (Lam "y" Nothing (\t -> App rT (Tup h t)))))
       Done ()
@@ -368,16 +419,17 @@ check d span book ctx term      goal =
     (Tup a b, Sig aT bT) -> do
       check d span book ctx a aT
       check d span book ctx b (App bT a)
+    -- NEW CASE:
+    (Tup a b, Eql (force book -> Sig aT bT) (force book -> Tup a1 b1) (force book -> Tup a2 b2)) -> do
+      check d span book ctx a (Eql aT a1 a2)
+      check d span book ctx b (Eql (App bT a1) b1 b2)
     (Rfl, Eql t a b) -> do
-      -- Check that a and b are equal for reflexivity
       if equal d book a b
         then Done ()
         else Fail $ TermMismatch span (normalCtx book ctx) (normal book a) (normal book b)
     (EqlM f, All (force book -> Eql t a b) rT) -> do
-      -- When matching on {==}, we rewrite the goal and context
-      -- replacing all occurrences of a with b
       let rewrittenGoal = rewrite d book a b (App rT Rfl)
-      let rewrittenCtx = rewriteCtx d book a b ctx
+      let rewrittenCtx  = rewriteCtx d book a b ctx
       check d span book rewrittenCtx f rewrittenGoal
     (Fix k f, _) -> do
       check (d+1) span book (extend ctx k (Fix k f) goal) (f (Fix k f)) goal
@@ -389,6 +441,11 @@ check d span book ctx term      goal =
       Done ()
     (Val (CHR_V _), Num CHR_T) -> do
       Done ()
+    -- NEW CASE:
+    (Val v1, Eql (force book -> Num t) (force book -> Val v2) (force book -> Val v3)) -> do
+      if v1 == v2 && v2 == v3
+        then Done ()
+        else Fail $ TermMismatch span (normalCtx book ctx) (normal book (Val v2)) (normal book (Val v3))
     (Op2 op a b, _) -> do
       ta <- infer d span book ctx a
       tb <- infer d span book ctx b
@@ -405,6 +462,13 @@ check d span book ctx term      goal =
     (Sup l a b, _) -> do
       check d span book ctx a goal
       check d span book ctx b goal
+    -- NEW CASE:
+    (SupM l f, All (force book -> Eql t (force book -> Sup l1 a1 b1) (force book -> Sup l2 a2 b2)) rT) -> do
+      if equal d book l l1 && equal d book l1 l2
+        then check d span book ctx f (All (Eql t a1 a2) (Lam "ap" Nothing (\ap -> 
+               All (Eql t b1 b2) (Lam "bp" Nothing (\bp -> 
+                 App rT (Sup l ap bp))))))
+        else Fail $ TermMismatch span (normalCtx book ctx) (normal book l1) (normal book l2)
     (SupM l f, _) -> do
       check d span book ctx l (Num U64_T)
       case force book goal of
@@ -416,33 +480,22 @@ check d span book ctx term      goal =
       check d span book ctx l (Num U64_T)
       check d span book ctx a goal
       check d span book ctx b goal
-    (Rwt e f, _) -> trace "rwt" $ do
+    (Rwt e f, _) -> do
       eT <- infer d span book ctx e
       case force book eT of
         Eql t a b -> do
-          -- Rewrite a by b in the context and goal
-          let rewrittenCtx = rewriteCtx d book a b ctx
+          let rewrittenCtx  = rewriteCtx d book a b ctx
           let rewrittenGoal = rewrite d book a b goal
           check d span book rewrittenCtx f rewrittenGoal
         _ ->
           Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (normal book eT)
     (Pat _ _ _, _) -> do
       error "not-supported"
-    -- (App f x, _) -> do
-      -- trace ("- check App: " ++ show (App f x) ++ " :: " ++ show goal) $ do
-        -- verify d span book ctx term goal
     (Log s x, _) -> do
       check d span book ctx s (Lst (Num CHR_T))
       check d span book ctx x goal
     (Lam f t x, _) ->
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (Ref "Function" 1)
-    -- FIXME: implement a proper refl?
-    -- (x, Eql t a b) | equal d book a b && equal d book a x -> do
-      -- Done ()
-      -- checks if x == a and x == b
-      -- if equal d book x a && equal d book x b
-        -- then Done ()
-        -- else Fail $ TermMismatch span (normalCtx book ctx) (normal book x) (Eql t (normal book a) (normal book b))
     (_, _) -> do
       verify d span book ctx term goal
 
