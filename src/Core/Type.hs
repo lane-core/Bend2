@@ -214,7 +214,10 @@ data Term
   -- Equality
   | Eql Type Term Term -- T{a==b}
   | Rfl                -- {==}
-  | Rwt Term Term Term -- rewrite e : goal; f
+  -- OLD VERSION:
+  -- | Rwt Term Term Term -- rewrite e : goal; f
+  -- NEW VERSION:
+  | EqlM Term          -- λ{{==}:f}
 
   -- MetaVar
   | Met Name Type [Term] -- ?N:T{x0,x1,...}
