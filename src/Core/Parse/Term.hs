@@ -590,16 +590,13 @@ parseRfl = label "reflexivity ({==} or finally)" $ choice
       _ <- try $ keyword "finally"
       return Rfl
 
--- | Syntax: rewrite expr : goal; body
+-- | Syntax: rewrite expr body
 parseRewrite :: Parser Term
 parseRewrite = label "rewrite" $ do
   _ <- try $ keyword "rewrite"
   e <- parseTerm
-  _ <- symbol ":"
-  g <- parseTerm
-  _ <- parseSemi
   f <- parseTerm
-  return (Rwt e (Lam "_" Nothing (\_ -> g)) f)
+  return (Rwt e f)
 
 -- | Syntax: absurd expr
 -- Desugars to: match expr {}

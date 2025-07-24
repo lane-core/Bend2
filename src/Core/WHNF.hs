@@ -38,7 +38,7 @@ whnfGo book term =
     Op1 o a     -> whnfOp1 book o a
     Pri p       -> Pri p
     Eql t a b   -> whnfEql book t a b
-    Rwt e g f   -> whnfRwt book e g f
+    Rwt e f     -> whnf book f  -- Rwt reduces to just the body
     -- λ-Match constructors are values, they only reduce when applied
     Log s x     -> whnfLog book s x
     _           -> term
@@ -74,6 +74,7 @@ whnfApp book f x =
     EnuM c e   -> whnfEnuM book x c e
     SigM f     -> whnfSigM book x f
     SupM l f   -> whnfSupM book x l f
+    EqlM f     -> whnfEqlM book x f
     Frk _ _ _  -> error "unreachable"
     f'         -> App f' x
 
@@ -143,6 +144,13 @@ whnfEnuM book x c f =
 whnfSupM :: Book -> Term -> Term -> Term -> Term
 whnfSupM book x l f = whnf book (App (App f x0) x1) where
     (x0, x1) = dup book l (whnf book x)
+
+-- Normalizes an equality match
+whnfEqlM :: Book -> Term -> Term -> Term
+whnfEqlM book x f =
+  case whnf book x of
+    Rfl -> whnf book f
+    x'  -> App (EqlM f) x'
 
 -- Normalizes a log operation
 whnfLog :: Book -> Term -> Term -> Term
@@ -308,28 +316,28 @@ whnfEql :: Book -> Term -> Term -> Term -> Term
 whnfEql book t a b =
   case whnf book t of
     Uni -> case (whnf book a, whnf book b) of
-      (One, One) -> Uni
+      (One, One) -> One
       (a', b')   -> Eql Uni a' b'
     
     Bit -> case (whnf book a, whnf book b) of
-      (Bt0, Bt0) -> Uni
+      (Bt0, Bt0) -> Bt0
       (Bt0, Bt1) -> Emp
       (Bt1, Bt0) -> Emp
-      (Bt1, Bt1) -> Uni
+      (Bt1, Bt1) -> Bt1
       (a', b')   -> Eql Bit a' b'
     
     Nat -> case (whnf book a, whnf book b) of
-      (Zer   , Zer)    -> Uni
+      (Zer   , Zer)    -> Zer
       (Zer   , Suc b') -> Emp
       (Suc a', Zer)    -> Emp
-      (Suc a', Suc b') -> Eql Nat a' b'
+      (Suc a', Suc b') -> Suc (Eql Nat a' b')
       (a'    , b')     -> Eql Nat a' b'
     
     Lst t' -> case (whnf book a, whnf book b) of
-      (Nil      , Nil)       -> Uni
-      (Nil      , Con _ _)   -> Emp
-      (Con _ _  , Nil)       -> Emp
-      (Con ah at, Con bh bt) -> Sig (Eql t' ah bh) (Lam "_" Nothing (\_ -> Eql (Lst t') at bt))
+      (Nil      , Nil)       -> Nil
+      (Nil      , Con bh bt) -> Emp
+      (Con ah at, Nil)       -> Emp
+      (Con ah at, Con bh bt) -> Con (Eql t' ah bh) (Eql (Lst t') at bt)
       (a'       , b')        -> Eql (Lst t') a' b'
     
     Sig x y -> case (whnf book a, whnf book b) of
@@ -340,14 +348,6 @@ whnfEql book t a b =
       All x (Lam "x" (Just x) (\x -> Eql (App y x) (App a x) (App b x)))
     
     t' -> Eql t' a b
-
--- Rewrite reduction
--- -----------------
-whnfRwt :: Book -> Term -> Term -> Term -> Term
-whnfRwt book e g f =
-  case whnf book e of
-    Rfl -> whnf book f
-    e'  -> Rwt e' g f
 
 -- Duplication
 -- -----------
@@ -398,7 +398,8 @@ normal book term =
       where (fn,xs) = collectApps (App f x) []
     Eql t a b   -> Eql (normal book t) (normal book a) (normal book b)
     Rfl         -> Rfl
-    Rwt e g f   -> Rwt (normal book e) (normal book g) (normal book f)
+    EqlM f      -> EqlM (normal book f)
+    Rwt e f     -> Rwt (normal book e) (normal book f)
     Loc l t     -> Loc l (normal book t)
     Log s x     -> Log (normal book s) (normal book x)
     Era         -> Era

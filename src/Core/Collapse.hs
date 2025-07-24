@@ -210,11 +210,9 @@ collapse dep book term = case term of
     b' <- collapse dep book b
     return $ Eql t' a' b'
   Rfl         -> return Rfl
-  Rwt e g f   -> do
-    e' <- collapse dep book e
-    g' <- collapse dep book g
+  EqlM f      -> do
     f' <- collapse dep book f
-    return $ Rwt e' g' f'
+    return $ EqlM f'
 
   -- MetaVar
   Met k t c   -> do
@@ -253,6 +251,7 @@ collapse dep book term = case term of
   -- Sugars
   Pat ts ms cs -> error "unreachable"
   Frk l a b    -> error "unreachable"
+  Rwt e f      -> CEra -- Erases at runtime
 
 -- doCollapse
 -- ----------

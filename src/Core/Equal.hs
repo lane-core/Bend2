@@ -74,7 +74,7 @@ cmp red d book a b =
     -- (Eql ta _  _  , b            ) -> eql red d book ta b
     -- (a            , Eql tb _  _  ) -> eql red d book a tb
     (Rfl            , Rfl            ) -> True
-    (Rwt ea ga fa   , Rwt eb gb fb   ) -> eql red d book ea eb && eql red d book ga gb && eql red d book fa fb
+    (Rwt ea fa      , Rwt eb fb      ) -> eql red d book ea eb && eql red d book fa fb
     (Loc _ ta       , b              ) -> eql red d book ta b
     (a              , Loc _ tb       ) -> eql red d book a tb
     (Era            , Era            ) -> True

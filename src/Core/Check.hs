@@ -13,6 +13,7 @@ import Debug.Trace
 import Core.Equal
 import Core.Type
 import Core.WHNF
+import Core.Rewrite (rewrite, rewriteCtx)
 
 -- Context
 -- -------
@@ -145,13 +146,17 @@ infer d span book@(Book defs _) ctx term =
       check d span book ctx a t
       check d span book ctx b t
       Done Set
-    Rwt e g f -> do
+    Rfl -> do
+      Fail $ CantInfer span (normalCtx book ctx)
+    EqlM f -> do
+      Fail $ CantInfer span (normalCtx book ctx)
+    Rwt e f -> trace "rwt" $ do
       eT <- infer d span book ctx e
       case force book eT of
         Eql t a b -> do
-          -- check d span book ctx g (All t (Lam "_" Nothing (\_ -> Set)))
-          check d span book ctx f (App g b)
-          Done (App g a)
+          -- Rewrite a by b in the context and goal, then infer f
+          let rewrittenCtx = rewriteCtx d book a b ctx
+          infer d span book rewrittenCtx f
         _ ->
           Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (normal book eT)
     Loc l t ->
@@ -263,15 +268,8 @@ inferOp1Type d span book ctx op a ta = case op of
 check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 check d span book ctx (Loc l t) goal = check d l book ctx t goal 
 check d span book ctx term      goal =
-  trace ("- check: " ++ show (normal book term) ++ " :: " ++ show (force book (normal book goal))) $
+  trace ("- check: " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
   case (term, force book goal) of
-    -- FIXME: implement a proper refl?
-    (x, Eql t a b) | equal d book x a && equal d book x b -> do
-      Done ()
-      -- checks if x == a and x == b
-      -- if equal d book x a && equal d book x b
-        -- then Done ()
-        -- else Fail $ TermMismatch span (normalCtx book ctx) (normal book x) (Eql t (normal book a) (normal book b))
     (Era, _) -> do
       Done ()
     (Let k t v f, _) -> case t of
@@ -376,13 +374,17 @@ check d span book ctx term      goal =
     (Tup a b, Sig aT bT) -> do
       check d span book ctx a aT
       check d span book ctx b (App bT a)
-    -- (One, Eql t a b) -> do
-      -- trace ("- REFL :: Eql " ++ show (normal book t) ++ " " ++ show (normal book a) ++ " " ++ show (normal book b)) $ do
-        -- check d span book ctx a t
-        -- check d span book ctx b t
-        -- if equal d book a b
-          -- then Done ()
-          -- else Fail $ TermMismatch span (normalCtx book ctx) (normal book a) (normal book b)
+    (Rfl, Eql t a b) -> do
+      -- Check that a and b are equal for reflexivity
+      if equal d book a b
+        then Done ()
+        else Fail $ TermMismatch span (normalCtx book ctx) (normal book a) (normal book b)
+    (EqlM f, All (force book -> Eql t a b) rT) -> do
+      -- When matching on {==}, we rewrite the goal and context
+      -- replacing all occurrences of a with b
+      let rewrittenGoal = rewrite d book a b (App rT Rfl)
+      let rewrittenCtx = rewriteCtx d book a b ctx
+      check d span book rewrittenCtx f rewrittenGoal
     (Fix k f, _) -> do
       check (d+1) span book (extend ctx k (Fix k f) goal) (f (Fix k f)) goal
     (Val (U64_V _), Num U64_T) -> do
@@ -420,6 +422,16 @@ check d span book ctx term      goal =
       check d span book ctx l (Num U64_T)
       check d span book ctx a goal
       check d span book ctx b goal
+    (Rwt e f, _) -> trace "rwt" $ do
+      eT <- infer d span book ctx e
+      case force book eT of
+        Eql t a b -> do
+          -- Rewrite a by b in the context and goal
+          let rewrittenCtx = rewriteCtx d book a b ctx
+          let rewrittenGoal = rewrite d book a b goal
+          check d span book rewrittenCtx f rewrittenGoal
+        _ ->
+          Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (normal book eT)
     (Pat _ _ _, _) -> do
       error "not-supported"
     -- (App f x, _) -> do
@@ -430,6 +442,13 @@ check d span book ctx term      goal =
       check d span book ctx x goal
     (Lam f t x, _) ->
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (Ref "Function" 1)
+    -- FIXME: implement a proper refl?
+    (x, Eql t a b) | equal d book a b && equal d book a x -> do
+      Done ()
+      -- checks if x == a and x == b
+      -- if equal d book x a && equal d book x b
+        -- then Done ()
+        -- else Fail $ TermMismatch span (normalCtx book ctx) (normal book x) (Eql t (normal book a) (normal book b))
     (_, _) -> do
       verify d span book ctx term goal
 

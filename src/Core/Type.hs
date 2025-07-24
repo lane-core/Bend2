@@ -214,10 +214,8 @@ data Term
   -- Equality
   | Eql Type Term Term -- T{a==b}
   | Rfl                -- {==}
-  -- OLD VERSION:
-  -- | Rwt Term Term Term -- rewrite e : goal; f
-  -- NEW VERSION:
   | EqlM Term          -- λ{{==}:f}
+  | Rwt Term Term      -- rewrite e f
 
   -- MetaVar
   | Met Name Type [Term] -- ?N:T{x0,x1,...}
@@ -291,8 +289,8 @@ instance Show Term where
   show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let k t v f)  = case t of
-    Just t  -> "!" ++ k ++ " : " ++ show t ++ " = " ++ show v ++ ";" ++ show (f (Var k 0))
-    Nothing -> "!" ++ k ++                    " = " ++ show v ++ ";" ++ show (f (Var k 0))
+    Just t  -> k ++ " : " ++ show t ++ " = " ++ show v ++ " " ++ show (f (Var k 0))
+    Nothing -> k ++                    " = " ++ show v ++ " " ++ show (f (Var k 0))
   show (Set)          = "Set"
   show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
   show (Emp)          = "Empty"
@@ -355,7 +353,8 @@ instance Show Term where
     (All _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
     _         ->        show t ++        "{" ++ show a ++ "==" ++ show b ++ "}"
   show (Rfl)           = "{==}"
-  show (Rwt e g f)     = "rewrite " ++ show e ++ " : " ++ show g ++ "; " ++ show f
+  show (EqlM f)        = "λ{{==}:" ++ show f ++ "}"
+  show (Rwt e f)       = "rewrite " ++ show e ++ " " ++ show f
   show (Loc _ t)       = show t
   show (Era)           = "*"
   show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
@@ -536,7 +535,8 @@ freeVars ctx tm = case tm of
   Lam n t f   -> S.union (freeVars (S.insert n ctx) (f (Var n 0))) (foldMap (freeVars ctx) t)
   App f x     -> S.union (freeVars ctx f) (freeVars ctx x)
   Eql t a b   -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
-  Rwt e g f   -> S.unions [freeVars ctx e, freeVars ctx g, freeVars ctx f]
+  EqlM f      -> freeVars ctx f
+  Rwt e f     -> S.union (freeVars ctx e) (freeVars ctx f)
   Met _ t c   -> S.unions (freeVars ctx t : map (freeVars ctx) c)
   Sup _ a b   -> S.union (freeVars ctx a) (freeVars ctx b)
   SupM l f    -> S.union (freeVars ctx l) (freeVars ctx f)
@@ -574,7 +574,8 @@ hasMet term = case term of
   Lam _ t f   -> maybe False hasMet t || hasMet (f (Var "" 0))
   App f x     -> hasMet f || hasMet x
   Eql t a b   -> hasMet t || hasMet a || hasMet b
-  Rwt e g f   -> hasMet e || hasMet g || hasMet f
+  EqlM f      -> hasMet f
+  Rwt e f     -> hasMet e || hasMet f
   Sup _ a b   -> hasMet a || hasMet b
   SupM l f    -> hasMet l || hasMet f
   Loc _ t     -> hasMet t

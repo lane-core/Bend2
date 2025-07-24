@@ -107,7 +107,7 @@ etaForm d t = case t of
   App f x      -> App (etaForm d f) (etaForm d x)
   Eql t' a b   -> Eql (etaForm d t') (etaForm d a) (etaForm d b)
   Rfl          -> Rfl
-  Rwt e g h    -> Rwt (etaForm d e) (etaForm d g) (etaForm d h)
+  EqlM f       -> EqlM (etaForm d f)
   Met n t' cs  -> Met n (etaForm d t') (map (etaForm d) cs)
   Era          -> Era
   Sup l a b    -> Sup (etaForm d l) (etaForm d a) (etaForm d b)
@@ -117,6 +117,7 @@ etaForm d t = case t of
   Pri p        -> Pri p
   Pat ss ms cs -> Pat (map (etaForm d) ss) [(k, etaForm d v) | (k,v) <- ms] [(map (etaForm d) ps, etaForm d rhs) | (ps,rhs) <- cs]
   Frk l a b    -> Frk (etaForm d l) (etaForm d a) (etaForm d b)
+  Rwt e f      -> Rwt (etaForm d e) (etaForm d f)
 
 -- Check if a term matches the eta-long pattern: λx0. λx1. ... (λ{...} x)
 isEtaLong :: Name -> Int -> Term -> Maybe (Term, [(Name, Maybe Term)])
@@ -169,6 +170,9 @@ injectLams lams term = case term of
   -- Superposition match - special handling (2 fields)
   SupM l f -> SupM l (injectLamsBody ["_a", "_b"] lams f)
   
+  -- Equality match - inject lambdas into the single case
+  EqlM f -> EqlM (injectLamsBody [] lams f)
+  
   -- Not a lambda-match
   _ -> term
 
@@ -192,6 +196,7 @@ isLambdaMatch term = case term of
   EnuM _ _   -> True
   SigM _     -> True
   SupM _ _   -> True
+  EqlM _     -> True
   _          -> False
 
 

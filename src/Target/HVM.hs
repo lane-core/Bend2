@@ -156,8 +156,8 @@ termToHVM book ctx term = go term where
       Just hvm -> hvm
       Nothing -> HVM.App (termToHVM book ctx f) (termToHVM book ctx x)
   go (Eql _ _ _)  = HVM.Era
-  -- go Rfl          = HVM.Era
-  go (Rwt e g f)  = termToHVM book ctx f
+  go Rfl          = HVM.Era
+  go (EqlM _)     = HVM.Era
   go (Met n t ts) = HVM.Era -- TODO: Met
   go Era          = HVM.Era
   go (Sup l a b)  =
@@ -166,6 +166,7 @@ termToHVM book ctx term = go term where
     HVM.Ref "SUP" 0 [termToHVM book ctx l, HVM.Var "sup0$", HVM.Var "sup1$"]
   go (SupM l f)   = termToHVM book ctx f
   go (Frk l a b)  = HVM.Era
+  go (Rwt e f)    = HVM.Era  -- Erases at runtime
   go (Loc s t)    = termToHVM book ctx t
   go (Pri p)      = fromJust (refAppToHVM book ctx (Pri p))
   go (Pat x m c)  = patToHVM book ctx x m c
@@ -253,7 +254,7 @@ patToHVM book ctx [x] m c@(([p], f) : _) =
       case ctrPatToHVM book ctx x m c of
         Just hvm -> hvm
         Nothing  -> simpleMat
-    -- (Rfl)        -> termToHVM book ctx (snd (head c))
+    (Rfl)        -> termToHVM book ctx (snd (head c))
     (Sup l (Var a _) (Var b _)) -> HVM.Ref "DUP" 0 [termToHVM book ctx l, termToHVM book ctx x, (HVM.Lam (bindNam a) (HVM.Lam (bindNam b) (termToHVM book ctx f)))]
     _ -> HVM.Era
   where

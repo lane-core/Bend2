@@ -63,7 +63,7 @@ collectDeps bound term = case term of
   App f x     -> S.union (collectDeps bound f) (collectDeps bound x)
   Eql t a b   -> S.unions [collectDeps bound t, collectDeps bound a, collectDeps bound b]
   Rfl         -> S.empty
-  Rwt e g f   -> S.unions [collectDeps bound e, collectDeps bound g, collectDeps bound f]
+  EqlM f      -> collectDeps bound f
   Met _ t ctx -> S.unions (collectDeps bound t : map (collectDeps bound) ctx)
   Era         -> S.empty
   Sup _ a b   -> S.union (collectDeps bound a) (collectDeps bound b)
@@ -73,6 +73,7 @@ collectDeps bound term = case term of
   Pri _       -> S.empty
   Pat s m c   -> S.unions $ map (collectDeps bound) s ++ map (collectDeps bound . snd) m ++ concatMap (collectCaseDeps bound) c
   Frk l a b   -> S.unions [collectDeps bound l, collectDeps bound a, collectDeps bound b]
+  Rwt e f     -> S.union (collectDeps bound e) (collectDeps bound f)
 
 -- | Helper for `collectDeps` to handle dependencies in pattern-match cases.
 collectCaseDeps :: S.Set Name -> Case -> [S.Set Name]

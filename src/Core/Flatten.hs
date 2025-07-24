@@ -86,12 +86,14 @@ flatten d book term = case term of
   (Lam n t f)   -> Lam n (fmap (flatten d book) t) (\x -> flatten (d+1) book (f x))
   (App f x)     -> App (flatten d book f) (flatten d book x)
   (Eql t a b)   -> Eql (flatten d book t) (flatten d book a) (flatten d book b)
-  (Rwt e g f)   -> Rwt (flatten d book e) (flatten d book g) (flatten d book f)
+  Rfl           -> Rfl
+  (EqlM f)      -> EqlM (flatten d book f)
   (Met i t x)   -> Met i (flatten d book t) (map (flatten d book) x)
   Era           -> Era
   (Sup l a b)   -> Sup (flatten d book l) (flatten d book a) (flatten d book b)
   (SupM l f)    -> SupM (flatten d book l) (flatten d book f)
   (Frk l a b)   -> Frk (flatten d book l) (flatten d book a) (flatten d book b)
+  (Rwt e f)     -> Rwt (flatten d book e) (flatten d book f)
   (Num t)       -> Num t
   (Val v)       -> Val v
   (Op2 o a b)   -> Op2 o (flatten d book a) (flatten d book b)
@@ -181,6 +183,8 @@ peelCtrCol d book (cut->k) ((((cut->p):ps),rhs):cs) =
     (Sym s    , Var k _)   -> ((ps, subst k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
     (Sup l _ _, Sup r a b) -> (((a:b:ps), rhs) : picks , drops)
     (Sup l _ _, Var k _)   -> (((Var (k++"a") 0:Var (k++"b") 0:ps), subst k (Sup l (Var (k++"a") 0) (Var (k++"b") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Rfl      , Rfl    )   -> ((ps, rhs) : picks , drops)
+    (Rfl      , Var k _)   -> ((ps, subst k Rfl rhs) : picks , ((p:ps),rhs) : drops)
     (Var _ _  , p      )   -> unsupported
     (k        , App f x)   -> callPatternSugar d book k f x p ps rhs cs
     x                      -> (picks , ((p:ps),rhs) : drops)
@@ -277,12 +281,14 @@ unpat d (All a b)       = All (unpat d a) (unpat d b)
 unpat d (Lam n t f)     = Lam n (fmap (unpat d) t) (\x -> unpat (d+1) (f x))
 unpat d (App f x)       = App (unpat d f) (unpat d x)
 unpat d (Eql t a b)     = Eql (unpat d t) (unpat d a) (unpat d b)
-unpat d (Rwt e g f)     = Rwt (unpat d e) (unpat d g) (unpat d f)
+unpat d Rfl             = Rfl
+unpat d (EqlM f)        = EqlM (unpat d f)
 unpat d (Met i t x)     = Met i (unpat d t) (map (unpat d) x)
 unpat d Era             = Era
 unpat d (Sup l a b)     = Sup (unpat d l) (unpat d a) (unpat d b)
 unpat d (SupM l f)      = SupM (unpat d l) (unpat d f)
 unpat d (Frk l a b)     = Frk (unpat d l) (unpat d a) (unpat d b)
+unpat d (Rwt e f)       = Rwt (unpat d e) (unpat d f)
 unpat d (Num t)         = Num t
 unpat d (Val v)         = Val v
 unpat d (Op2 o a b)     = Op2 o (unpat d a) (unpat d b)
@@ -420,6 +426,12 @@ match d x ms (([(cut -> Sup l a b)], s) : _) =
   apps d (map snd ms) $ App (SupM l if_sup) x
   where if_sup = Lam (patOf d a) Nothing $ \_ -> Lam (patOf (d+1) b) Nothing $ \_ -> lam d (map fst ms) $ unpat (d+2) s
 
+-- match x { Rfl: r }
+-- ------------------
+-- ~x { Rfl: r }
+match d x ms (([(cut -> Rfl)], r) : _) =
+  apps d (map snd ms) $ App (EqlM (lam d (map fst ms) $ unpat d r)) x
+
 -- match x { k: body }
 -- -------------------
 -- body[k := x]
@@ -493,12 +505,13 @@ unfrkGo d ctx (Lam n t f)   = Lam n (fmap (unfrkGo d ctx) t) (\x -> unfrkGo (d+1
 unfrkGo d ctx (App f x)     = App (unfrkGo d ctx f) (unfrkGo d ctx x)
 unfrkGo d ctx (Eql t a b)   = Eql (unfrkGo d ctx t) (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx Rfl           = Rfl
-unfrkGo d ctx (Rwt e g f)   = Rwt (unfrkGo d ctx e) (unfrkGo d ctx g) (unfrkGo d ctx f)
+unfrkGo d ctx (EqlM f)      = EqlM (unfrkGo d ctx f)
 unfrkGo d ctx (Met i t x)   = Met i (unfrkGo d ctx t) (map (unfrkGo d ctx) x)
 unfrkGo d ctx Era           = Era
 unfrkGo d ctx (Sup l a b)   = Sup (unfrkGo d ctx l) (unfrkGo d ctx a) (unfrkGo d ctx b)
 unfrkGo d ctx (SupM l f)    = SupM (unfrkGo d ctx l) (unfrkGo d ctx f)
 unfrkGo d ctx (Frk l a b)   = unfrkFrk d ctx l a b
+unfrkGo d ctx (Rwt e f)     = Rwt (unfrkGo d ctx e) (unfrkGo d ctx f)
 unfrkGo d ctx (Num t)       = Num t
 unfrkGo d ctx (Val v)       = Val v
 unfrkGo d ctx (Op2 o a b)   = Op2 o (unfrkGo d ctx a) (unfrkGo d ctx b)
@@ -579,6 +592,7 @@ ctrOf d One         = (One , [])
 ctrOf d (Tup a b)   = (Tup (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
 ctrOf d (Sym s)     = (Sym s, [])
 ctrOf d (Sup l a b) = (Sup l (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
+ctrOf d Rfl         = (Rfl , [])
 ctrOf d x           = (var d , [var d])
 
 -- Subst a var for a value in a term
@@ -619,12 +633,14 @@ subst name val term = go name val term where
     Lam k t f   -> if k == name then term else Lam k (fmap (go name val) t) (\x -> go name val (f x))
     App f x     -> App (go name val f) (go name val x)
     Eql t a b   -> Eql (go name val t) (go name val a) (go name val b)
-    Rwt e g f   -> Rwt (go name val e) (go name val g) (go name val f)
+    Rfl         -> Rfl
+    EqlM f      -> EqlM (go name val f)
     Met i t x   -> Met i (go name val t) (map (go name val) x)
     Era         -> Era
     Sup l a b   -> Sup (go name val l) (go name val a) (go name val b)
     SupM l f    -> SupM (go name val l) (go name val f)
     Frk l a b   -> Frk (go name val l) (go name val a) (go name val b)
+    Rwt e f     -> Rwt (go name val e) (go name val f)
     Num t       -> Num t
     Val v       -> Val v
     Op2 o a b   -> Op2 o (go name val a) (go name val b)
