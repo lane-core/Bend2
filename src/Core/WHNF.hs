@@ -37,7 +37,7 @@ whnfGo book term =
     Op2 o a b   -> whnfOp2 book o a b
     Op1 o a     -> whnfOp1 book o a
     Pri p       -> Pri p
-    Eql t a b   -> whnfEql book t a b
+    -- Eql t a b   -> whnfEql book t a b
     Rwt e f     -> whnf book f  -- Rwt reduces to just the body
     -- λ-Match constructors are values, they only reduce when applied
     Log s x     -> whnfLog book s x
@@ -312,42 +312,42 @@ whnfOp1 book op a =
 
 -- Equality reduction (observational equality)
 -- ------------------------------------------
-whnfEql :: Book -> Term -> Term -> Term -> Term
-whnfEql book t a b =
-  case whnf book t of
-    Uni -> case (whnf book a, whnf book b) of
-      (One, One) -> One
-      (a', b')   -> Eql Uni a' b'
+-- whnfEql :: Book -> Term -> Term -> Term -> Term
+-- whnfEql book t a b =
+  -- case whnf book t of
+    -- Uni -> case (whnf book a, whnf book b) of
+      -- (One, One) -> One
+      -- (a', b')   -> Eql Uni a' b'
     
-    Bit -> case (whnf book a, whnf book b) of
-      (Bt0, Bt0) -> Bt0
-      (Bt0, Bt1) -> Emp
-      (Bt1, Bt0) -> Emp
-      (Bt1, Bt1) -> Bt1
-      (a', b')   -> Eql Bit a' b'
+    -- Bit -> case (whnf book a, whnf book b) of
+      -- (Bt0, Bt0) -> Bt0
+      -- (Bt0, Bt1) -> Emp
+      -- (Bt1, Bt0) -> Emp
+      -- (Bt1, Bt1) -> Bt1
+      -- (a', b')   -> Eql Bit a' b'
     
-    Nat -> case (whnf book a, whnf book b) of
-      (Zer   , Zer)    -> Zer
-      (Zer   , Suc b') -> Emp
-      (Suc a', Zer)    -> Emp
-      (Suc a', Suc b') -> Suc (Eql Nat a' b')
-      (a'    , b')     -> Eql Nat a' b'
+    -- Nat -> case (whnf book a, whnf book b) of
+      -- (Zer   , Zer)    -> Zer
+      -- (Zer   , Suc b') -> Emp
+      -- (Suc a', Zer)    -> Emp
+      -- (Suc a', Suc b') -> Suc (Eql Nat a' b')
+      -- (a'    , b')     -> Eql Nat a' b'
     
-    Lst t' -> case (whnf book a, whnf book b) of
-      (Nil      , Nil)       -> Nil
-      (Nil      , Con bh bt) -> Emp
-      (Con ah at, Nil)       -> Emp
-      (Con ah at, Con bh bt) -> Con (Eql t' ah bh) (Eql (Lst t') at bt)
-      (a'       , b')        -> Eql (Lst t') a' b'
+    -- Lst t' -> case (whnf book a, whnf book b) of
+      -- (Nil      , Nil)       -> Nil
+      -- (Nil      , Con bh bt) -> Emp
+      -- (Con ah at, Nil)       -> Emp
+      -- (Con ah at, Con bh bt) -> Con (Eql t' ah bh) (Eql (Lst t') at bt)
+      -- (a'       , b')        -> Eql (Lst t') a' b'
     
-    Sig x y -> case (whnf book a, whnf book b) of
-      (Tup ax ay , Tup bx by) -> Sig (Eql x ax bx) (Lam "_" Nothing (\x -> Eql (App y x) ay by))
-      (a'        , b')        -> Eql (Sig x y) a' b'
+    -- Sig x y -> case (whnf book a, whnf book b) of
+      -- (Tup ax ay , Tup bx by) -> Sig (Eql x ax bx) (Lam "_" Nothing (\x -> Eql (App y x) ay by))
+      -- (a'        , b')        -> Eql (Sig x y) a' b'
     
-    All x y ->
-      All x (Lam "x" (Just x) (\x -> Eql (App y x) (App a x) (App b x)))
+    -- All x y ->
+      -- All x (Lam "x" (Just x) (\x -> Eql (App y x) (App a x) (App b x)))
     
-    t' -> Eql t' a b
+    -- t' -> Eql t' a b
 
 -- Duplication
 -- -----------

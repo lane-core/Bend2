@@ -16,7 +16,7 @@ def app
   , e: A{a == b}
   ) -> B{f(a) == f(b)}:
   rewrite e
-  f(b)
+  {==}
 
 # Negation on booleans
 # - neg(True)  = False
@@ -30,9 +30,9 @@ def neg(x: Bool) -> Bool:
 # Proof: double negation is identity
 def double_neg_theo(x: Bool) -> Bool{neg(neg(x)) == x}:
   if x:
-    True
+    {==}
   else:
-    False
+    {==}
 
 # Double of a Nat
 # - mul2(3) = 6
@@ -62,7 +62,7 @@ def div2(n: Nat) -> Nat:
 def div2_mul2_theo(n: Nat) -> Nat{div2(mul2(n)) == n}:
   match n:
     case 0n:
-      0n
+      {==}
     case 1n + p:
       1n + div2_mul2_theo(p)
 
@@ -102,7 +102,7 @@ def eql(a: Nat, b: Nat) -> Bool:
 def div2_mul2_theo_2(n: Nat) -> Nat{div2(mul2(n)) == n}:
   match n:
     case 0n:
-      0n
+      {==}
     case 1n + p:
       1n + div2_mul2_theo_2(p)
 
@@ -137,9 +137,9 @@ def is_even_b(n: Nat) -> Bool:
 def is_even_ab_theo(n: Nat) -> Bool{is_even_a(n) == is_even_b(n)}:
   match n:
     case 0n:
-      True
+      {==}
     case 1n:
-      False
+      {==}
     case 2n + p:
       rewrite double_neg_theo(is_even_b(p))
       is_even_ab_theo(p)
@@ -156,7 +156,7 @@ def map<A,B>(f: A -> B, xs: A[]) -> B[]:
 def zero_right(a: Nat) -> Nat{a == add(a,0n)}:
   match a:
     case 0n:
-      0n
+      {==}
     case 1n + ap:
       1n + zero_right(ap)
 
@@ -164,7 +164,7 @@ def zero_right(a: Nat) -> Nat{a == add(a,0n)}:
 def succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
   match a:
     case 0n:
-      1n + b
+      1n + {==}
     case 1n + ap:
       1n + succ_right(ap,b)
 
@@ -176,7 +176,7 @@ def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
     case 1n+ap:
       rewrite comm(ap, b)
       rewrite succ_right(b, ap)
-      1n + add(b,ap)
+      1n + {==}
 
 # 0 != 1+n
 def succ_neq_zero(n: Nat) -> Nat{0n != (1n+n)}:
@@ -186,176 +186,176 @@ def succ_neq_zero(n: Nat) -> Nat{0n != (1n+n)}:
 def succ_inj(n: Nat, m: Nat, e: Nat{1n+n==1n+m}) -> Nat{n==m}:
   match n m e:
     case 0n 0n e:
-      0n
+      {==}
     case 1n+n 0n e:
-      1n + e
+      absurd e
     case 0n 1n+m e:
-      ()
+      absurd e
     case 1n+n 1n+m e:
       ()
 
-### Inductive Datatype
-### ------------------
+#### Inductive Datatype
+#### ------------------
 
-### data Vec (A : Set) : Nat → Set where
-###   nil  : Vec A zero
-###   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
-##type Vec<A: Set>(N: Nat) -> Set:
-  ##case @Nil:
-    ##e: Nat{N == 0n}
-  ##case @Cons:
-    ##n: Nat
-    ##h: A
-    ##t: Vec(A,n)
-    ##e: Nat{N == (1n+n)}
+#### data Vec (A : Set) : Nat → Set where
+####   nil  : Vec A zero
+####   cons : ∀ {n} → A → Vec A n → Vec A (suc n)
+###type Vec<A: Set>(N: Nat) -> Set:
+  ###case @Nil:
+    ###e: Nat{N == 0n}
+  ###case @Cons:
+    ###n: Nat
+    ###h: A
+    ###t: Vec(A,n)
+    ###e: Nat{N == (1n+n)}
 
-###λA:Set. λN:Nat.
-###  Σenum{&Nil,&Cons}.
-###  λ{
-###    &Nil: Σe:Nat{N==0n}. Unit;
-###    &Cons: Σn:Nat. Σh:A. Σt:Vec(A,n). Σe:Nat{N==1n+n}. Unit
-###    ;λ_. ()
-###  }
+####λA:Set. λN:Nat.
+####  Σenum{&Nil,&Cons}.
+####  λ{
+####    &Nil: Σe:Nat{N==0n}. Unit;
+####    &Cons: Σn:Nat. Σh:A. Σt:Vec(A,n). Σe:Nat{N==1n+n}. Unit
+####    ;λ_. ()
+####  }
 
-##def VecInd
-  ##( A: Set
-  ##, P: all n:Nat xs:Vec(A,n). Set
-  ##, N: P(0n,@Nil{0n})
-  ##, C: all s:Nat x:A xs:Vec(A,s) p:P(s,xs). P(1n+s,@Cons{s,x,xs,1n+s})
-  ##, n: Nat
-  ##, x: Vec(A,n)
-  ##) -> P(n,x):
-  ##match x:
-    ##case @Nil{e}:
-      ##rewrite e : P(_,@Nil{e})
-      ###N
-      ##()
-    ##case @Cons{n,h,t,e}:
-      ##()
-      ###rewrite e
-      ###C(n,h,t,VecInd(A,P,N,C,n,t))
+###def VecInd
+  ###( A: Set
+  ###, P: all n:Nat xs:Vec(A,n). Set
+  ###, N: P(0n,@Nil{0n})
+  ###, C: all s:Nat x:A xs:Vec(A,s) p:P(s,xs). P(1n+s,@Cons{s,x,xs,1n+s})
+  ###, n: Nat
+  ###, x: Vec(A,n)
+  ###) -> P(n,x):
+  ###match x:
+    ###case @Nil{e}:
+      ###rewrite e : P(_,@Nil{e})
+      ####N
+      ###()
+    ###case @Cons{n,h,t,e}:
+      ###()
+      ####rewrite e
+      ####C(n,h,t,VecInd(A,P,N,C,n,t))
 
-##### Proofs by o3
-##### ------------
+###### Proofs by o3
+###### ------------
 
-##### Add: reduce zero on the *left*
-####def zero_left(b: Nat) -> Nat{add(0n, b) == b}:
-  ####finally
+###### Add: reduce zero on the *left*
+#####def zero_left(b: Nat) -> Nat{add(0n, b) == b}:
+  #####finally
 
-##### Add: associativity (helper)
-####def assoc(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
-  ####match a:
-    ####case 0n:
-      ####finally
-    ####case 1n + ap:
-      ####1n + assoc(ap, b, c)
+###### Add: associativity (helper)
+#####def assoc(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
+  #####match a:
+    #####case 0n:
+      #####finally
+    #####case 1n + ap:
+      #####1n + assoc(ap, b, c)
 
-##### Left-distributivity of multiplication over addition
-####def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
-  ####match n:
-    ####case 0n:
-      ####finally
-    ####case 1n + p:
-      ####rewrite mul_dist_left(p, m, k)               #- Goal: Nat{add(add(m,k),add(mul(p,m),mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      ####rewrite assoc(m, k, add(mul(p,m),mul(p,k)))  #- Goal: Nat{add(m,add(k,add(mul(p,m),mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      ####rewrite comm(k, add(mul(p,m),mul(p,k)))      #- Goal: Nat{add(m,add(add(mul(p,m),mul(p,k)),k)) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      ####rewrite assoc(mul(p,m), mul(p,k), k)         #- Goal: Nat{add(m,add(mul(p,m),add(mul(p,k),k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      ####rewrite comm(mul(p,k), k)                    #- Goal: Nat{add(m,add(mul(p,m),add(k,mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      ####rewrite assoc(m, mul(p,m), add(k,mul(p,k)))  #- Goal: Nat{add(add(m,mul(p,m)),add(k,mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      ####finally
+###### Left-distributivity of multiplication over addition
+#####def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
+  #####match n:
+    #####case 0n:
+      #####finally
+    #####case 1n + p:
+      #####rewrite mul_dist_left(p, m, k)               #- Goal: Nat{add(add(m,k),add(mul(p,m),mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #####rewrite assoc(m, k, add(mul(p,m),mul(p,k)))  #- Goal: Nat{add(m,add(k,add(mul(p,m),mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #####rewrite comm(k, add(mul(p,m),mul(p,k)))      #- Goal: Nat{add(m,add(add(mul(p,m),mul(p,k)),k)) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #####rewrite assoc(mul(p,m), mul(p,k), k)         #- Goal: Nat{add(m,add(mul(p,m),add(mul(p,k),k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #####rewrite comm(mul(p,k), k)                    #- Goal: Nat{add(m,add(mul(p,m),add(k,mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #####rewrite assoc(m, mul(p,m), add(k,mul(p,k)))  #- Goal: Nat{add(add(m,mul(p,m)),add(k,mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #####finally
 
-##### Multiplication: zero on the **right**
-####def mul_zero_right(n: Nat) -> Nat{mul(n, 0n) == 0n}:
-  ####match n:
-    ####case 0n:
-      ####finally
-    ####case 1n + p:
-      ####rewrite mul_zero_right(p) #- Goal: Nat{add(0n, 0n) == 0n}
-      ####finally
+###### Multiplication: zero on the **right**
+#####def mul_zero_right(n: Nat) -> Nat{mul(n, 0n) == 0n}:
+  #####match n:
+    #####case 0n:
+      #####finally
+    #####case 1n + p:
+      #####rewrite mul_zero_right(p) #- Goal: Nat{add(0n, 0n) == 0n}
+      #####finally
 
-##### Multiplication: zero on the **left**
-####def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
-  ####finally
+###### Multiplication: zero on the **left**
+#####def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
+  #####finally
 
-##### Multiplication: zero on the **left**
-####def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
-  ####finally
+###### Multiplication: zero on the **left**
+#####def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
+  #####finally
 
-##### Multiplication: successor on the **left**
-####def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
-  ####finally
+###### Multiplication: successor on the **left**
+#####def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
+  #####finally
 
-##### W-Types
-##### -------
+###### W-Types
+###### -------
 
-##### W-Tree Type
-####type W(A: Set, B: A -> Set):
-  ####case @Sup:
-    ####x: A
-    ####f: B(x) -> W(A,B)
+###### W-Tree Type
+#####type W(A: Set, B: A -> Set):
+  #####case @Sup:
+    #####x: A
+    #####f: B(x) -> W(A,B)
 
-##### Generic W-Type Fold
-####def wfold
-  ####( A: Set
-  ####, B: A -> Set
-  ####, P: Set
-  ####, w: W(A,B)
-  ####, F: all x:A k:(B(x) -> P) . P
-  ####) -> P:
-  ####match w:
-    ####case @Sup{x,f}:
-      ####F(x, λy. wfold(A,B,P,f(y),F))
+###### Generic W-Type Fold
+#####def wfold
+  #####( A: Set
+  #####, B: A -> Set
+  #####, P: Set
+  #####, w: W(A,B)
+  #####, F: all x:A k:(B(x) -> P) . P
+  #####) -> P:
+  #####match w:
+    #####case @Sup{x,f}:
+      #####F(x, λy. wfold(A,B,P,f(y),F))
 
-##### W-Tree
-##### ------
+###### W-Tree
+###### ------
 
-##### W-Tree Tag
-####type WTreeTag<A: Set>:
-  ####case @WLeaf:
-    ####value: A
-  ####case @WNode:
+###### W-Tree Tag
+#####type WTreeTag<A: Set>:
+  #####case @WLeaf:
+    #####value: A
+  #####case @WNode:
 
-##### W-Tree Recursive Fields
-####def WTreeRec(tag: WTreeTag(Nat)) -> Set:
-  ####match tag:
-    ####case @WLeaf{value}:
-      ####return Empty
-    ####case @WNode:
-      ####return enum{&lft, &rgt}
+###### W-Tree Recursive Fields
+#####def WTreeRec(tag: WTreeTag(Nat)) -> Set:
+  #####match tag:
+    #####case @WLeaf{value}:
+      #####return Empty
+    #####case @WNode:
+      #####return enum{&lft, &rgt}
 
-##### W-Tree Type
-####def WTree : Set =
-  ####W(WTreeTag(Nat), WTreeRec)
+###### W-Tree Type
+#####def WTree : Set =
+  #####W(WTreeTag(Nat), WTreeRec)
 
-##### Constructs a W-Leaf
-####def WLeaf(n: Nat) -> WTree:
-  ####return @Sup{@WLeaf{n}, λe. absurd e}
+###### Constructs a W-Leaf
+#####def WLeaf(n: Nat) -> WTree:
+  #####return @Sup{@WLeaf{n}, λe. absurd e}
 
-##### Constructs a W-Node
-####def WNode(l: WTree, r: WTree) -> WTree:
-  ####return @Sup{@WNode{}, λi. match i: case &lft: l case &rgt: r  }
+###### Constructs a W-Node
+#####def WNode(l: WTree, r: WTree) -> WTree:
+  #####return @Sup{@WNode{}, λi. match i: case &lft: l case &rgt: r  }
 
-##### Sums a W-Tree
-####def sum_wtree(w: WTree) -> Nat:
-  ####match w:
-    ####case @Sup{x,f}:
-      ####match x:
-        ####case @WLeaf{value}:
-          ####return value
-        ####case @WNode{}:
-          ####a = f(&lft)
-          ####b = f(&rgt)
-          ####return add(sum_wtree(a), sum_wtree(b))
+###### Sums a W-Tree
+#####def sum_wtree(w: WTree) -> Nat:
+  #####match w:
+    #####case @Sup{x,f}:
+      #####match x:
+        #####case @WLeaf{value}:
+          #####return value
+        #####case @WNode{}:
+          #####a = f(&lft)
+          #####b = f(&rgt)
+          #####return add(sum_wtree(a), sum_wtree(b))
 
-##### Sum a W-Tree (using the generic fold)
-####def sum_wtree_fold(w: WTree) -> Nat:
-  ####wfold<WTreeTag(Nat), WTreeRec, Nat>(w,
-    ####lambda tag f.
-    ####match tag:
-      ####case @WLeaf{value}:
-        ####value
-      ####case @WNode:
-        ####add(f(&lft), f(&rgt)))
+###### Sum a W-Tree (using the generic fold)
+#####def sum_wtree_fold(w: WTree) -> Nat:
+  #####wfold<WTreeTag(Nat), WTreeRec, Nat>(w,
+    #####lambda tag f.
+    #####match tag:
+      #####case @WLeaf{value}:
+        #####value
+      #####case @WNode:
+        #####add(f(&lft), f(&rgt)))
 
 
 

@@ -279,26 +279,18 @@ check d span book ctx term      goal =
         Nothing -> do
           t <- infer d span book ctx v
           check (d+1) span book (extend ctx k v t) (f v) goal
-    (One, One) -> do
-      Done ()
     (One, Uni) -> do
-      Done ()
-    (Bt0, Bt0) -> do
       Done ()
     (Bt0, Bit) -> do
       Done ()
-    (Bt1, Bt1) -> do
-      Done ()
     (Bt1, Bit) -> do
-      Done ()
-    (Zer, Zer) -> do
       Done ()
     (Zer, Nat) -> do
       Done ()
-    (Suc n, Suc m) -> do
-      check d span book ctx n m
     (Suc n, Nat) -> do
       check d span book ctx n Nat
+    (Suc n, Eql t (force book -> Suc a) (force book -> Suc b)) ->
+      check d span book ctx n (Eql t a b)
     (Nil, Lst _) -> do
       Done ()
     (Nil, goal) ->
@@ -309,10 +301,12 @@ check d span book ctx term      goal =
     (Lam k t f, All a b) -> do
       let x = Var k d
       check (d+1) span book (extend ctx k x a) (f x) (App b x)
-    (EmpM, All (force book -> Eql t (force book -> Zer) (force book -> Suc x)) rT) -> do
+    (EmpM, All (force book -> Eql t (force book -> Zer) (force book -> Suc y)) rT) -> do
       Done ()
     (EmpM, All (force book -> Eql t (force book -> Suc x) (force book -> Zer)) rT) -> do
       Done ()
+    (EmpM, All (force book -> Eql t (force book -> Suc x) (force book -> Suc y)) rT) -> do
+      check d span book ctx EmpM (All (Eql t x y) rT)
     (EmpM, All (force book -> Emp) rT) -> do
       Done ()
     (EmpM, _) -> do
@@ -443,8 +437,8 @@ check d span book ctx term      goal =
     (Lam f t x, _) ->
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (Ref "Function" 1)
     -- FIXME: implement a proper refl?
-    (x, Eql t a b) | equal d book a b && equal d book a x -> do
-      Done ()
+    -- (x, Eql t a b) | equal d book a b && equal d book a x -> do
+      -- Done ()
       -- checks if x == a and x == b
       -- if equal d book x a && equal d book x b
         -- then Done ()
