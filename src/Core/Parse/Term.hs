@@ -352,7 +352,7 @@ parseIndentClauses col arity = many clause where
         guard (unPos (sourceColumn pos) >= col)
         _    <- symbol "case"
         return pos
-      pats <- replicateM arity parseTerm
+      pats <- replicateM arity (parseTermBefore ":")
       _    <- symbol ":"
       body <- parseTerm
       pure (pats, body)
@@ -363,7 +363,7 @@ parseBraceClauses :: Int -> Parser [Case]
 parseBraceClauses arity = manyTill singleClause (lookAhead (symbol "}")) where
   singleClause = label "case clause" $ do
     _    <- symbol "case"
-    pats <- replicateM arity parseTerm
+    pats <- replicateM arity (parseTermBefore ":")
     _    <- symbol ":"
     body <- parseTerm
     pure (pats, body)
@@ -802,7 +802,7 @@ parseLam = label "lambda abstraction" $ do
   -- Parse terms instead of just names to support patterns
   -- pats <- some parseTerm
   binders <- some $ do
-    pat <- parseTerm
+    pat <- parseTermBefore ":"
     mtyp <- optional $ do
       _ <- symbol ":"
       parseTerm
