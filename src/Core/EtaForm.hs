@@ -51,8 +51,6 @@
 -- - Field names use underscore prefix (_p, _h, _t) to avoid capture
 -- - The transformation preserves semantics while enabling optimizations
 
-{-# LANGUAGE ViewPatterns #-}
-
 module Core.EtaForm where
 
 import Core.Type
@@ -62,11 +60,11 @@ import Debug.Trace
 -- Main eta-reduction function with lambda-inject optimization
 etaForm :: Int -> Term -> Term
 etaForm d t = case t of
-  -- Check for the lambda-inject pattern: λx. λx0. λx1. ... (λ{...} x)
+  -- Check for the lambda-inject pattern: λx. ... (λ{...} x)
   Lam n ty f ->
     case isEtaLong n d (f (Var n d)) of
-      Just (lmat, lams) -> etaForm d (injectLams lams lmat)
-      Nothing           -> Lam n (fmap (etaForm d) ty) (\v -> etaForm (d+1) (f v))
+      Just (lmat, inj) -> etaForm d (injectInto inj lmat)
+      Nothing          -> Lam n (fmap (etaForm d) ty) (\v -> etaForm (d+1) (f v))
   
   -- Recursive cases for all other constructors
   Var n i      -> Var n i
@@ -119,15 +117,32 @@ etaForm d t = case t of
   Frk l a b    -> Frk (etaForm d l) (etaForm d a) (etaForm d b)
   Rwt e f      -> Rwt (etaForm d e) (etaForm d f)
 
--- Check if a term matches the eta-long pattern: λx0. λx1. ... (λ{...} x)
-isEtaLong :: Name -> Int -> Term -> Maybe (Term, [(Name, Maybe Term)])
-isEtaLong target depth = go [] depth
+-- Check if a term matches the eta-long pattern: ... (λ{...} x)
+-- Returns the lambda-match and an injection function for intermediate terms
+isEtaLong :: Name -> Int -> Term -> Maybe (Term, Term -> Term)
+isEtaLong target depth = go id depth
   where
-    go :: [(Name, Maybe Term)] -> Int -> Term -> Maybe (Term, [(Name, Maybe Term)])
-    go lams d term = case cut term of
-      -- Found more intermediate lambdas
+    go :: (Term -> Term) -> Int -> Term -> Maybe (Term, Term -> Term)
+    go inj d term = case cut term of
+      -- Found intermediate lambda - add to injection
       Lam n ty f -> 
-        go (lams ++ [(n, ty)]) (d+1) (f (Var n d))
+        go (\h -> inj (Lam n ty (\_ -> h))) (d+1) (f (Var n d))
+      
+      -- Found Let - add to injection
+      Let k mt v f ->
+        go (\h -> inj (Let k mt v (\_ -> h))) (d+1) (f (Var k d))
+      
+      -- Found Chk - add to injection
+      Chk x t ->
+        go inj d x
+      
+      -- Found Loc - add to injection
+      Loc s x ->
+        go (\h -> inj (Loc s h)) d x
+      
+      -- Found Log - add to injection
+      Log s x ->
+        go (\h -> inj (Log s h)) d x
       
       -- Found application - check if it's (λ{...} x)
       App f arg ->
@@ -137,53 +152,53 @@ isEtaLong target depth = go [] depth
             -- Also verify target variable is not free in the lambda-match
             if target `S.member` freeVars S.empty lmat
             then Nothing
-            else Just (lmat, lams)
+            else Just (lmat, inj)
           _ -> Nothing
       
       -- Any other form doesn't match our pattern
       _ -> Nothing
 
--- Inject lambdas into each case of a lambda-match
-injectLams :: [(Name, Maybe Term)] -> Term -> Term
-injectLams lams term = case term of
+-- Inject the injection function into each case of a lambda-match
+injectInto :: (Term -> Term) -> Term -> Term
+injectInto inj term = case term of
   -- Empty match - no cases to inject into
   EmpM -> EmpM
   
-  -- Unit match - inject lambdas into the single case
-  UniM f -> UniM (injectLamsBody [] lams f)
+  -- Unit match - inject into the single case
+  UniM f -> UniM (injectBody [] inj f)
   
-  -- Bool match - inject lambdas into both cases
-  BitM f t -> BitM (injectLamsBody [] lams f) (injectLamsBody [] lams t)
+  -- Bool match - inject into both cases
+  BitM f t -> BitM (injectBody [] inj f) (injectBody [] inj t)
   
   -- Nat match - special handling for successor case (1 field)
-  NatM z s -> NatM (injectLamsBody [] lams z) (injectLamsBody ["_p"] lams s)
+  NatM z s -> NatM (injectBody [] inj z) (injectBody ["_p"] inj s)
   
   -- List match - special handling for cons case (2 fields)
-  LstM n c -> LstM (injectLamsBody [] lams n) (injectLamsBody ["_h", "_t"] lams c)
+  LstM n c -> LstM (injectBody [] inj n) (injectBody ["_h", "_t"] inj c)
   
   -- Enum match - inject into each case and default
-  EnuM cs e -> EnuM [(s, injectLamsBody [] lams v) | (s,v) <- cs] (injectLamsBody [] lams e)
+  EnuM cs e -> EnuM [(s, injectBody [] inj v) | (s,v) <- cs] (injectBody [] inj e)
   
   -- Sigma match - special handling for pair case (2 fields)
-  SigM f -> SigM (injectLamsBody ["_a", "_b"] lams f)
+  SigM f -> SigM (injectBody ["_a", "_b"] inj f)
   
   -- Superposition match - special handling (2 fields)
-  SupM l f -> SupM l (injectLamsBody ["_a", "_b"] lams f)
+  SupM l f -> SupM l (injectBody ["_a", "_b"] inj f)
   
-  -- Equality match - inject lambdas into the single case
-  EqlM f -> EqlM (injectLamsBody [] lams f)
+  -- Equality match - inject into the single case
+  EqlM f -> EqlM (injectBody [] inj f)
   
   -- Not a lambda-match
   _ -> term
 
--- Helper to inject lambdas, skipping existing field lambdas
-injectLamsBody :: [Name] -> [(Name, Maybe Term)] -> Term -> Term
-injectLamsBody fields lams body = go 0 fields lams body where
-    go :: Int -> [Name] -> [(Name, Maybe Term)] -> Term -> Term
-    go d []     lams body = foldr (\(n,ty) b -> Lam n ty (\_ -> b)) body lams
-    go d (f:fs) lams body = case cut body of
-      Lam n ty b -> Lam n ty (\v -> go (d+1) fs lams (b v))
-      _          -> Lam f Nothing (\v -> go (d+1) fs lams (App body v))
+-- Helper to inject the injection function, skipping existing field lambdas
+injectBody :: [Name] -> (Term -> Term) -> Term -> Term
+injectBody fields inj body = go 0 fields body where
+  go :: Int -> [Name] -> Term -> Term
+  go d []     body = inj body
+  go d (f:fs) body = case cut body of
+    Lam n ty b -> Lam n ty (\v -> go (d+1) fs (b v))
+    _          -> Lam f Nothing (\v -> go (d+1) fs (App body v))
 
 -- Check if a term is a lambda-match (one of the match constructors)
 isLambdaMatch :: Term -> Bool
@@ -198,41 +213,6 @@ isLambdaMatch term = case term of
   SupM _ _   -> True
   EqlM _     -> True
   _          -> False
-
-
--- testEtaForm :: IO ()
--- testEtaForm = do
-  -- let term = Lam "a" (Just Nat) $ \a ->
-             -- Lam "b" (Just Nat) $ \b ->
-             -- App (NatM 
-                   -- (App (NatM Bt1 (Lam "b" (Just Nat) $ \_ -> Bt0)) b)
-                   -- (Lam "a" (Just Nat) $ \a' ->
-                     -- App (NatM Bt0 (Lam "b" (Just Nat) $ \b' ->
-                       -- App (App (Ref "eql") a') b')) b))
-                 -- a
-  -- putStrLn "Original term:"
-  -- putStrLn $ show term
-  -- putStrLn "\nAfter etaForm:"
-  -- putStrLn $ show (etaForm 0 term)
-
--- this file works very well! good job. let's now just document it...
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 -- AI logs (TODO: remove later)
 
@@ -488,3 +468,34 @@ isLambdaMatch term = case term of
 -- Basically, make sure the important info is there for someone in the future trying to understand
 -- what this file is, and also to make sure that whoever refactors it doesn't accidentally remove
 -- important details. But don't make it too verbose, just the minimal info needed.
+
+-- NEW PROBLEM:
+-- we just realized that, while the file above works in most cases, it fails
+-- in the example below:
+-- def t : ∀A:Set. ∀e:Empty. A = (λA. λe. unused = 0n λ{}(e))
+-- note that this works fine:
+-- def t : ∀A:Set. ∀e:Empty. A = (λA. λe. λ{}(e))
+-- that is, presumably, because the extra "Let" in the middle of the term breaks
+-- the eta-form detection. expressions like Let, Chk, Loc, Log, are
+-- "passthrough" expressions, in the sense the EtaForm algorithm must be capable
+-- of detecting eta forms passing through them.
+-- in the case above, the correct elaboration is:
+-- def t : ∀A:Set. ∀e:Empty. A = (λA. unused = 0n λ{})
+-- note that we re-inserted 'unused = 0'.
+-- that means rather than just allowing "in-between lambdas", we also allow
+-- "in-between" Lets and similar expressions. note that these expressions
+-- must, too, be injected inside branches. example:
+-- def t : ∀k:Bool. ∀f:Nat->Nat. ∀x:Nat. Nat = λk. λf. λx. r = f(x) λ{False:r;True:r}(k)
+-- becomes:
+-- def t : ∀k:Bool. ∀f:Nat->Nat. ∀x:Nat. Nat = λ{False: λf. λx. r = f(x) r; True: λf. λx. r = f(x) r}
+-- to implement this in a satisfactory way, I suggest us to, rather than storing
+-- a list of lambda names to be injected, we store a single 'inj : Term -> Term'
+-- function, which we *apply* to the body, at the right moment.
+-- so, for example, suppose we have, in between, the lambdas: ... λf. λx. ...
+-- initially, we set inj to (\h -> h)
+-- then, when we met a lambda like λf, we extend it like:
+-- newInj = \h -> inj (Lam k t (\_ -> h)) -- (remember that HOAS vars aren't used at this stage of the elaborator)
+-- we do similarly with other terms like Let and Chk.
+-- now, your goal is to rewrite the file above to include this change in how
+-- in-between lambdas (and, now, Lets, Chks, etc.) are handled.
+-- write the complete updated file below:
