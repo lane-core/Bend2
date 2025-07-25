@@ -131,22 +131,15 @@ parseTerm = located $ do
 parseTermBefore :: String -> Parser Term
 parseTermBefore op = do
   st <- get
+  -- TODO: using trace, print the remaining tokens, removing all \n chars from it
+  -- also print the current blocked list
   let wasBlocked = blocked st
   let newBlocked = op : wasBlocked
   put st { blocked = newBlocked }
-  -- Use observing to catch parse failures and ensure cleanup
-  termResult <- observing parseTerm
-  case termResult of
-    Left err -> do
-      -- Restore blocked state before re-throwing the error
-      st' <- get
-      put st' { blocked = wasBlocked }
-      parseError err
-    Right term -> do
-      -- Normal restoration path
-      st' <- get
-      put st' { blocked = wasBlocked }
-      return term
+  term <- parseTerm
+  st'  <- get
+  put st' { blocked = wasBlocked }
+  return term
 
 -- | Syntax: x, foo, bar_123, Type<A,B>, Nat/add
 parseVar :: Parser Term
