@@ -68,6 +68,7 @@ termToCT book term dep = case term of
   Sub t        -> termToCT book t dep
   Fix k f      -> CFix k (\x -> termToCT book (f (ctToTerm x)) (dep+1))
   Let k t v f  -> CLet (termToCT book v dep) (\x -> termToCT book (f (ctToTerm x)) (dep+1))
+  Use k v f    -> termToCT book (f v) dep  -- Inline directly, no binding
   Set          -> CEra
   Chk x _      -> termToCT book x dep
   Emp          -> CEra

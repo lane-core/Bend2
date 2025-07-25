@@ -102,6 +102,10 @@ collapse dep book term = case term of
     v' <- collapse dep book v
     f' <- collapse (dep+1) book (f (Var k dep))
     return $ Let k t' v' (\_ -> f')
+  Use k v f -> do
+    v' <- collapse dep book v
+    f' <- collapse (dep+1) book (f (Var k dep))
+    return $ Use k v' (\_ -> f')
 
   -- Universe
   Set -> return Set

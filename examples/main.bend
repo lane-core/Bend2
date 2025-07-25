@@ -181,8 +181,10 @@ def comm(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
     case 0n:
       zero_right(b)
     case 1n+ap:
-      rewrite comm(ap, b)
-      rewrite succ_right(b, ap)
+      e0 = comm(ap, b)
+      e1 = succ_right(b, ap)
+      rewrite e0
+      rewrite e1
       1n + {==}
 
 # 0 != 1+n

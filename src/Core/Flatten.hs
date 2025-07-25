@@ -57,6 +57,7 @@ flatten d book term = case term of
   (Sub t)       -> Sub (flatten d book t)
   (Fix n f)     -> Fix n (\x -> flatten (d+1) book (f x))
   (Let k t v f) -> Let k (fmap (flatten d book) t) (flatten d book v) (\x -> flatten (d+1) book (f x))
+  (Use k v f)   -> Use k (flatten d book v) (\x -> flatten (d+1) book (f x))
   Set           -> Set
   (Chk x t)     -> Chk (flatten d book x) (flatten d book t)
   Emp           -> Emp
@@ -252,6 +253,7 @@ unpat d (Ref n i)       = Ref n i
 unpat d (Sub t)         = Sub (unpat d t)
 unpat d (Fix n f)       = Fix n (\x -> unpat (d+1) (f x))
 unpat d (Let k t v f)   = Let k (fmap (unpat d) t) (unpat d v) (\x -> unpat (d+1) (f x))
+unpat d (Use k v f)     = Use k (unpat d v) (\x -> unpat (d+1) (f x))
 unpat d Set             = Set
 unpat d (Chk x t)       = Chk (unpat d x) (unpat d t)
 unpat d Emp             = Emp
@@ -475,6 +477,7 @@ unfrkGo d ctx (Ref n i)     = Ref n i
 unfrkGo d ctx (Sub t)       = Sub (unfrkGo d ctx t)
 unfrkGo d ctx (Fix n f)     = Fix n (\x -> unfrkGo (d+1) ((n,d):ctx) (f x))
 unfrkGo d ctx (Let k t v f) = Let k (fmap (unfrkGo d ctx) t) (unfrkGo d ctx v) (\x -> unfrkGo (d+1) ((k,d):ctx) (f x))
+unfrkGo d ctx (Use k v f)   = Use k (unfrkGo d ctx v) (\x -> unfrkGo (d+1) ((k,d):ctx) (f x))
 unfrkGo d ctx Set           = Set
 unfrkGo d ctx (Chk x t)     = Chk (unfrkGo d ctx x) (unfrkGo d ctx t)
 unfrkGo d ctx Emp           = Emp
@@ -604,6 +607,7 @@ subst name val term = go name val term where
     Sub t       -> Sub (go name val t)
     Fix k f     -> if k == name then term else Fix k (\x -> go name val (f x))
     Let k t v f -> if k == name then term else Let k (fmap (go name val) t) (go name val v) (\x -> go name val (f x))
+    Use k v f   -> if k == name then term else Use k (go name val v) (\x -> go name val (f x))
     Chk x t     -> Chk (go name val x) (go name val t)
     Set         -> Set
     Emp         -> Emp

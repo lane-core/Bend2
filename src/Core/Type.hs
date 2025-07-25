@@ -59,6 +59,7 @@ data Term
   -- Definitions
   | Fix Name Body                   -- μx. f
   | Let Name (Maybe Term) Term Body -- !x : T = v; f
+  | Use Name Term Body              -- !x = v; f
 
   -- Universe
   | Set -- Set
@@ -188,12 +189,13 @@ instance Monad Result where
 
 instance Show Term where
   show (Var k i)      = k -- ++ "^" ++ show i
-  show (Ref k i)      = k
+  show (Ref k i)      = k -- ++ "!"
   show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let k t v f)  = case t of
     Just t  -> k ++ " : " ++ show t ++ " = " ++ show v ++ " " ++ show (f (Var k 0))
     Nothing -> k ++                    " = " ++ show v ++ " " ++ show (f (Var k 0))
+  show (Use k v f)    = "use " ++ k ++ " = " ++ show v ++ " " ++ show (f (Var k 0))
   show (Set)          = "Set"
   show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
   show (Emp)          = "Empty"
@@ -419,6 +421,7 @@ freeVars ctx tm = case tm of
   Sub t       -> freeVars ctx t
   Fix n f     -> freeVars (S.insert n ctx) (f (Var n 0))
   Let k t v f -> S.unions [foldMap (freeVars ctx) t, freeVars ctx v, freeVars (S.insert k ctx) (f (Var k 0))]
+  Use k v f   -> S.union (freeVars ctx v) (freeVars (S.insert k ctx) (f (Var k 0)))
   Chk v t     -> S.union (freeVars ctx v) (freeVars ctx t)
   EmpM        -> S.empty
   UniM f      -> freeVars ctx f
@@ -458,6 +461,7 @@ hasMet term = case term of
   Let k t v f -> case t of
     Just t    -> hasMet t || hasMet v || hasMet (f (Var k 0))
     Nothing   -> hasMet v || hasMet (f (Var k 0))
+  Use k v f   -> hasMet v || hasMet (f (Var k 0))
   Chk x t     -> hasMet x || hasMet t
   EmpM        -> False
   UniM f      -> hasMet f

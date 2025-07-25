@@ -32,6 +32,7 @@ rewriteGo d book old neo val =
     Sub t       -> t
     Fix k f     -> Fix k (\x -> rewrite d book old neo (f x))
     Let k t v f -> Let k (fmap (rewrite d book old neo) t) (rewrite d book old neo v) (\x -> rewrite d book old neo (f x))
+    Use k v f   -> Use k (rewrite d book old neo v) (\x -> rewrite d book old neo (f x))
     Set         -> Set
     Chk x t     -> Chk (rewrite d book old neo x) (rewrite d book old neo t)
     Emp         -> Emp

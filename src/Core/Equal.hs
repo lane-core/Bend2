@@ -21,14 +21,25 @@ import Debug.Trace
 
 equal :: Int -> Book -> Term -> Term -> Bool
 equal d book a b =
-  -- trace ("- equal: " ++ show (normal d book a) ++ " == " ++ show (normal d book b)) $
+  -- trace ("- equal: " ++ show (normal book a) ++ " == " ++ show (normal book b)) $
   eql True d book a b
 
 eql :: Bool -> Int -> Book -> Term -> Term -> Bool
 eql False d book a b = cmp False d book (cut a) (cut b)
-eql True  d book a b = identical || similar where
-  identical = eql False d book a b
-  similar   = cmp True  d book (force book a) (force book b)
+eql True  d book a b = 
+  if identical 
+    then
+      -- trace ("identic " ++ show a ++ " == " ++ show b) $
+      True
+    else if similar
+      then 
+        -- trace ("similar " ++ show a ++ " == " ++ show b) $
+        -- trace ("similar " ++ show (force book a) ++ " ~~ " ++ show (force book b)) $
+        True
+      else False
+  where
+    identical = eql False d book a b
+    similar   = cmp True  d book (force book a) (force book b)
 
 cmp :: Bool -> Int -> Book -> Term -> Term -> Bool
 cmp red d book a b =
@@ -42,6 +53,7 @@ cmp red d book a b =
     (Var ka ia      , Var kb ib      ) -> ia == ib
     (Sub ta         , Sub tb         ) -> eql red d book ta tb
     (Let ka ta va fa, Let kb tb vb fb) -> eql red d book va vb && eql red (d+1) book (fa (Var ka d)) (fb (Var kb d)) && fromMaybe True (liftA2 (eql red d book) ta tb)
+    (Use ka va fa   , Use kb vb fb   ) -> eql red d book va vb && eql red d book (fa va) (fb vb)
     (Set            , Set            ) -> True
     (Chk xa ta      , Chk xb tb      ) -> eql red d book xa xb && eql red d book ta tb
     (Emp            , Emp            ) -> True

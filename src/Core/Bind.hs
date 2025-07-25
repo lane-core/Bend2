@@ -19,6 +19,7 @@ binder lv term ctx vars = case term of
   Ref k i     -> Ref k i
   Sub t       -> t
   Let k t v f -> Let k (fmap (\u -> binder lv u ctx vars) t) (binder lv v ctx vars) (\x -> binder lv (f (Sub x)) (ctx++[x]) (M.insert k x vars))
+  Use k v f   -> Use k (binder lv v ctx vars) (\x -> binder lv (f (Sub x)) (ctx++[x]) (M.insert k x vars))
   Fix k f     -> Fix k (\x -> binder (lv+1) (f (Sub x)) (ctx++[x]) (M.insert k x vars))
   Set         -> Set
   Chk x t     -> Chk (binder lv x ctx vars) (binder lv t ctx vars)

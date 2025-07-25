@@ -18,6 +18,7 @@ subterms d term = case term of
   Fix k b       -> [b (Var k d)]
   Lam x _ b     -> [b (Var x d)]
   Let k t v f   -> maybe [] (:[]) t ++ [v, f (Var k d)]
+  Use k v f     -> [v, f (Var k d)]
   Chk v t       -> [v, t]
   Suc n         -> [n]
   Con h t       -> [h, t]

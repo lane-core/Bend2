@@ -29,6 +29,7 @@ whnfGo :: Book -> Term -> Term
 whnfGo book term =
   case term of
     Let k t v f -> whnfLet book v f
+    Use k v f   -> whnfUse book v f
     Ref k i     -> whnfRef book k i
     Fix k f     -> whnfFix book k f
     Chk x _     -> whnf book x
@@ -46,6 +47,10 @@ whnfGo book term =
 -- Normalizes a let binding
 whnfLet :: Book -> Term -> Body -> Term
 whnfLet book v f = whnf book (f v)
+
+-- Normalizes a use binding (inlines the value directly)
+whnfUse :: Book -> Term -> Body -> Term
+whnfUse book v f = whnf book (f v)
 
 -- Normalizes a reference using guarded deref
 whnfRef :: Book -> Name -> Int -> Term
@@ -367,6 +372,7 @@ normal book term =
     Sub t       -> t
     Fix k f     -> Fix k (\x -> normal book (f (Sub x)))
     Let k t v f -> Let k (fmap (normal book) t) (normal book v) (\x -> normal book (f (Sub x)))
+    Use k v f   -> Use k (normal book v) (\x -> normal book (f (Sub x)))
     Set         -> Set
     Chk x t     -> Chk (normal book x) (normal book t)
     Emp         -> Emp
@@ -488,7 +494,7 @@ force book term =
   case whnf book term of
     term' -> case cut fn of
       Ref k i -> case getDefn book k of
-        Just (_,fn',_) -> force book $ foldl App fn' xs
-        otherwise      -> term'
+        Just (True,fn',_) -> force book $ foldl App fn' xs
+        otherwise         -> term'
       term' -> term'
       where (fn,xs) = collectApps term' []

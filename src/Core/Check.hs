@@ -48,6 +48,8 @@ infer d span book@(Book defs _) ctx term =
       Nothing -> do
         t <- infer d span book ctx v
         infer (d+1) span book (extend ctx k v t) (f v)
+    Use k v f -> do
+      infer d span book ctx (f v)
     Fix k f -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Chk v t -> do
@@ -128,12 +130,12 @@ infer d span book@(Book defs _) ctx term =
         Done $ All tk (Lam k (Just tk) (\v -> tb))
       Nothing -> do
         Fail $ CantInfer span (normalCtx book ctx)
-    App f x ->
-      case f of
-        Lam k t body -> do
-          xT <- infer d span book ctx x
-          infer (d+1) span book (extend ctx k x xT) (body x)
-        _ -> do
+    App f x -> do
+      -- case f of
+        -- Lam k t body -> do
+          -- xT <- infer d span book ctx x
+          -- infer (d+1) span book (extend ctx k x xT) (body x)
+        -- _ -> do
           fT <- infer d span book ctx f
           case force book fT of
             All fA fB -> do
@@ -280,6 +282,8 @@ check d span book ctx term      goal =
         Nothing -> do
           t <- infer d span book ctx v
           check (d+1) span book (extend ctx k v t) (f v) goal
+    (Use k v f, _) -> do
+      check d span book ctx (f v) goal
     (One, Uni) -> do
       Done ()
     (Bt0, Bit) -> do

@@ -75,6 +75,7 @@ compileFn book nam tm ty =
       Pat _ _ c                                              -> all (\(p,f) -> alwaysMat x f) c
       -- Pass through terms that just bind
       Let k t v f                                            -> alwaysMat x (f (Var k 0))
+      Use k v f                                              -> alwaysMat x (f v)
       SupM _ (Lam a _ (subst a -> Lam b _ (subst b -> f))) -> alwaysMat x f
       _ -> False
 
@@ -116,6 +117,7 @@ termToHVM book ctx term = go term where
   go (Sub t)       = termToHVM book ctx t
   go (Fix n f)     = HVM.Ref "fix" 0 [HVM.Lam (bindNam n) (termToHVM book (MS.insert n n ctx) (f (Var n 0)))]
   go (Let k t v f) = HVM.Let HVM.LAZY (bindNam k) (termToHVM book ctx v) (termToHVM book (MS.insert k k ctx) (f (Var k 0)))
+  go (Use k v f)   = termToHVM book ctx (f v)  -- Inline directly, no binding
   go Set          = HVM.Era
   go (Chk v t)    = termToHVM book ctx v
   go Emp          = HVM.Era

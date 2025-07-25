@@ -1,7 +1,5 @@
 {-./Type.hs-}
 
-{-# LANGUAGE ViewPatterns #-}
-
 -- Eta-Form
 -- ========
 --
@@ -10,46 +8,31 @@
 --
 -- Basic Transformation:
 -- --------------------
--- λx. λy. λz. (λ{...} x) ~> λ{0n:λy.λz.A; 1n+:λp.λy.λz.B}
+-- λx. λy. λz. (λ{...} x) ~> λ{0n:λy.λz.A; 1n+:λy.λz.B}
 --
--- The optimization moves intermediate lambdas inside match branches. It is
--- useful for the HVM backend due to linearization, and for the bidirectional
--- type-checker, which can't infer a form like `(λ{...} x)`.
+-- The optimization moves intermediate lambdas inside match branches. It also handles
+-- passthrough constructs (Let, Use, Chk, Loc, Log, App) and reconstructs the scrutinee
+-- when needed using 'use' bindings.
 --
 -- Examples:
 -- ---------
 -- 1. Simple eta-reduction:
---    λn. (λ{0n:Z; 1n+:S} n) 
---    ----------------------
---    λ{0n:Z; 1n+:S}
+--    λn. (λ{0n:Z; 1n+:S} n) ~> λ{0n:Z; 1n+:S}
 --
 -- 2. With intermediate lambdas:
---    λa. λb. (λ{0n:Z; 1n+:S} a) 
---    ---------------------------
---    λ{0n:λb.Z; 1n+:λp.λb.(S p)}
+--    λa. λb. (λ{0n:Z; 1n+:S} a) ~> λ{0n:λb.Z; 1n+:λp.λb.S}
 --
--- 3. List pattern:
---    λx. λy. (λ{[]:N; <>:C} x)
---    -------------------------
---    λ{[]:λy.N; <>:λh.λt.λy.(C h t)}
+-- 3. With scrutinee reconstruction:
+--    λa. (λ{0n:a; 1n+:λp. 1n+p} a) ~> λ{0n:use a=0n a; 1n+:λp. use a=1n+p 1n+p}
 --
--- 4. Nested matches:
---    λa. λb. (λ{0n:(λ{0n:T; 1n+:F} b); 1n+:λa_.(λ{0n:F; 1n+:E} b)} a)
---    ----------------------------------------------------------------
---    λ{0n:λ{0n:T; 1n+:F}; 1n+:λa_.λ{0n:F; 1n+:E}}
---
--- 5. With existing field lambdas:
---    λa. λb. (λ{0n:Z; 1n+:λp.S} a)
---    -----------------------------
---    λ{0n:λb.Z; 1n+:λp.λb.S}
+-- 4. Reconstruction disabled when field name matches scrutinee:
+--    λb. (λ{0n:Z; 1n+:λb. S} b) ~> λ{0n:use b=0n Z; 1n+:λb. S} (no reconstruction in 1n+ case)
 --
 -- Key Points:
 -- ----------
--- - Field lambdas (for constructor arguments) are injected first
--- - Intermediate lambdas are injected after field lambdas
--- - Existing field lambdas are preserved, not duplicated
--- - Field names use underscore prefix (_p, _h, _t) to avoid capture
--- - The transformation preserves semantics while enabling optimizations
+-- - Field lambdas are injected first, then intermediate constructs
+-- - Scrutinee is reconstructed with 'use' bindings unless field names conflict
+-- - Handles Let, Use, Chk, Loc, Log, and App as passthrough constructs
 
 module Core.EtaForm where
 
@@ -72,6 +55,7 @@ etaForm d t = case t of
   Sub t'       -> Sub (etaForm d t')
   Fix n f      -> Fix n (\v -> etaForm (d+1) (f v))
   Let k mt v f -> Let k (fmap (etaForm d) mt) (etaForm d v) (\v' -> etaForm (d+1) (f v'))
+  Use k v f    -> Use k (etaForm d v) (\v' -> etaForm (d+1) (f v'))
   Set          -> Set
   Chk a b      -> Chk (etaForm d a) (etaForm d b)
   Emp          -> Emp
@@ -132,9 +116,13 @@ isEtaLong target depth = go id depth
       Let k mt v f ->
         go (\h -> inj (Let k mt v (\_ -> h))) (d+1) (f (Var k d))
       
+      -- Found Use - add to injection
+      Use k v f ->
+        go (\h -> inj (Use k v (\_ -> h))) (d+1) (f (Var k d))
+      
       -- Found Chk - add to injection
       Chk x t ->
-        go inj d x
+        go (\h -> inj (Chk h t)) d x
       
       -- Found Loc - add to injection
       Loc s x ->
@@ -151,7 +139,7 @@ isEtaLong target depth = go id depth
           (lmat, Var v_n _) | v_n == target && isLambdaMatch lmat ->
             Just (lmat, inj)
           -- Otherwise, pass through the application
-          _ -> go (\h -> inj (App h arg)) d f
+          _ -> go (\h -> inj (app h arg)) d f
       
       -- Any other form doesn't match our pattern
       _ -> Nothing
@@ -171,21 +159,21 @@ injectInto inj scrutName term = case term of
   
   -- Nat match - special handling for successor case (1 field)
   NatM z s -> NatM (injectBody [] inj scrutName (\_ -> Zer) z) 
-                   (injectBody ["_p"] inj scrutName (\vars -> case vars of [p] -> Suc p; _ -> Era) s)
+                   (injectBody ["p"] inj scrutName (\vars -> case vars of [p] -> Suc p; _ -> Era) s)
   
   -- List match - special handling for cons case (2 fields)
   LstM n c -> LstM (injectBody [] inj scrutName (\_ -> Nil) n) 
-                   (injectBody ["_h", "_t"] inj scrutName (\vars -> case vars of [h,t] -> Con h t; _ -> Era) c)
+                   (injectBody ["h", "t"] inj scrutName (\vars -> case vars of [h,t] -> Con h t; _ -> Era) c)
   
   -- Enum match - inject into each case and default
   EnuM cs e -> EnuM [(s, injectBody [] inj scrutName (\_ -> Sym s) v) | (s,v) <- cs] 
                     (injectBody [] inj scrutName (\_ -> Era) e)
   
   -- Sigma match - special handling for pair case (2 fields)
-  SigM f -> SigM (injectBody ["_a", "_b"] inj scrutName (\vars -> case vars of [a,b] -> Tup a b; _ -> Era) f)
+  SigM f -> SigM (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Tup a b; _ -> Era) f)
   
   -- Superposition match - special handling (2 fields)
-  SupM l f -> SupM l (injectBody ["_a", "_b"] inj scrutName (\vars -> case vars of [a,b] -> Sup l a b; _ -> Era) f)
+  SupM l f -> SupM l (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Sup l a b; _ -> Era) f)
   
   -- Equality match - inject into the single case
   EqlM f -> EqlM (injectBody [] inj scrutName (\_ -> Rfl) f)
@@ -194,16 +182,23 @@ injectInto inj scrutName term = case term of
   _ -> term
 
 -- Helper to inject the injection function, skipping existing field lambdas
+-- Also handles scrutinee reconstruction
 injectBody :: [Name] -> (Term -> Term) -> Name -> ([Term] -> Term) -> Term -> Term
-injectBody fields inj scrutName mkScrut body = go 0 fields [] body where
-  go :: Int -> [Name] -> [Term] -> Term -> Term
-  go d []     vars body = 
-    let injectedBody = inj body
-        scrutVal = mkScrut (reverse vars)
-    in Let scrutName Nothing scrutVal (\_ -> injectedBody)
-  go d (f:fs) vars body = case cut body of
-    Lam n ty b -> Lam n ty (\v -> go (d+1) fs (v:vars) (b v))
-    _          -> Lam f Nothing (\v -> go (d+1) fs (v:vars) (App body v))
+injectBody fields inj scrutName mkScrut body = go 0 fields [] [] body where
+  go :: Int -> [Name] -> [Term] -> [Name] -> Term -> Term
+  go d []     vars fieldNames body = 
+    let scrutVal = mkScrut (reverse vars)
+        injectedBody = inj body
+        -- Check if any field name matches scrutinee name
+        shouldReconstruct = scrutName `notElem` fieldNames
+    in if shouldReconstruct
+       then Use scrutName scrutVal (\_ -> injectedBody)
+       else injectedBody
+  go d (f:fs) vars fieldNames body = case cut body of
+    -- Existing field lambda - preserve it
+    Lam n ty b -> Lam n ty (\v -> go (d+1) fs (v:vars) (n:fieldNames) (b v))
+    -- Missing field lambda - add it
+    _          -> Lam f Nothing (\v -> go (d+1) fs (v:vars) (f:fieldNames) body)
 
 -- Check if a term is a lambda-match (one of the match constructors)
 isLambdaMatch :: Term -> Bool
@@ -218,6 +213,11 @@ isLambdaMatch term = case term of
   SupM _ _   -> True
   EqlM _     -> True
   _          -> False
+
+
+app :: Term -> Term -> Term
+app (Lam k _ f) x = Use k x f
+app f           x = App f x
 
 -- AI logs (TODO: remove later)
 
@@ -582,3 +582,25 @@ isLambdaMatch term = case term of
 -- this file, let's remove that flag, and *always* reconstruct the scrutinee.
 -- as such, we don't need FreeVars anymore.
 -- implement the COMPLETE updated file below:
+
+-- NEW PROBLEM:
+-- while this works, we now got a different issue. consider:
+-- λa:Nat. λb:Nat. (λ{0n:(λ{0n:True;1n+:λb:Nat. False})(b);1n+:λa:Nat. (λ{0n:False;1n+:λb:Nat. eql(a,b)})(b)})(a)
+-- this becomes:
+-- λ{0n:use a = 0n λ{0n:use b = 0n True;1n+:λb:Nat. use b = 1n+b False};1n+:λa:Nat. use a = 1n+a λ{0n:use b = 0n False;1n+:λb:Nat. use b = 1n+b eql(a,b)}}
+-- which satisfies the previous spec, yet, it is wrong. notice that the 'b'
+-- variable is the *predecessor* of the input 'b' in the original term, but, on
+-- the elaborated term, it is actually the input 'b' itself, reconstructed. so,
+-- the elaboration changes the meaning of the term.
+-- there is a simple way to fix this, though: if any of the *field* variable names
+-- that we find when passing through user-supplied lambda for fields, is the same
+-- as the name of the scrutinee we're reconstructing, then, we *disable* the
+-- scrutinee reconstruction on that branch.
+-- your goal is to rewrite the entire file above, to fix this issue.
+-- keep all else the same.
+-- also, to finish things up, update the top comment so that it properly
+-- documents these changes we made since. don't make it too verbose, but at
+-- least include some of these behaviors for future readers, specially if
+-- they're important or impactiful
+-- write the COMPLETE refactored file below:
+
