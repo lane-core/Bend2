@@ -21,12 +21,14 @@ adjust :: Book -> Term -> Term
 adjust book term =
   -- trace ("nfrk: " ++ show nfrk) $
   -- trace ("done: " ++ show done) $
+  -- trace ("more: " ++ show more) $
   done
   where
     flat  = flatten 0 book term
     npat = unpat 0 flat
     nfrk = unfrk 0 npat
     etas = etaForm 0 nfrk
+    -- more = etaForm 0 etas
     done = bind etas
 
 -- | Adjusts a term. simplifying patterns but leaving terms as Pats.
