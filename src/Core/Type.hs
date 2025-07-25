@@ -313,12 +313,12 @@ instance Show Term where
   show (Enu s)        = "enum{" ++ intercalate "," (map (\x -> "&" ++ x) s) ++ "}"
   show (Sym s)        = "&" ++ s
   show (EnuM c e)     = "λ{" ++ intercalate ";" (map (\(s,t) -> "&" ++ s ++ ":" ++ show t) c) ++ ";" ++ show e ++ "}"
-  show (Sig a b) = case b of
+  show (Sig a b) = case cut b of
       Lam "_" t f -> showArg a ++ " & " ++ showCodomain (f (Var "_" 0))
       Lam k t f   -> "Σ" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
       _           -> "Σ" ++ showArg a ++ ". " ++ show b
     where
-      showArg t = case t of
+      showArg t = case cut t of
           All{} -> "(" ++ show t ++ ")"
           Sig{} -> "(" ++ show t ++ ")"
           _     -> show t
@@ -332,7 +332,7 @@ instance Show Term where
       Lam k t f   -> "∀" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
       _           -> "∀" ++ showArg a ++ ". " ++ show b
     where
-      showArg t = case t of
+      showArg t = case cut t of
           All{} -> "(" ++ show t ++ ")"
           Sig{} -> "(" ++ show t ++ ")"
           _     -> show t
