@@ -63,8 +63,8 @@ etaForm d t = case t of
   -- Check for the lambda-inject pattern: λx. ... (λ{...} x)
   Lam n ty f ->
     case isEtaLong n d (f (Var n d)) of
-      Just (lmat, inj) -> etaForm d (injectInto inj lmat)
-      Nothing          -> Lam n (fmap (etaForm d) ty) (\v -> etaForm (d+1) (f v))
+      Just (lmat, inj, injScrut) -> etaForm d (injectInto inj injScrut n lmat)
+      Nothing                    -> Lam n (fmap (etaForm d) ty) (\v -> etaForm (d+1) (f v))
   
   -- Recursive cases for all other constructors
   Var n i      -> Var n i
@@ -118,11 +118,11 @@ etaForm d t = case t of
   Rwt e f      -> Rwt (etaForm d e) (etaForm d f)
 
 -- Check if a term matches the eta-long pattern: ... (λ{...} x)
--- Returns the lambda-match and an injection function for intermediate terms
-isEtaLong :: Name -> Int -> Term -> Maybe (Term, Term -> Term)
+-- Returns the lambda-match, an injection function, and whether to inject scrutinee
+isEtaLong :: Name -> Int -> Term -> Maybe (Term, Term -> Term, Bool)
 isEtaLong target depth = go id depth
   where
-    go :: (Term -> Term) -> Int -> Term -> Maybe (Term, Term -> Term)
+    go :: (Term -> Term) -> Int -> Term -> Maybe (Term, Term -> Term, Bool)
     go inj d term = case cut term of
       -- Found intermediate lambda - add to injection
       Lam n ty f -> 
@@ -149,56 +149,65 @@ isEtaLong target depth = go id depth
         case (cut f, cut arg) of
           -- Check if f is a lambda-match and arg is our target variable
           (lmat, Var v_n _) | v_n == target && isLambdaMatch lmat ->
-            -- Also verify target variable is not free in the lambda-match
-            if target `S.member` freeVars S.empty lmat
-            then Nothing
-            else Just (lmat, inj)
+            -- Check if target variable is free in the lambda-match
+            let injScrut = target `S.member` freeVars S.empty lmat
+            in Just (lmat, inj, injScrut)
           _ -> Nothing
       
       -- Any other form doesn't match our pattern
       _ -> Nothing
 
 -- Inject the injection function into each case of a lambda-match
-injectInto :: (Term -> Term) -> Term -> Term
-injectInto inj term = case term of
+injectInto :: (Term -> Term) -> Bool -> Name -> Term -> Term
+injectInto inj injScrut scrutName term = case term of
   -- Empty match - no cases to inject into
   EmpM -> EmpM
   
   -- Unit match - inject into the single case
-  UniM f -> UniM (injectBody [] inj f)
+  UniM f -> UniM (injectBody [] inj injScrut scrutName (\_ -> One) f)
   
   -- Bool match - inject into both cases
-  BitM f t -> BitM (injectBody [] inj f) (injectBody [] inj t)
+  BitM f t -> BitM (injectBody [] inj injScrut scrutName (\_ -> Bt0) f) 
+                   (injectBody [] inj injScrut scrutName (\_ -> Bt1) t)
   
   -- Nat match - special handling for successor case (1 field)
-  NatM z s -> NatM (injectBody [] inj z) (injectBody ["_p"] inj s)
+  NatM z s -> NatM (injectBody [] inj injScrut scrutName (\_ -> Zer) z) 
+                   (injectBody ["_p"] inj injScrut scrutName (\vars -> case vars of [p] -> Suc p; _ -> Era) s)
   
   -- List match - special handling for cons case (2 fields)
-  LstM n c -> LstM (injectBody [] inj n) (injectBody ["_h", "_t"] inj c)
+  LstM n c -> LstM (injectBody [] inj injScrut scrutName (\_ -> Nil) n) 
+                   (injectBody ["_h", "_t"] inj injScrut scrutName (\vars -> case vars of [h,t] -> Con h t; _ -> Era) c)
   
   -- Enum match - inject into each case and default
-  EnuM cs e -> EnuM [(s, injectBody [] inj v) | (s,v) <- cs] (injectBody [] inj e)
+  EnuM cs e -> EnuM [(s, injectBody [] inj injScrut scrutName (\_ -> Sym s) v) | (s,v) <- cs] 
+                    (injectBody [] inj injScrut scrutName (\_ -> Era) e)
   
   -- Sigma match - special handling for pair case (2 fields)
-  SigM f -> SigM (injectBody ["_a", "_b"] inj f)
+  SigM f -> SigM (injectBody ["_a", "_b"] inj injScrut scrutName (\vars -> case vars of [a,b] -> Tup a b; _ -> Era) f)
   
+
   -- Superposition match - special handling (2 fields)
-  SupM l f -> SupM l (injectBody ["_a", "_b"] inj f)
+  SupM l f -> SupM l (injectBody ["_a", "_b"] inj injScrut scrutName (\vars -> case vars of [a,b] -> Sup l a b; _ -> Era) f)
   
   -- Equality match - inject into the single case
-  EqlM f -> EqlM (injectBody [] inj f)
+  EqlM f -> EqlM (injectBody [] inj injScrut scrutName (\_ -> Rfl) f)
   
   -- Not a lambda-match
   _ -> term
 
 -- Helper to inject the injection function, skipping existing field lambdas
-injectBody :: [Name] -> (Term -> Term) -> Term -> Term
-injectBody fields inj body = go 0 fields body where
-  go :: Int -> [Name] -> Term -> Term
-  go d []     body = inj body
-  go d (f:fs) body = case cut body of
-    Lam n ty b -> Lam n ty (\v -> go (d+1) fs (b v))
-    _          -> Lam f Nothing (\v -> go (d+1) fs (App body v))
+injectBody :: [Name] -> (Term -> Term) -> Bool -> Name -> ([Term] -> Term) -> Term -> Term
+injectBody fields inj injScrut scrutName mkScrut body = go 0 fields [] body where
+  go :: Int -> [Name] -> [Term] -> Term -> Term
+  go d []     vars body = 
+    let injectedBody = inj body
+        scrutVal = mkScrut (reverse vars)
+    in if injScrut 
+       then Let scrutName Nothing scrutVal (\_ -> injectedBody)
+       else injectedBody
+  go d (f:fs) vars body = case cut body of
+    Lam n ty b -> Lam n ty (\v -> go (d+1) fs (v:vars) (b v))
+    _          -> Lam f Nothing (\v -> go (d+1) fs (v:vars) (App body v))
 
 -- Check if a term is a lambda-match (one of the match constructors)
 isLambdaMatch :: Term -> Bool
@@ -213,6 +222,7 @@ isLambdaMatch term = case term of
   SupM _ _   -> True
   EqlM _     -> True
   _          -> False
+
 
 -- AI logs (TODO: remove later)
 
@@ -499,3 +509,37 @@ isLambdaMatch term = case term of
 -- now, your goal is to rewrite the file above to include this change in how
 -- in-between lambdas (and, now, Lets, Chks, etc.) are handled.
 -- write the complete updated file below:
+-- (DONE!)
+
+-- NEW PROBLEM:
+-- the *current* file works very well, but, there is another issue. consider:
+-- def f : ... = λa:Nat. (λ{0n:a;1n+:λp:Nat. 1n+p})(a)
+-- in this case, the EtaForm optimization will NOT be triggered, because 'a'
+-- is used inside the body - as we specified. sadly, this will result in a
+-- CantInfer error, which is confusing to some users. I just realized there
+-- is a way to save this program: we *can* perform the EtaForm optimization
+-- here, as long as we *re-create* 'a' on each branch. that is, the program
+-- above could safely be converted to:
+-- def f : ... = λ{0n: a=0n a;1n+:λp:Nat. a=1n+p 1n+p}
+-- where `a=0n` and `a=1n+p` are Let-binders that *reconstruct* the 'a' var
+-- specialized on each branch. so, here's the idea: when the eta-contracted
+-- var is in the body of the eta-contracted function, rather than disabling
+-- the optimization entirely, we will just flag it for scrutinee-reconstruct
+-- mode, which will inject a `Let` on the body of each branch, rebuilding
+-- the scrutinee with its specialized value there.
+-- now, your goal is to rewrite the file above to include this new feature.
+-- write the complete updated file below:
+-- remember that this Let must be placed *after* the field (λp in this case).
+-- this is very important; getting this wrong might result in:
+-- done: λ{0n:a = 0n a;1n+:λ_p. (a=1n+_p λp:Nat. 1n+p)(_p)}
+-- which is, obviously, not the goal here.
+-- call that flag 'injScrut'
+
+-- that didn't work. it produced:
+-- λ{0n:a=0n a;1n+:λp:Nat. a=1n+_p 1n+p}
+-- it seems like there is some confusion on how field names are handled;
+-- the a=1n+_p part is out of place.
+-- take a moment to review this aspect of the implementation and make
+-- sure it is correct.
+-- spend a long time thinking about this.
+-- try again:
