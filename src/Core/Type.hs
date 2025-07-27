@@ -209,7 +209,15 @@ instance Show Term where
   show (BitM f t)     = "λ{False:" ++ show f ++ ";True:" ++ show t ++ "}"
   show (Nat)          = "Nat"
   show (Zer)          = "0n"
-  show (Suc n)        = "1n+" ++ show n
+  show term@(Suc _) =
+    let (count, rest) = countSucs term in
+    case cut rest of
+      Zer -> show count ++ "n"
+      _   -> show count ++ "n+" ++ show rest
+    where
+      countSucs :: Term -> (Int, Term)
+      countSucs (cut -> Suc t) = let (c, r) = countSucs t in (c + 1, r)
+      countSucs t              = (0, t)
   show (NatM z s)     = "λ{0n:" ++ show z ++ ";1n+:" ++ show s ++ "}"
   show (Lst t)        = show t ++ "[]"
   show (Nil)          = "[]"
