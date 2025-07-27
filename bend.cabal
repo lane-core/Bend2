@@ -94,3 +94,16 @@ executable bend
 --                       HVM
 --     hs-source-dirs:   app
 --     default-language: GHC2024
+
+test-suite bend-test
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Main.hs
+    other-modules:    Test
+    build-depends:    base ^>=4.21.0.0,
+                      bend,
+                      filepath,
+                      directory,
+                      process
+    hs-source-dirs:   test
+    default-language: GHC2024
