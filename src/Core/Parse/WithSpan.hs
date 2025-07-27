@@ -13,6 +13,7 @@ import Control.Monad.State.Strict (MonadState, get)
 import Data.Char (isSpace)
 import Data.Void
 import Text.Megaparsec
+import qualified Data.Vector as V
 
 import Core.Type (Span(..))
 
@@ -37,6 +38,8 @@ withSpan getSource p = do
 
   let src = getSource st
       pth = sourceName begPos
+      -- Convert to Vector for O(1) indexing
+      srcVec = V.fromList src
 
       -- | Skip backwards over whitespace and line comments.  We treat any line
       -- starting with a hash ("# …") as a comment.  The returned offset is the
@@ -50,13 +53,14 @@ withSpan getSource p = do
       -- The algorithm walks backwards from the original end offset until it
       -- finds the last non-trivia character.  For line comments we must drop
       -- the entire line, not just the hash symbol itself.
+      -- Optimized trimEnd using Vector for O(1) access
       trimEnd :: Int -> Int -> Int
       trimEnd b e = step (e - 1)
         where
           -- Walk backwards while we are in whitespace or a comment line.
           step i
             | i < b              = b                    -- fell past start
-            | isSpace (src !! i) = step (i - 1)         -- skip whitespace
+            | isSpace (srcVec V.! i) = step (i - 1)     -- skip whitespace  
             | isInCommentLine i  = step (startOfLine i - 1) -- skip comment line
             | otherwise          = i + 1                -- exclusive end
 
@@ -74,18 +78,18 @@ withSpan getSource p = do
               -- empty or contains only spaces it returns @Nothing@.
               firstNonSpace :: Int -> Maybe Char
               firstNonSpace j
-                | j >= length src        = Nothing
-                | src !! j == '\n'       = Nothing
-                | isSpace (src !! j)     = firstNonSpace (j + 1)
-                | otherwise              = Just (src !! j)
+                | j >= V.length srcVec   = Nothing
+                | srcVec V.! j == '\n'   = Nothing
+                | isSpace (srcVec V.! j) = firstNonSpace (j + 1)
+                | otherwise              = Just (srcVec V.! j)
 
           -- Find the index of the first character of the current line that
           -- contains index @i@.
           startOfLine :: Int -> Int
           startOfLine j
-            | j <= 0           = 0
-            | src !! (j - 1) == '\n' = j
-            | otherwise        = startOfLine (j - 1)
+            | j <= 0                     = 0
+            | srcVec V.! (j - 1) == '\n' = j
+            | otherwise                  = startOfLine (j - 1)
 
       trimmedEndOff = trimEnd begOff endOffRaw
 
@@ -104,4 +108,4 @@ withSpan getSource p = do
       (begLine, begCol) = (unPos (sourceLine begPos), unPos (sourceColumn begPos))
       (endLine, endCol) = indexToPos src trimmedEndOff
 
-  return (Span (begLine, begCol) (endLine, endCol) src pth, x)
+  return (Span (begLine, begCol) (endLine, endCol) pth, x)
