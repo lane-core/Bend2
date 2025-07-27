@@ -55,3 +55,32 @@ It is structured as follows:
 - docs/syntax.md: longer syntax guide for humans (AIs prefer prompt.bend)
 
 - docs/inductive-datatypes.md: how are inductive types encoded? (A: via "Fording")
+
+## Testing
+
+The Bend2 test framework is located in the `test/` directory:
+
+- test/Main.hs: test runner that finds and executes all test files
+- test/Test.hs: testing framework module with assertions and utilities
+- test/tests/: directory containing test files
+- test/README.md: comprehensive testing documentation
+
+To run tests:
+- All tests: `cabal test`
+- Single test: `runhaskell -i:test test/tests/BasicTest.hs`
+
+Tests are written using the `testFile` function which runs Bend code and checks output:
+```haskell
+{-# LANGUAGE MultilineStrings #-}
+import Test
+
+main = testFile """
+def main : Nat = 1n + 3n
+""" "Description" $ \out err -> do
+  assert (out `has` "4n")
+```
+
+The framework provides:
+- `assert`: basic assertions
+- `has`: checks if output contains text (ignores ANSI colors and whitespace)
+- Colored output showing test results
