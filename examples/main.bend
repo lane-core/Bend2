@@ -257,7 +257,7 @@ def assoc(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
     case 0n:
       {==}
     case 1n + ap:
-      1n + assoc(ap, b, c)
+      1n + ()
 
 # Left-distributivity of multiplication over addition
 def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:

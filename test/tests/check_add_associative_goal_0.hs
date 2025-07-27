@@ -2,8 +2,8 @@
 
 import Test
 
-add_associative_bend :: String
-add_associative_bend = """
+add_associative_goal_0_bend :: String
+add_associative_goal_0_bend = """
 def add(a: Nat, b: Nat) -> Nat:
   match a:
     case 0n:
@@ -20,4 +20,4 @@ def add_associative(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, ad
 """
 
 main :: IO ()
-main = testFileChecks add_associative_bend
+main = testFileGoal add_associative_goal_0_bend "Nat{add(b,c)==add(b,c)}" [("b", "Nat"), ("c", "Nat")]

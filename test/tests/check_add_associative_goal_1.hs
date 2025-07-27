@@ -2,8 +2,8 @@
 
 import Test
 
-add_associative_bend :: String
-add_associative_bend = """
+add_associative_goal_1_bend :: String
+add_associative_goal_1_bend = """
 def add(a: Nat, b: Nat) -> Nat:
   match a:
     case 0n:
@@ -14,10 +14,10 @@ def add(a: Nat, b: Nat) -> Nat:
 def add_associative(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
   match a:
     case 0n:
-      ()
+      {==}
     case 1n + ap:
-      1n + add_associative(ap, b, c)
+      ()
 """
 
 main :: IO ()
-main = testFileChecks add_associative_bend
+main = testFileGoal add_associative_goal_1_bend "Nat{1n+add(add(ap,b),c)==1n+add(ap,add(b,c))}" [("ap", "Nat"), ("b", "Nat"), ("c", "Nat")]

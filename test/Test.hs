@@ -70,6 +70,20 @@ testFileChecks :: String -> IO ()
 testFileChecks code = testFile code "must check" $ \out err -> do
   assert (err == "")
 
+-- Test that a file produces a specific goal in the error output
+-- Also checks that specific variables have specific types in the context
+testFileGoal :: String -> String -> [(String, String)] -> IO ()
+testFileGoal code expectedGoal contextChecks = 
+  testFile code ("must show goal: " ++ expectedGoal) $ \out err -> do
+    -- Check that we have a mismatch error (not empty err)
+    assert (err /= "")
+    -- Check that it's a mismatch error
+    assert (err `has` "Mismatch:")
+    -- Check that the goal matches
+    assert (err `has` ("Goal: " ++ expectedGoal))
+    -- Check context variables
+    mapM_ (\(varName, varType) -> assert (err `has` ("- " ++ varName ++ " : " ++ varType))) contextChecks
+
 assert :: Bool -> IO ()
 assert True = return ()
 assert False = exitFailure
