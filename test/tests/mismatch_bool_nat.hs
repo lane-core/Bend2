@@ -10,6 +10,6 @@ def main : Nat = True
 main :: IO ()
 main = testFile bool_isnt_nat_bend
   "using bool where a nat is expected causes a type mismatch" $ \out err -> do
-    assert (out `has` "Mismatch:")
-    assert (out `has` "Goal: Nat")
-    assert (out `has` "Type: Bool")
+    assert (err `has` "Mismatch:")
+    assert (err `has` "Goal: Nat")
+    assert (err `has` "Type: Bool")
