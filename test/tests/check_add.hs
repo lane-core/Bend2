@@ -11,10 +11,10 @@ def add(a: Nat, b: Nat) -> Nat:
     case 1n + p:
       1n + add(p, b)
 
-def T0 : Nat{4n == add(1n, 3n)} = {==}
-def T1 : Nat{0n == add(0n, 0n)} = {==}
-def T2 : Nat{5n == add(2n, 3n)} = {==}
-def T3 : Nat{10n == add(add(2n, 3n), 5n)} = {==}
+assert 4n == add(1n, 3n) : Nat
+assert 0n == add(0n, 0n) : Nat
+assert 5n == add(2n, 3n) : Nat
+assert 10n == add(add(2n, 3n), 5n) : Nat
 """
 
 main :: IO ()

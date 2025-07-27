@@ -11,10 +11,10 @@ def eql(a: Nat, b: Nat) -> Bool:
     case 0n   1n+b: False
     case 1n+a 1n+b: eql(a, b)
 
-def T0 : Bool{True == eql(0n, 0n)} = {==}
-def T1 : Bool{False == eql(0n, 1n)} = {==}
-def T2 : Bool{False == eql(1n, 0n)} = {==}
-def T3 : Bool{True == eql(5n, 5n)} = {==}
+assert True == eql(0n, 0n) : Bool
+assert False == eql(0n, 1n) : Bool
+assert False == eql(1n, 0n) : Bool
+assert True == eql(5n, 5n) : Bool
 """
 
 main :: IO ()

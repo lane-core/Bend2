@@ -13,11 +13,11 @@ def is_even_a(n: Nat) -> Bool:
     case 2n + p:
       is_even_a(p)
 
-def T0 : Bool{True == is_even_a(0n)} = {==}
-def T1 : Bool{False == is_even_a(1n)} = {==}
-def T2 : Bool{True == is_even_a(4n)} = {==}
-def T3 : Bool{False == is_even_a(5n)} = {==}
-def T4 : Bool{True == is_even_a(6n)} = {==}
+assert True == is_even_a(0n) : Bool
+assert False == is_even_a(1n) : Bool
+assert True == is_even_a(4n) : Bool
+assert False == is_even_a(5n) : Bool
+assert True == is_even_a(6n) : Bool
 """
 
 main :: IO ()

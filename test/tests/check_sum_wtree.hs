@@ -66,11 +66,11 @@ def sum_wtree_fold(w: WTree) -> Nat:
       case @WNode:
         add(f(&lft), f(&rgt)))
 
-def T0 : Nat{5n == sum_wtree(WLeaf(5n))} = {==}
-def T1 : Nat{7n == sum_wtree(WNode(WLeaf(3n), WLeaf(4n)))} = {==}
-def T2 : Nat{10n == sum_wtree(WNode(WNode(WLeaf(2n), WLeaf(3n)), WLeaf(5n)))} = {==}
-def T3 : Nat{5n == sum_wtree_fold(WLeaf(5n))} = {==}
-def T4 : Nat{7n == sum_wtree_fold(WNode(WLeaf(3n), WLeaf(4n)))} = {==}
+assert 5n == sum_wtree(WLeaf(5n)) : Nat
+assert 7n == sum_wtree(WNode(WLeaf(3n), WLeaf(4n))) : Nat
+assert 10n == sum_wtree(WNode(WNode(WLeaf(2n), WLeaf(3n)), WLeaf(5n))) : Nat
+assert 5n == sum_wtree_fold(WLeaf(5n)) : Nat
+assert 7n == sum_wtree_fold(WNode(WLeaf(3n), WLeaf(4n))) : Nat
 """
 
 main :: IO ()

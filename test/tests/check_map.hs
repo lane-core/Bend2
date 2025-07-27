@@ -23,10 +23,10 @@ def neg(x: Bool) -> Bool:
   else:
     True
 
-def T0 : Nat[]{[] == map<Nat,Nat>(inc, [])} = {==}
-def T1 : Nat[]{[2n, 3n, 4n] == map<Nat,Nat>(inc, [1n, 2n, 3n])} = {==}
-def T2 : Nat[]{[2n, 3n, 4n] == map<Nat,Nat>(plus2, [0n, 1n, 2n])} = {==}
-def T3 : Bool[]{[False, True, False] == map<Bool,Bool>(neg, [True, False, True])} = {==}
+assert [] == map<Nat,Nat>(inc, []) : Nat[]
+assert [2n, 3n, 4n] == map<Nat,Nat>(inc, [1n, 2n, 3n]) : Nat[]
+assert [2n, 3n, 4n] == map<Nat,Nat>(plus2, [0n, 1n, 2n]) : Nat[]
+assert [False, True, False] == map<Bool,Bool>(neg, [True, False, True]) : Bool[]
 """
 
 main :: IO ()

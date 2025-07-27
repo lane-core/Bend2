@@ -61,10 +61,11 @@ import qualified Core.Parse.WithSpan as WithSpan
 
 -- Parser state
 data ParserState = ParserState
-  { tight   :: Bool                  -- ^ tracks whether previous token ended with no trailing space
-  , source  :: String                -- ^ original file source, for error reporting
-  , blocked :: [String]              -- ^ list of blocked operators
-  , imports :: M.Map String String   -- ^ import mappings: "Lib/" => "Path/To/Lib/"
+  { tight         :: Bool                  -- ^ tracks whether previous token ended with no trailing space
+  , source        :: String                -- ^ original file source, for error reporting
+  , blocked       :: [String]              -- ^ list of blocked operators
+  , imports       :: M.Map String String   -- ^ import mappings: "Lib/" => "Path/To/Lib/"
+  , assertCounter :: Int                   -- ^ counter for generating unique assert names (E0, E1, E2...)
   }
 
 type Parser = ParsecT Void String (Control.Monad.State.Strict.State ParserState)
@@ -112,7 +113,7 @@ isNameChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c ==
 
 reserved :: [Name]
 -- The 'lambda' keyword is removed as part of the refactoring to expression-based matches.
-reserved = ["match","case","else","elif","if","end","all","any","finally","import","as","and","or","def","log","gen","enum"]
+reserved = ["match","case","else","elif","if","end","all","any","finally","import","as","and","or","def","log","gen","enum","assert"]
 
 -- | Parse a raw name without import resolution
 parseRawName :: Parser Name

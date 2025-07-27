@@ -11,10 +11,10 @@ def pred(n: Nat) -> Nat:
     case 1n + p:
       return p
 
-def T0 : Nat{0n == pred(0n)} = {==}
-def T1 : Nat{0n == pred(1n)} = {==}
-def T2 : Nat{2n == pred(3n)} = {==}
-def T3 : Nat{9n == pred(10n)} = {==}
+assert 0n == pred(0n) : Nat
+assert 0n == pred(1n) : Nat
+assert 2n == pred(3n) : Nat
+assert 9n == pred(10n) : Nat
 """
 
 main :: IO ()

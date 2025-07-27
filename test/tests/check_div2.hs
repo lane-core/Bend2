@@ -13,11 +13,11 @@ def div2(n: Nat) -> Nat:
     case 2n + p:
       1n + div2(p)
 
-def T0 : Nat{0n == div2(0n)} = {==}
-def T1 : Nat{0n == div2(1n)} = {==}
-def T2 : Nat{1n == div2(3n)} = {==}
-def T3 : Nat{3n == div2(6n)} = {==}
-def T4 : Nat{4n == div2(8n)} = {==}
+assert 0n == div2(0n) : Nat
+assert 0n == div2(1n) : Nat
+assert 1n == div2(3n) : Nat
+assert 3n == div2(6n) : Nat
+assert 4n == div2(8n) : Nat
 """
 
 main :: IO ()

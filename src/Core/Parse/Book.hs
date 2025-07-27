@@ -25,10 +25,10 @@ import Core.Type
 
 -- | Book parsing
 
--- | Syntax: def name : Type = term | type Name<T>(i) -> Type: cases | name : Type = term | try name : Type
+-- | Syntax: def name : Type = term | type Name<T>(i) -> Type: cases | name : Type = term | try name : Type | assert A == B : T
 parseDefinition :: Parser (Name, Defn)
 parseDefinition = do
-  (name, defn) <- choice [ parseType , parseDef , parseTry ]
+  (name, defn) <- choice [ parseType , parseDef , parseTry , parseAssert ]
   return $ (name, defn)
 
 -- | Syntax: def name : Type = term | def name(x: T1, y: T2) -> RetType: body
@@ -193,12 +193,34 @@ parseTryFunction nam = label "try definition" $ do
   ctx      <- option [] $ braces $ sepEndBy parseTerm (symbol ",")
   return (Met nam typ ctx, typ)
 
+-- | Syntax: assert A == B : T
+-- Desugars to: def EN : T{A == B} = {==} where N is an incrementing counter
+parseAssert :: Parser (Name, Defn)
+parseAssert = do
+  _ <- keyword "assert"
+  a <- parseTermBefore "=="
+  _ <- symbol "=="
+  b <- parseTermBefore ":"
+  _ <- symbol ":"
+  t <- parseTerm
+  -- Get and increment the assert counter
+  st <- get
+  let counter = assertCounter st
+  put st { assertCounter = counter + 1 }
+  -- Generate the assert name EN
+  let assertName = "E" ++ show counter
+  -- Create the equality type: T{A == B}
+  let eqType = Eql t a b
+  -- Create the reflexivity proof: {==}
+  let eqProof = Rfl
+  return (assertName, (False, eqProof, eqType))
+
 -- | Main entry points
 
 -- | Parse a book from a string, returning an error message on failure
 doParseBook :: FilePath -> String -> Either String Book
 doParseBook file input =
-  case evalState (runParserT p file input) (ParserState True input [] M.empty) of
+  case evalState (runParserT p file input) (ParserState True input [] M.empty 0) of
     Left err  -> Left (formatError input err)
     Right res -> Right res
       -- in Right (trace (show book) book)

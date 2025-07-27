@@ -11,10 +11,10 @@ def mul2(n: Nat) -> Nat:
     case 1n + p:
       2n + mul2(p)
 
-def T0 : Nat{0n == mul2(0n)} = {==}
-def T1 : Nat{6n == mul2(3n)} = {==}
-def T2 : Nat{8n == mul2(4n)} = {==}
-def T3 : Nat{10n == mul2(5n)} = {==}
+assert 0n == mul2(0n) : Nat
+assert 6n == mul2(3n) : Nat
+assert 8n == mul2(4n) : Nat
+assert 10n == mul2(5n) : Nat
 """
 
 main :: IO ()

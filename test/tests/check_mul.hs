@@ -18,10 +18,10 @@ def mul(a: Nat, b: Nat) -> Nat:
     case 1n + ap:
       add(b, mul(ap, b))
 
-def T0 : Nat{0n == mul(0n, 5n)} = {==}
-def T1 : Nat{0n == mul(3n, 0n)} = {==}
-def T2 : Nat{6n == mul(2n, 3n)} = {==}
-def T3 : Nat{12n == mul(3n, 4n)} = {==}
+assert 0n == mul(0n, 5n) : Nat
+assert 0n == mul(3n, 0n) : Nat
+assert 6n == mul(2n, 3n) : Nat
+assert 12n == mul(3n, 4n) : Nat
 """
 
 main :: IO ()
