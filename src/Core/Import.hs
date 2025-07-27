@@ -8,6 +8,7 @@ import qualified Data.Set as S
 import System.Directory (doesFileExist, getCurrentDirectory)
 import System.FilePath (takeDirectory, (</>))
 import System.Exit (exitFailure)
+import System.IO (hPutStrLn, stderr)
 
 import Core.Type
 import Core.Deps
@@ -20,7 +21,7 @@ autoImport _ book = do
   result <- autoImportRefs book deps S.empty
   case result of
     Left err -> do
-      putStrLn $ "Error: " ++ err
+      hPutStrLn stderr $ "Error: " ++ err
       exitFailure
     Right book' -> return book'
 

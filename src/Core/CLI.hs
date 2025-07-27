@@ -18,6 +18,7 @@ import System.Exit (exitFailure)
 import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import Control.Exception (catch, IOException)
+import System.IO (hPutStrLn, stderr)
 
 import Core.Adjust (adjustBook, adjustBookWithPats)
 import Core.Bind
@@ -40,7 +41,7 @@ parseFile file = do
   registerSource file content
   case doParseBook file content of
     Left err -> do
-      putStrLn $ err
+      hPutStrLn stderr $ err
       exitFailure
     Right book -> do
       -- Auto-import unbound references
@@ -68,8 +69,8 @@ checkDefinitions book@(Book defs names) = do
           putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
           checkAll bBook rest
         Fail e -> do
-          putStrLn $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
-          putStrLn $ show e
+          hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
+          hPutStrLn stderr $ show e
           _ <- checkAll bBook rest
           return False
 
@@ -83,7 +84,7 @@ runMain book = do
       let mainCall = Ref "main" 1
       case infer 0 noSpan book (Ctx []) mainCall of
         Fail e -> do
-          putStrLn $ show e
+          hPutStrLn stderr $ show e
           exitFailure
         Done typ -> do
           -- let results = flatten $ collapse 0 book $ normal 0 book mainCall

@@ -65,6 +65,11 @@ test cmd files desc callback = do
 testFile :: String -> String -> (String -> String -> IO ()) -> IO ()
 testFile code desc callback = test "bend main.bend" [("main.bend", code)] desc callback
 
+-- Alias for tests that just check if a file type-checks (err == "")
+testFileChecks :: String -> IO ()
+testFileChecks code = testFile code "must check" $ \out err -> do
+  assert (err == "")
+
 assert :: Bool -> IO ()
 assert True = return ()
 assert False = exitFailure

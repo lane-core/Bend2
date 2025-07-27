@@ -69,16 +69,53 @@ To run tests:
 - All tests: `cabal test`
 - Single test: `runhaskell -i:test test/tests/BasicTest.hs`
 
-Tests are written using the `testFile` function which runs Bend code and checks output:
+### Test Style Convention
+
+Tests follow a specific format convention:
+
+1. **Test File Naming**: Each test file in `test/tests/` is a unit test
+   - Name pattern for type-checking tests: `check_<function_name>.hs` (tests if function checks and computes correctly)
+   - Name pattern for error tests: descriptive names like `mismatch_bool_nat.hs`
+   - Examples: `check_id.hs`, `check_add.hs`, `mismatch_bool_nat.hs`
+
+2. **Canonical Test File Structure** (for type-checking tests):
 ```haskell
 {-# LANGUAGE MultilineStrings #-}
+
 import Test
 
-main = testFile """
-def main : Nat = 1n + 3n
-""" "Description" $ \out err -> do
-  assert (out `has` "4n")
+-- Each top-level Haskell definition represents a virtual .bend file
+-- Convention: use <name>_bend for definitions (e.g., id_bend represents "id.bend")
+id_bend :: String
+id_bend = """
+def id<A>(x: A) -> A:
+  x
+
+-- Include inline tests using Bend equalities
+-- Convention: T0, T1, T2... for test names
+def T0 : Nat{3n == id<Nat>(3n)} = {==}
+def T1 : Bool{True == id<Bool>(True)} = {==}
+def T2 : Nat{0n == id<Nat>(id<Nat>(0n))} = {==}
+def T3 : String{"hello" == id<String>("hello")} = {==}
+"""
+
+main :: IO ()
+main = testFileChecks id_bend
 ```
+
+3. **Test Functions Available**:
+   - `testFileChecks`: Alias for tests that just need to type-check (checks that `err == ""`)
+   - `testFile`: Full test function when you need to check stdout/stderr explicitly
+   - `test`: Most general function for testing multiple files
+
+Key conventions:
+- Use top-level string definitions for Bend code (not inline strings)
+- Name convention: `<name>_bend` represents a virtual `.bend` file within the test
+- Include 3-4 inline tests (T0, T1, T2...) within the Bend code to test the function
+- Inline tests use Bend equality types: `def T0 : Nat{3n == id<Nat>(3n)} = {==}`
+- A file is considered successfully checked when `err == ""`
+- For simple type-checking tests, use `testFileChecks` (canonical style)
+- For tests that need to verify specific output or errors, use `testFile`
 
 The framework provides:
 - `assert`: basic assertions

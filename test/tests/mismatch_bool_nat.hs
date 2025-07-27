@@ -2,14 +2,14 @@
 
 import Test
 
-main_bend :: String
-main_bend = """
+bool_isnt_nat_bend :: String
+bool_isnt_nat_bend = """
 def main : Nat = True
 """
 
 main :: IO ()
-main = testFile main_bend
-  "Should report a type mismatch error when assigning Bool to Nat." $ \out err -> do
+main = testFile bool_isnt_nat_bend
+  "using bool where a nat is expected causes a type mismatch" $ \out err -> do
     assert (out `has` "Mismatch:")
     assert (out `has` "Goal: Nat")
     assert (out `has` "Type: Bool")
