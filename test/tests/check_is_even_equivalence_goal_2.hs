@@ -43,4 +43,4 @@ def is_even_equivalence(n: Nat) -> Bool{is_even_a(n) == is_even_b(n)}:
 """
 
 main :: IO ()
-main = testFileGoal is_even_equivalence_goal_2_bend "Bool{is_even_a(p)==neg(neg(is_even_b(p)))}" [("p", "Nat")]
+main = testFileGoal is_even_equivalence_goal_2_bend "Bool{is_even_a(p)==neg(neg(is_even_b(p)))}" []

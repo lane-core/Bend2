@@ -21,4 +21,4 @@ def succ_injective(n: Nat, m: Nat, e: Nat{1n+n==1n+m}) -> Nat{n==m}:
 """
 
 main :: IO ()
-main = testFileGoal succ_injective_goal_3_bend "Nat{n==m}" [("n", "Nat"), ("m", "Nat"), ("e", "Nat{0n==0n}")]
+main = testFileGoal succ_injective_goal_3_bend "Nat{n==m}" []

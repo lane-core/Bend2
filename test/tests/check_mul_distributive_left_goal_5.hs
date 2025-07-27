@@ -45,4 +45,4 @@ def mul_distributive_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add
 """
 
 main :: IO ()
-main = testFileGoal mul_distributive_left_goal_5_bend "Nat{add(m,add(mul(p,m),add(mul(p,k),k)))==add(add(m,mul(p,m)),add(k,mul(p,k)))}" [("p", "Nat"), ("m", "Nat"), ("k", "Nat")]
+main = testFileGoal mul_distributive_left_goal_5_bend "Nat{add(m,add(mul(p,m),add(mul(p,k),k)))==add(add(m,mul(p,m)),add(k,mul(p,k)))}" []

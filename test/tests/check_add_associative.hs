@@ -14,7 +14,7 @@ def add(a: Nat, b: Nat) -> Nat:
 def add_associative(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
   match a:
     case 0n:
-      ()
+      {==}
     case 1n + ap:
       1n + add_associative(ap, b, c)
 """

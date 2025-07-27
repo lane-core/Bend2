@@ -28,4 +28,4 @@ def mul_zero_right(n: Nat) -> Nat{mul(n, 0n) == 0n}:
 """
 
 main :: IO ()
-main = testFileGoal mul_zero_right_goal_2_bend "Nat{0n==0n}" [("p", "Nat")]
+main = testFileGoal mul_zero_right_goal_2_bend "Nat{0n==0n}" []

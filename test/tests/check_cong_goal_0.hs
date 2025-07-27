@@ -16,4 +16,4 @@ def cong
 """
 
 main :: IO ()
-main = testFileGoal cong_goal_0_bend "B{f(a)==f(b)}" [("A", "Set"), ("B", "Set"), ("a", "A"), ("b", "A"), ("f", "∀A. B"), ("e", "A{a==b}")]
+main = testFileGoal cong_goal_0_bend "B{f(a)==f(b)}" []

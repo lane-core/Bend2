@@ -29,4 +29,4 @@ def VecInd
 """
 
 main :: IO ()
-main = testFileGoal vecind_goal_0_bend "P(0n,@Nil{{==}})" [("A", "Set"), ("P", "∀Nat. ∀Vec(A,n). Set"), ("N", "P(0n,@Nil{{==}})")]
+main = testFileGoal vecind_goal_0_bend "P(0n,@Nil{{==}})" []

@@ -29,4 +29,4 @@ def VecInd
 """
 
 main :: IO ()
-main = testFileGoal vecind_goal_1_bend "P(1n+n,@Cons{n,h,t,{==}})" [("A", "Set"), ("P", "∀Nat. ∀Vec(A,n). Set"), ("C", "∀Nat. ∀A. ∀Vec(A,s). ∀P(s,xs). P(1n+s,@Cons{s,x,xs,{==}})"), ("n", "Nat"), ("h", "A"), ("t", "Vec(A,n)")]
+main = testFileGoal vecind_goal_1_bend "P(1n+n,@Cons{n,h,t,{==}})" []

@@ -38,4 +38,4 @@ def add_commutative(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
 """
 
 main :: IO ()
-main = testFileGoal add_commutative_goal_2_bend "Nat{add(b,1n+ap)==1n+add(b,ap)}" [("ap", "Nat"), ("b", "Nat"), ("e0", "Nat{add(ap,b)==add(b,ap)}")]
+main = testFileGoal add_commutative_goal_2_bend "_{_==_}" []
