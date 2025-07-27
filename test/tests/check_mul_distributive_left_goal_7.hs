@@ -25,12 +25,30 @@ def add_associative(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, ad
     case 1n + ap:
       1n + add_associative(ap, b, c)
 
+def add_zero_right(a: Nat) -> Nat{a == add(a,0n)}:
+  match a:
+    case 0n:
+      {==}
+    case 1n + ap:
+      1n + add_zero_right(ap)
+
+def add_succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
+  match a:
+    case 0n:
+      1n + {==}
+    case 1n + ap:
+      1n + add_succ_right(ap,b)
+
 def add_commutative(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
   match a:
     case 0n:
-      ()
+      add_zero_right(b)
     case 1n+ap:
-      ()
+      e0 = add_commutative(ap, b)
+      e1 = add_succ_right(b, ap)
+      rewrite e0
+      rewrite e1
+      1n + {==}
 
 def mul_distributive_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
   match n:
@@ -47,4 +65,4 @@ def mul_distributive_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add
 """
 
 main :: IO ()
-main = testFileGoal mul_distributive_left_goal_7_bend "Nat{add(add(m,mul(p,m)),add(k,mul(p,k)))==add(add(m,mul(p,m)),add(k,mul(p,k)))}" []
+main = testFileGoal mul_distributive_left_goal_7_bend "Nat{add(m,add(mul(p,m),add(k,mul(p,k))))==add(m,add(mul(p,m),add(k,mul(p,k))))}" []

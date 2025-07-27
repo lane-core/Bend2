@@ -42,13 +42,18 @@ findTestFiles dir = do
 runTestFile :: FilePath -> IO Bool
 runTestFile file = do
   let testName = takeBaseName file
-  putStrLn $ "\ESC[1m> " ++ testName ++ "\ESC[0m"
   (exitCode, out, err) <- readProcessWithExitCode "runhaskell" ["-i:test", file] ""
   
-  -- Always show the output
-  when (not $ null out) $ putStr out
-  when (not $ null err) $ putStr err
-  
   case exitCode of
-    ExitSuccess -> return True
-    ExitFailure n -> return False
+    ExitSuccess -> do
+      putStrLn $ "\ESC[1m\ESC[32m✓ " ++ testName ++ "\ESC[0m"
+      -- Show the output indented
+      when (not $ null out) $ putStr $ unlines $ map ("  " ++) $ lines out
+      when (not $ null err) $ putStr $ unlines $ map ("  " ++) $ lines err
+      return True
+    ExitFailure n -> do
+      putStrLn $ "\ESC[1m\ESC[31m✗ " ++ testName ++ "\ESC[0m"
+      -- Show the output indented
+      when (not $ null out) $ putStr $ unlines $ map ("  " ++) $ lines out
+      when (not $ null err) $ putStr $ unlines $ map ("  " ++) $ lines err
+      return False

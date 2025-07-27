@@ -13,12 +13,8 @@ def succ_injective(n: Nat, m: Nat, e: Nat{1n+n==1n+m}) -> Nat{n==m}:
     case 0n 1n+m e:
       absurd e
     case 1n+n 1n+m e:
-      match e:
-        case 0n:
-          ()
-        case 1n+e:
-          e
+      ()
 """
 
 main :: IO ()
-main = testFileGoal succ_injective_goal_3_bend "Nat{n==m}" []
+main = testFileGoal succ_injective_goal_3_bend "Nat{1n+n==1n+m}" []
