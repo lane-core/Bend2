@@ -2,8 +2,8 @@
 
 import Test
 
-add_commutative_goal_0_bend :: String
-add_commutative_goal_0_bend = """
+add_commutative_goal_4_bend :: String
+add_commutative_goal_4_bend = """
 def add(a: Nat, b: Nat) -> Nat:
   match a:
     case 0n:
@@ -28,14 +28,14 @@ def add_succ_right(a: Nat, b: Nat) -> Nat{add(a,1n+b) == (1n+add(a,b))}:
 def add_commutative(a: Nat, b: Nat) -> Nat{add(a,b) == add(b,a)}:
   match a:
     case 0n:
-      ()
+      add_zero_right(b)
     case 1n+ap:
       e0 = add_commutative(ap, b)
       e1 = add_succ_right(b, ap)
       rewrite e0
       rewrite e1
-      1n + {==}
+      1n + ()
 """
 
 main :: IO ()
-main = testFileGoal add_commutative_goal_0_bend "Nat{b==add(b,0n)}" [("b", "Nat")]
+main = testFileGoal add_commutative_goal_4_bend "Nat{add(b,ap)==add(b,ap)}" [("ap", "Nat"), ("b", "Nat"), ("e0", "Nat{add(ap,b)==add(b,ap)}"), ("e1", "Nat{add(b,1n+ap)==1n+add(b,ap)}")]

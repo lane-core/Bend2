@@ -2,8 +2,8 @@
 
 import Test
 
-mul_distributive_left_goal_0_bend :: String
-mul_distributive_left_goal_0_bend = """
+mul_zero_right_goal_2_bend :: String
+mul_zero_right_goal_2_bend = """
 def add(a: Nat, b: Nat) -> Nat:
   match a:
     case 0n:
@@ -18,13 +18,14 @@ def mul(a: Nat, b: Nat) -> Nat:
     case 1n + ap:
       add(b, mul(ap, b))
 
-def mul_distributive_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
+def mul_zero_right(n: Nat) -> Nat{mul(n, 0n) == 0n}:
   match n:
     case 0n:
-      ()
-    case 1n + p:
       finally
+    case 1n + p:
+      rewrite mul_zero_right(p)
+      ()
 """
 
 main :: IO ()
-main = testFileGoal mul_distributive_left_goal_0_bend "Nat{0n==0n}" []
+main = testFileGoal mul_zero_right_goal_2_bend "Nat{0n==0n}" [("p", "Nat")]
