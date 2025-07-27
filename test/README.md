@@ -9,9 +9,18 @@ Run all tests:
 cabal test
 ```
 
-Run a single test:
+Run a single test (several options):
 ```bash
+# Direct approach
 runhaskell -i:test test/tests/BasicTest.hs
+
+# Using cabal exec (runs in cabal environment)
+cabal exec -- runhaskell -i:test test/tests/BasicTest.hs
+
+# Using cabal repl (interactive)
+cabal repl test:bend-test
+> :load test/tests/BasicTest.hs
+> main
 ```
 
 ## Writing Tests
