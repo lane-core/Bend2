@@ -101,6 +101,8 @@ instance Show Term where
   show (Pri p)         = pri p where
     pri U64_TO_CHAR    = "U64_TO_CHAR"
     pri CHAR_TO_U64    = "CHAR_TO_U64"
+    pri HVM_INC        = "HVM_INC"
+    pri HVM_DEC        = "HVM_DEC"
   show (Num U64_T)     = "U64"
   show (Num I64_T)     = "I64"
   show (Num F64_T)     = "F64"

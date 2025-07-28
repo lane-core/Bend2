@@ -57,6 +57,8 @@ data NOp1
 data PriF
   = U64_TO_CHAR
   | CHAR_TO_U64
+  | HVM_INC
+  | HVM_DEC
   deriving (Show, Eq)
 
 -- Bend's Term Type
