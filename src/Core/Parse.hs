@@ -139,13 +139,22 @@ resolveImports n = do
 
 -- | Apply all import mappings to a name
 applyImportMappings :: M.Map String String -> Name -> Name
-applyImportMappings mappings n
-  = foldr tryApplyMapping n (M.toList mappings) where
-    tryApplyMapping :: (String, String) -> String -> String
-    tryApplyMapping (prefix, replacement) name =
+applyImportMappings mappings n =
+  case M.lookup (n ++ "/") mappings of
+    Just replacement -> dropSuffix "/" replacement  -- Exact alias match: "add" -> "Nat/add"
+    Nothing -> foldr tryApplyPrefix n (M.toList mappings)  -- Try prefix matches: "add/foo" -> "Nat/add/foo"
+  where
+    tryApplyPrefix :: (String, String) -> String -> String
+    tryApplyPrefix (prefix, replacement) name =
       if take (length prefix) name == prefix
       then replacement ++ drop (length prefix) name
       else name
+    
+    dropSuffix :: String -> String -> String
+    dropSuffix suffix str =
+      if length str >= length suffix && drop (length str - length suffix) str == suffix
+      then take (length str - length suffix) str
+      else str
 
 -- | Parse a name with import resolution
 name :: Parser Name

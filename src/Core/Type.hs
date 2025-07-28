@@ -169,6 +169,7 @@ data Error
   | TermMismatch Span Ctx Term Term
   | IncompleteMatch Span Ctx
   | UnknownTermination Term
+  | ImportError Span String
 
 data Result a
   = Done a
@@ -375,6 +376,9 @@ instance Show Error where
     show span
   show (UnknownTermination term) =
     "\x1b[1mUnknownTermination:\x1b[0m " ++ show term
+  show (ImportError span msg) = 
+    "\x1b[1mImportError:\x1b[0m " ++ msg ++
+    show span
 
 instance Show Ctx where
   show (Ctx ctx)

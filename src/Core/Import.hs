@@ -3,6 +3,7 @@
 module Core.Import (autoImport) where
 
 import Control.Monad (foldM)
+import Data.List (intercalate)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import System.Directory (doesFileExist, getCurrentDirectory)
@@ -83,8 +84,11 @@ autoImportRef visited (Right (book@(Book defs _), newRefs)) refName = do
                   let additionalRefs = getBookDeps importedBook'
                   return (Right (mergedBook, S.union newRefs additionalRefs))
         else do
-          -- putStrLn $ "WARNING: unbound variable: '" ++ refName ++ "'"
-          return $ Right (book, newRefs)
+          -- If refName contains '/', it's likely an import path that should exist
+          if '/' `elem` refName
+            then return $ Left $ "Import error: Could not find file for '" ++ refName ++ "'. Tried: " ++ 
+                         intercalate ", " [filePath, pyFilePath, altFilePath, altPyFilePath]
+            else return $ Right (book, newRefs)  -- Likely a regular unbound variable, not an import issue
           
 
 -- Merge two books, preferring definitions from the first book
