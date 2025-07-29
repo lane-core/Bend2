@@ -5,17 +5,50 @@ import System.Directory
 import System.FilePath
 import System.Process
 import System.Exit
+import System.Environment (getArgs)
 import Control.Monad (forM_, when, filterM)
 import Data.List (sort)
 
 main :: IO ()
 main = do
+  args <- getArgs
+  case args of
+    [] -> runAllTests
+    testNames -> runSpecificTests testNames
+
+runAllTests :: IO ()
+runAllTests = do
   testFiles <- findTestFiles "test/tests"
   
   if null testFiles
     then putStrLn "No test files found in test/tests/"
     else do
       results <- mapM runTestFile testFiles
+      
+      let passed = length $ filter id results
+      let failed = length results - passed
+      
+      putStrLn ""
+      putStrLn $ "\ESC[1mTest summary: " ++ show passed ++ " passed, " ++ show failed ++ " failed\ESC[0m"
+      
+      when (failed > 0) exitFailure
+
+runSpecificTests :: [String] -> IO ()
+runSpecificTests testNames = do
+  let testFiles = map (\name -> if takeExtension name == ".hs" 
+                                then "test/tests/" </> name
+                                else "test/tests/" </> name <.> "hs") testNames
+  
+  existingFiles <- filterM doesFileExist testFiles
+  let missingFiles = filter (`notElem` existingFiles) testFiles
+  
+  when (not $ null missingFiles) $ do
+    putStrLn $ "Warning: Test files not found: " ++ show missingFiles
+  
+  if null existingFiles
+    then putStrLn "No valid test files found"
+    else do
+      results <- mapM runTestFile existingFiles
       
       let passed = length $ filter id results
       let failed = length results - passed

@@ -8,9 +8,13 @@ import Control.Exception (try, throwIO, finally)
 import Control.Monad (when)
 import Data.List (isInfixOf)
 import Data.Char (isSpace)
+import System.Timeout (timeout)
 
 test :: String -> [(String, String)] -> String -> (String -> String -> IO ()) -> IO ()
-test cmd files desc callback = do
+test cmd files desc callback = testWithTimeout cmd files desc callback (30 * 1000000) -- 30 seconds default
+
+testWithTimeout :: String -> [(String, String)] -> String -> (String -> String -> IO ()) -> Int -> IO ()
+testWithTimeout cmd files desc callback timeoutMicros = do
   -- Print description if not empty
   when (not $ null desc) $ putStrLn $ "  \ESC[2m" ++ desc ++ "\ESC[0m"  -- dim/gray
   tmpDir <- getTemporaryDirectory
@@ -53,9 +57,10 @@ test cmd files desc callback = do
                       ("bend":args) -> "cabal run -v0 bend --project-dir=" ++ projectDir ++ " -- " ++ unwords args
                       _             -> cmd
       
-      (exitCode, out, err) <- readProcessWithExitCode "sh" ["-c", "cd " ++ testDir ++ " && " ++ fullCmd] ""
-      
-      return (out, err)
+      result <- timeout timeoutMicros $ readProcessWithExitCode "sh" ["-c", "cd " ++ testDir ++ " && " ++ fullCmd] ""
+      case result of
+        Just (exitCode, out, err) -> return (out, err)
+        Nothing -> return ("", "ERROR: Test timed out after " ++ show (timeoutMicros `div` 1000000) ++ " seconds")
     
     writeTestFile testDir (name, content) = do
       let path = testDir </> name
@@ -64,6 +69,9 @@ test cmd files desc callback = do
 
 testFile :: String -> String -> (String -> String -> IO ()) -> IO ()
 testFile code desc callback = test "bend main.bend" [("main.bend", code)] desc callback
+
+testFileWithTimeout :: String -> String -> (String -> String -> IO ()) -> Int -> IO ()
+testFileWithTimeout code desc callback timeoutSeconds = testWithTimeout "bend main.bend" [("main.bend", code)] desc callback (timeoutSeconds * 1000000)
 
 -- Alias for tests that just check if a file type-checks (err == "")
 testFileChecks :: String -> IO ()
