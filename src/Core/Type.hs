@@ -10,8 +10,6 @@ import Data.Word (Word32, Word64)
 import Data.Maybe (fromMaybe, fromJust)
 import qualified Data.Map as M
 import qualified Data.Set as S
-import System.IO.Unsafe (unsafePerformIO)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 
 data Bits = O Bits | I Bits | E deriving Show
 type Name = String
@@ -160,6 +158,7 @@ data Span = Span
   { spanBeg :: (Int,Int)
   , spanEnd :: (Int,Int)
   , spanPth :: FilePath -- original file path
+  , spanSrc :: String   -- source content
   }
 
 data Error
@@ -325,29 +324,11 @@ instance Show Book where
   show (Book defs names) = unlines (map defn [(name, fromJust (M.lookup name defs)) | name <- names])
     where defn (k,(_,x,t)) = k ++ " : " ++ show t ++ " = " ++ show x
 
--- Global source cache to avoid storing source in every Span
-{-# NOINLINE sourceCache #-}
-sourceCache :: IORef (M.Map FilePath String)
-sourceCache = unsafePerformIO (newIORef M.empty)
-
--- Register source content for a file
-registerSource :: FilePath -> String -> IO ()
-registerSource path content = do
-  cache <- readIORef sourceCache
-  writeIORef sourceCache (M.insert path content cache)
-
--- Get cached source content  
-getCachedSource :: FilePath -> IO (Maybe String)
-getCachedSource path = do
-  cache <- readIORef sourceCache
-  return (M.lookup path cache)
 
 instance Show Span where
   show span = "\n\x1b[1mLocation:\x1b[0m "
     ++ "\x1b[2m(line "++show (fst $ spanBeg span)++ ", column "++show (snd $ spanBeg span)++")\x1b[0m\n"
-    ++ case unsafePerformIO (getCachedSource (spanPth span)) of
-         Just src -> highlightError (spanBeg span) (spanEnd span) src
-         Nothing  -> "\x1b[31mError: Could not find cached source for: " ++ spanPth span ++ "\x1b[0m"
+    ++ highlightError (spanBeg span) (spanEnd span) (spanSrc span)
 
 instance Show Error where
   show (CantInfer span ctx) = 
@@ -421,7 +402,7 @@ collectApps (cut -> App f x) args = collectApps f (x:args)
 collectApps f                args = (f, args)
 
 noSpan :: Span
-noSpan = Span (0,0) (0,0) ""
+noSpan = Span (0,0) (0,0) "" ""
 
 flattenTup :: Term -> [Term]
 flattenTup (Tup l r) = l : flattenTup r

@@ -108,4 +108,4 @@ withSpan getSource p = do
       (begLine, begCol) = (unPos (sourceLine begPos), unPos (sourceColumn begPos))
       (endLine, endCol) = indexToPos src trimmedEndOff
 
-  return (Span (begLine, begCol) (endLine, endCol) pth, x)
+  return (Span (begLine, begCol) (endLine, endCol) pth src, x)

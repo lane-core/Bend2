@@ -15,6 +15,7 @@
   # Context:
   # - x : Nat
   # - y : Nat
+  # - z : Nat
   # Location: (line 8, column 3)
   # 8 |   True
 
