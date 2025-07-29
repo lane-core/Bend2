@@ -27,7 +27,7 @@ extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 -- Infer the type of a term
 infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
 infer d span book@(Book defs _) ctx term =
-  trace ("- infer: " ++ show (normal book term)) $
+  -- trace ("- infer: " ++ show (normal book term)) $
   case term of
     Var _ i -> do
       let Ctx ks = ctx
@@ -271,7 +271,7 @@ inferOp1Type d span book ctx op a ta = case op of
 check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
 check d span book ctx (Loc l t) goal = check d l book ctx t goal 
 check d span book ctx term      goal =
-  trace ("- check: " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
+  -- trace ("- check: " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
   case (term, force book goal) of
     (Era, _) -> do
       Done ()

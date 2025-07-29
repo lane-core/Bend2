@@ -450,11 +450,11 @@ derefUndo book k i (LHS (SS n) l) body x = deref book k i (LHS n (l x)) body
 --- - Injective Refs (whnf skips them for pretty printing)
 force :: Book -> Term -> Term
 force book term =
-  trace ("force: " ++ show term) $
+  -- trace ("force: " ++ show term) $
   case whnf book term of
-    term' -> trace "A" $ case cut term' of
-      Ref k i -> trace "B" $ case getDefn book k of
-        Just (True,fn',_) -> trace "C" $ force book $ foldl App fn' xs
-        otherwise         -> trace "D" $ term'
-      term' -> trace "E" $ term'
+    term' -> case cut fn of
+      Ref k i -> case getDefn book k of
+        Just (True,fn',_) -> force book $ foldl App fn' xs
+        otherwise         -> term'
+      term' -> term'
       where (fn,xs) = collectApps term' []
