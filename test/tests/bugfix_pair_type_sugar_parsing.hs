@@ -2,7 +2,7 @@
 
 import Test
 
--- fixed in commit 91c8924cffc7f476c8925fffb7e10bf1642be5b3
+-- fixed in: 7a1ae15df03b5fcd3815f75f334cac9e08b7a4cc
 --
 -- bug description:
 -- This was giving a parse error unless parenthesizing the second Nat
