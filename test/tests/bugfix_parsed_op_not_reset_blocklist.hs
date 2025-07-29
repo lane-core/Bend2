@@ -2,7 +2,7 @@
 
 import Test
 
--- fixed in commit 91c8924cffc7f476c8925fffb7e10bf1642be5b3
+-- fixed in 4a2a1ceec2165e16a2c99574ec629c60aced152f
 --
 -- fixed. parseTermBefore should restore the blocked ops always
 -- even when its internal parseTerm fails. with this, additional
