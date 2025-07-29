@@ -14,7 +14,7 @@ def f() -> Unit:
 """
 
 main :: IO ()
-main = testFile type_error_on_ctr_mismatch
+main = testFile assignment_vars_not_in_ctx
   "Variables coming from let assignments not showing in the context" $ \out err -> do
     assert (err `has` "Mismatch:")
     assert (err `has` "Goal: Unit")
