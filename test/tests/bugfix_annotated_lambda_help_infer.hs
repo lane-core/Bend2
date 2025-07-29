@@ -2,7 +2,7 @@
 
 import Test
 
--- fixed in commit 1eed35665a52f9bc793679509922e8a299a03c64
+-- fixed in commit: df355af377ca90afe8f2739e4f2d06b2d84992d2
 --
 --  Now use annotated lambdas to help infer
 -- Update: Let with HOAS made old error check too.
