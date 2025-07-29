@@ -3,8 +3,9 @@
 import Test
 
 
+-- fixed in commit df355af377ca90afe8f2739e4f2d06b2d84992d2
+--
 -- an unused variable causes a type mismatch by rewriting goal:
--- Fixed by using let with HOAS binding
 
 unused_var_mismatch_rewriting :: String
 unused_var_mismatch_rewriting = """

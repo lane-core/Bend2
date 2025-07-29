@@ -2,6 +2,8 @@
 
 import Test
 
+-- fixed in commit 91c8924cffc7f476c8925fffb7e10bf1642be5b3
+--
 -- bug description:
 -- This was giving a parse error unless parenthesizing the second Nat
 --   PARSE_ERROR

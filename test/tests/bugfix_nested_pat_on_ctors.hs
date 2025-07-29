@@ -2,6 +2,8 @@
 
 import Test
 
+-- fixed in commit f6c6aa91cba7aa70b537c780737745ec52d5495d
+--
 -- bug description:
 -- Variables coming from let assignments not showing in the context of the error.
 

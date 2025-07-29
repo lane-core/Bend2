@@ -2,6 +2,8 @@
 
 import Test
 
+-- fixed in commit 7123c3c18761d308cb91455a4cd815d2d246d4ab
+--
 -- bug description:
 
 -- The issue was that, once you create an an alias, like `Y = A`, Bend replaces

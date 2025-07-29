@@ -1,5 +1,6 @@
 {-# LANGUAGE MultilineStrings #-}
 
+-- fixed in commit df355af377ca90afe8f2739e4f2d06b2d84992d2
 --
 --  (the error was improved from CantInfer to TypeMismatch)
 --  Type mismatch on a constructor pattern matching returns `CantInfer` when it should be a `Type Mismatch`.
