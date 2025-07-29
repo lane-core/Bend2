@@ -2,7 +2,7 @@
 
 import Test
 
--- fixed in commit 7123c3c18761d308cb91455a4cd815d2d246d4ab
+-- fixed in: 5541251597d236d01dc8907cf7273bc52b3981e4
 --
 -- bug description:
 
