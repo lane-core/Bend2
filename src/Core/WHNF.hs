@@ -452,7 +452,7 @@ force :: Book -> Term -> Term
 force book term =
   -- trace ("force: " ++ show term) $
   case whnf book term of
-    term' -> case cut fn of
+    term' -> case cut term' of
       Ref k i -> case getDefn book k of
         Just (True,fn',_) -> force book $ foldl App fn' xs
         otherwise         -> term'
