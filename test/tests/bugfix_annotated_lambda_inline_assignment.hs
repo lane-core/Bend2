@@ -2,11 +2,13 @@
 
 import Test
 
-annotated_lambda_inline_assignment :: String
-annotated_lambda_inline_assignment = """
 -- fixed in commit 1eed35665a52f9bc793679509922e8a299a03c64
 --
 -- Now use annotated lambdas to help infer
+
+
+annotated_lambda_inline_assignment :: String
+annotated_lambda_inline_assignment = """
 
 def thm_fixed(A:Set) -> Σf: A->A . Σg:A->A . ∀a:A . A{g(f(a)) == a}:
   (λa:A.a,λb.b,λc.finally)
