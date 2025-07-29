@@ -53,8 +53,10 @@ testWithTimeout cmd files desc callback timeoutMicros = do
     runTest testDir = do
       mapM_ (writeTestFile testDir) files
 
+      -- Find project directory by looking for bend.cabal
+      projectDir <- findProjectRoot
+      
       let cmdWords = words cmd
-      let projectDir = "absolute_path_directory/Bend2"
       let fullCmd = case cmdWords of
                       ("bend":args) -> "cabal run -v0 bend --project-dir=" ++ projectDir ++ " -- " ++ unwords args
                       _             -> cmd
@@ -126,6 +128,24 @@ stripAnsiColors = stripAnsi
     stripAnsi [] = []
     stripAnsi ('\ESC':'[':xs) = stripAnsi (dropWhile (/= 'm') xs)
     stripAnsi (x:xs) = x : stripAnsi xs
+
+-- Find the project root by looking for bend.cabal
+findProjectRoot :: IO FilePath
+findProjectRoot = do
+  cwd <- getCurrentDirectory
+  searchUpwards cwd
+  where
+    searchUpwards :: FilePath -> IO FilePath
+    searchUpwards dir = do
+      let cabalFile = dir </> "bend.cabal"
+      exists <- doesFileExist cabalFile
+      if exists
+        then return dir
+        else do
+          let parent = takeDirectory dir
+          if parent == dir  -- reached root
+            then error "Could not find bend.cabal in any parent directory"
+            else searchUpwards parent
 
 -- Infix operator to check if output contains expected text
 -- Automatically handles ANSI colors and normalizes whitespace
