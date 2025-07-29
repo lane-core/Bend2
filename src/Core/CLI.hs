@@ -37,8 +37,6 @@ import qualified Target.HVM as HVM
 parseFile :: FilePath -> IO Book
 parseFile file = do
   content <- readFile file
-  -- Register source content for error highlighting
-  registerSource file content
   case doParseBook file content of
     Left err -> do
       hPutStrLn stderr $ err
