@@ -244,134 +244,134 @@ def VecInd
     case @Cons{n,h,t,{==}}:
       C(n,h,t,VecInd(A,P,N,C,n,t))
 
-# Proofs by o3
-# ------------
+## Proofs by o3
+## ------------
 
-# Add: reduce zero on the *left*
-def zero_left(b: Nat) -> Nat{add(0n, b) == b}:
-  {==}
+## Add: reduce zero on the *left*
+#def zero_left(b: Nat) -> Nat{add(0n, b) == b}:
+  #{==}
 
-# Add: associativity (helper)
-def assoc(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
-  match a:
-    case 0n:
-      {==}
-    case 1n + ap:
-      1n + ()
+## Add: associativity (helper)
+#def assoc(a: Nat, b: Nat, c: Nat) -> Nat{add(add(a,b), c) == add(a, add(b,c))}:
+  #match a:
+    #case 0n:
+      #{==}
+    #case 1n + ap:
+      #1n + ()
 
-# Left-distributivity of multiplication over addition
-def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
-  match n:
-    case 0n:
-      {==}
-    case 1n + p:
-      rewrite mul_dist_left(p, m, k)               #- Goal: Nat{add(add(m,k),add(mul(p,m),mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      rewrite assoc(m, k, add(mul(p,m),mul(p,k)))  #- Goal: Nat{add(m,add(k,add(mul(p,m),mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      rewrite comm(k, add(mul(p,m),mul(p,k)))      #- Goal: Nat{add(m,add(add(mul(p,m),mul(p,k)),k)) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      rewrite assoc(mul(p,m), mul(p,k), k)         #- Goal: Nat{add(m,add(mul(p,m),add(mul(p,k),k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      rewrite comm(mul(p,k), k)                    #- Goal: Nat{add(m,add(mul(p,m),add(k,mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      rewrite assoc(m, mul(p,m), add(k,mul(p,k)))  #- Goal: Nat{add(add(m,mul(p,m)),add(k,mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
-      finally
+## Left-distributivity of multiplication over addition
+#def mul_dist_left(n: Nat, m: Nat, k: Nat) -> Nat{mul(n, add(m,k)) == add(mul(n,m), mul(n,k))}:
+  #match n:
+    #case 0n:
+      #{==}
+    #case 1n + p:
+      #rewrite mul_dist_left(p, m, k)               #- Goal: Nat{add(add(m,k),add(mul(p,m),mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #rewrite assoc(m, k, add(mul(p,m),mul(p,k)))  #- Goal: Nat{add(m,add(k,add(mul(p,m),mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #rewrite comm(k, add(mul(p,m),mul(p,k)))      #- Goal: Nat{add(m,add(add(mul(p,m),mul(p,k)),k)) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #rewrite assoc(mul(p,m), mul(p,k), k)         #- Goal: Nat{add(m,add(mul(p,m),add(mul(p,k),k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #rewrite comm(mul(p,k), k)                    #- Goal: Nat{add(m,add(mul(p,m),add(k,mul(p,k)))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #rewrite assoc(m, mul(p,m), add(k,mul(p,k)))  #- Goal: Nat{add(add(m,mul(p,m)),add(k,mul(p,k))) == add(add(m,mul(p,m)),add(k,mul(p,k)))}
+      #finally
 
-# Multiplication: zero on the **right**
-def mul_zero_right(n: Nat) -> Nat{mul(n, 0n) == 0n}:
-  match n:
-    case 0n:
-      finally
-    case 1n + p:
-      rewrite mul_zero_right(p) #- Goal: Nat{add(0n, 0n) == 0n}
-      finally
+## Multiplication: zero on the **right**
+#def mul_zero_right(n: Nat) -> Nat{mul(n, 0n) == 0n}:
+  #match n:
+    #case 0n:
+      #finally
+    #case 1n + p:
+      #rewrite mul_zero_right(p) #- Goal: Nat{add(0n, 0n) == 0n}
+      #finally
 
-# Multiplication: zero on the **left**
-def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
-  finally
+## Multiplication: zero on the **left**
+#def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
+  #finally
 
-# Multiplication: zero on the **left**
-def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
-  finally
+## Multiplication: zero on the **left**
+#def mul_zero_left(b: Nat) -> Nat{mul(0n , b) == 0n}:
+  #finally
 
-# Multiplication: successor on the **left**
-def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
-  finally
+## Multiplication: successor on the **left**
+#def succ_left_mul(a: Nat, b: Nat) -> Nat{mul(1n + a, b) == add(b, mul(a, b))}:
+  #finally
 
-# W-Types
-# -------
+## W-Types
+## -------
 
-# W-Tree Type
-type W(A: Set, B: A -> Set):
-  case @Sup:
-    x: A
-    f: B(x) -> W(A,B)
+## W-Tree Type
+#type W(A: Set, B: A -> Set):
+  #case @Sup:
+    #x: A
+    #f: B(x) -> W(A,B)
 
-# Generic W-Type Fold
-def wfold
-  ( A: Set
-  , B: A -> Set
-  , P: Set
-  , w: W(A,B)
-  , F: all x:A k:(B(x) -> P) . P
-  ) -> P:
-  match w:
-    case @Sup{x,f}:
-      F(x, λy. wfold(A,B,P,f(y),F))
-
-# W-Tree
-# ------
-
-# W-Tree Tag
-type WTreeTag<A: Set>:
-  case @WLeaf:
-    value: A
-  case @WNode:
-
-# W-Tree Recursive Fields
-def WTreeRec(tag: WTreeTag(Nat)) -> Set:
-  match tag:
-    case @WLeaf{value}:
-      return Empty
-    case @WNode:
-      return enum{&lft, &rgt}
-
-# W-Tree Type
-def WTree : Set =
-  W(WTreeTag(Nat), WTreeRec)
-
-# Constructs a W-Leaf
-def WLeaf(n: Nat) -> WTree:
-  return @Sup{@WLeaf{n}, λe. absurd e}
-
-# Constructs a W-Node
-def WNode(l: WTree, r: WTree) -> WTree:
-  return @Sup{@WNode{}, λi. match i: case &lft: l case &rgt: r  }
-
-# FIXME: written like this, Adjust will produce a (λ{...} x) form (CantInfer)
-#def sum_wtree(w: WTree) -> Nat:
+## Generic W-Type Fold
+#def wfold
+  #( A: Set
+  #, B: A -> Set
+  #, P: Set
+  #, w: W(A,B)
+  #, F: all x:A k:(B(x) -> P) . P
+  #) -> P:
   #match w:
     #case @Sup{x,f}:
-      #match x:
-        #case @WLeaf{value}:
-          #return value
-        #case @WNode{}:
-          #a = f(&lft)
-          #b = f(&rgt)
-          #return add(sum_wtree(a), sum_wtree(b))
+      #F(x, λy. wfold(A,B,P,f(y),F))
 
-# Sums a W-Tree
-def sum_wtree(w: WTree) -> Nat:
-  match w:
-    case @Sup{@WLeaf{value},f}:
-      value
-    case @Sup{@WNode{},f}:
-      a = f(&lft)
-      b = f(&rgt)
-      return add(sum_wtree(a), sum_wtree(b))
+## W-Tree
+## ------
 
-# Sum a W-Tree (using the generic fold)
-def sum_wtree_fold(w: WTree) -> Nat:
-  wfold<WTreeTag(Nat), WTreeRec, Nat>(w,
-    lambda tag f.
-    match tag:
-      case @WLeaf{value}:
-        value
-      case @WNode:
-        add(f(&lft), f(&rgt)))
+## W-Tree Tag
+#type WTreeTag<A: Set>:
+  #case @WLeaf:
+    #value: A
+  #case @WNode:
+
+## W-Tree Recursive Fields
+#def WTreeRec(tag: WTreeTag(Nat)) -> Set:
+  #match tag:
+    #case @WLeaf{value}:
+      #return Empty
+    #case @WNode:
+      #return enum{&lft, &rgt}
+
+## W-Tree Type
+#def WTree : Set =
+  #W(WTreeTag(Nat), WTreeRec)
+
+## Constructs a W-Leaf
+#def WLeaf(n: Nat) -> WTree:
+  #return @Sup{@WLeaf{n}, λe. absurd e}
+
+## Constructs a W-Node
+#def WNode(l: WTree, r: WTree) -> WTree:
+  #return @Sup{@WNode{}, λi. match i: case &lft: l case &rgt: r  }
+
+## FIXME: written like this, Adjust will produce a (λ{...} x) form (CantInfer)
+##def sum_wtree(w: WTree) -> Nat:
+  ##match w:
+    ##case @Sup{x,f}:
+      ##match x:
+        ##case @WLeaf{value}:
+          ##return value
+        ##case @WNode{}:
+          ##a = f(&lft)
+          ##b = f(&rgt)
+          ##return add(sum_wtree(a), sum_wtree(b))
+
+## Sums a W-Tree
+#def sum_wtree(w: WTree) -> Nat:
+  #match w:
+    #case @Sup{@WLeaf{value},f}:
+      #value
+    #case @Sup{@WNode{},f}:
+      #a = f(&lft)
+      #b = f(&rgt)
+      #return add(sum_wtree(a), sum_wtree(b))
+
+## Sum a W-Tree (using the generic fold)
+#def sum_wtree_fold(w: WTree) -> Nat:
+  #wfold<WTreeTag(Nat), WTreeRec, Nat>(w,
+    #lambda tag f.
+    #match tag:
+      #case @WLeaf{value}:
+        #value
+      #case @WNode:
+        #add(f(&lft), f(&rgt)))
