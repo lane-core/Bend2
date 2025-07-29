@@ -4,11 +4,12 @@ import System.Process
 import System.Directory
 import System.FilePath
 import System.Exit
-import Control.Exception (try, throwIO, finally)
+import Control.Exception (try, throwIO, finally, evaluate)
 import Control.Monad (when)
 import Data.List (isInfixOf)
 import Data.Char (isSpace)
 import System.Timeout (timeout)
+import System.IO (hClose, hGetContents)
 
 test :: String -> [(String, String)] -> String -> (String -> String -> IO ()) -> IO ()
 test cmd files desc callback = testWithTimeout cmd files desc callback (30 * 1000000) -- 30 seconds default
@@ -20,48 +21,70 @@ testWithTimeout cmd files desc callback timeoutMicros = do
   tmpDir <- getTemporaryDirectory
   testDir <- findUniqueTestDir tmpDir (0 :: Int)
   createDirectory testDir
-  
+
   -- Capture the test result first
   (out, err) <- finally (runTest testDir) (removeDirectoryRecursive testDir)
-  
+
   -- Run the callback and check if test passes
   testPassed <- try (callback out err) :: IO (Either ExitCode ())
   let success = case testPassed of
                   Right _ -> True
-                  Left _ -> False
-  
+                  Left _  -> False
+
   -- Print the bend output with appropriate color
   let output = out ++ err
   let outputLines = lines output
   let color = if success then "\ESC[32m" else "\ESC[31m"
   let resetColor = "\ESC[0m"
   mapM_ (\line -> putStrLn $ "  " ++ color ++ ">" ++ resetColor ++ " " ++ line) outputLines
-  
+
   -- Re-throw if test failed
   case testPassed of
-    Left e -> throwIO e
+    Left e  -> throwIO e
     Right _ -> return ()
-  
+
   where
     findUniqueTestDir base n = do
       let dir = base </> ("bend-test-" ++ show n)
       exists <- doesDirectoryExist dir
       if exists then findUniqueTestDir base (n + 1) else return dir
-    
+
+    -- Corrected runTest function
     runTest testDir = do
       mapM_ (writeTestFile testDir) files
-      
+
       let cmdWords = words cmd
-      let projectDir = "/Users/v/vic/dev/bend2"
+      let projectDir = "absolute_path_directory/Bend2"
       let fullCmd = case cmdWords of
                       ("bend":args) -> "cabal run -v0 bend --project-dir=" ++ projectDir ++ " -- " ++ unwords args
                       _             -> cmd
-      
-      result <- timeout timeoutMicros $ readProcessWithExitCode "sh" ["-c", "cd " ++ testDir ++ " && " ++ fullCmd] ""
-      case result of
-        Just (exitCode, out, err) -> return (out, err)
-        Nothing -> return ("", "ERROR: Test timed out after " ++ show (timeoutMicros `div` 1000000) ++ " seconds")
-    
+
+      -- Create the process in its own group to kill it and its children
+      let procSpec = (shell $ "cd " ++ testDir ++ " && " ++ fullCmd)
+            { std_out = CreatePipe
+            , std_err = CreatePipe
+            , create_group = True -- IMPORTANT: For POSIX systems (Linux/macOS)
+            }
+
+      withCreateProcess procSpec $ \_ (Just stdout_h) (Just stderr_h) ph -> do
+        -- Use timeout on waiting for the process to complete
+        result <- timeout timeoutMicros (waitForProcess ph)
+
+        case result of
+          Just _ -> do
+            -- Process finished normally, grab output
+            out <- hGetContents stdout_h
+            err <- hGetContents stderr_h
+            -- Fully evaluate the output strings before the handles are closed
+            _ <- evaluate (length out + length err)
+            return (out, err)
+          Nothing -> do
+            -- Process timed out. Terminate the entire process group.
+            interruptProcessGroupOf ph
+            -- Wait for the process to truly die to avoid zombies
+            _ <- waitForProcess ph
+            return ("", "ERROR: Test timed out after " ++ show (timeoutMicros `div` 1000000) ++ " seconds")
+
     writeTestFile testDir (name, content) = do
       let path = testDir </> name
       createDirectoryIfMissing True (takeDirectory path)
@@ -81,7 +104,7 @@ testFileChecks code = testFile code "must check" $ \out err -> do
 -- Test that a file produces a specific goal in the error output
 -- Also checks that specific variables have specific types in the context
 testFileGoal :: String -> String -> [(String, String)] -> IO ()
-testFileGoal code expectedGoal contextChecks = 
+testFileGoal code expectedGoal contextChecks =
   testFile code ("must show goal: " ++ expectedGoal) $ \out err -> do
     -- Check that we have a mismatch error (not empty err)
     assert (err /= "")
@@ -93,7 +116,7 @@ testFileGoal code expectedGoal contextChecks =
     mapM_ (\(varName, varType) -> assert (err `has` ("- " ++ varName ++ " : " ++ varType))) contextChecks
 
 assert :: Bool -> IO ()
-assert True = return ()
+assert True  = return ()
 assert False = exitFailure
 
 -- Internal helper to strip ANSI colors
@@ -111,4 +134,3 @@ output `has` expected =
   let cleanExpected = filter (not . isSpace) expected
       cleanOutput = filter (not . isSpace) (stripAnsiColors output)
   in cleanExpected `isInfixOf` cleanOutput
-
