@@ -77,11 +77,11 @@ infer d span book@(Book defs names) ctx term =
         (book1, tV) <- check d span book ctx t Set
         (book2, vV) <- check d span book1 ctx v t
         (book3, fV, fT) <- infer (d+1) span book2 (extend ctx k (Var k d) t) (f (Var k d))
-        return $ (book3, Let k (Just tV) vV (\x -> bindVar d x fV), fT)
+        return $ (book3, Let k (Just tV) vV (\x -> bindIndex d x fV), fT)
       Nothing -> do
         (book1, vV, vT) <- infer d span book ctx v
         (book2, fV, fT) <- infer (d+1) span book1 (extend ctx k (Var k d) vT) (f (Var k d))
-        return $ (book2, Let k Nothing vV (\x -> bindVar d x fV), fT)
+        return $ (book2, Let k Nothing vV (\x -> bindIndex d x fV), fT)
     Use k v f -> do
       infer d span book ctx (f v)
     Fix k f -> do
@@ -158,7 +158,7 @@ infer d span book@(Book defs names) ctx term =
       Just tk -> do
         (book1, tkV) <- check d span book ctx tk Set
         (book2, bV, bT) <- infer (d+1) span book1 (extend ctx k (Var k d) tkV) (b (Var k d))
-        Done (book2, Lam k (Just tkV) (\v -> bindVar d v bV), All tkV (Lam k (Just tkV) (\v -> bindVar d v bT)))
+        Done (book2, Lam k (Just tkV) (\v -> bindIndex d v bV), All tkV (Lam k (Just tkV) (\v -> bindIndex d v bT)))
       Nothing -> do
         Fail $ CantInfer span (normalCtx book ctx)
     App f x -> do
@@ -309,11 +309,11 @@ check d span book ctx term      goal =
           (book1, tV) <- check d span book ctx t Set
           (book2, vV) <- check d span book1 ctx v tV
           (book3, fV) <- check (d+1) span book2 (extend ctx k (Var k d) tV) (f (Var k d)) goal
-          Done (book3, Let k (Just tV) vV (\x -> bindVar d x fV))
+          Done (book3, Let k (Just tV) vV (\x -> bindIndex d x fV))
         Nothing -> do
           (book1, vV, vT) <- infer d span book ctx v
           (book2, fV) <- check (d+1) span book1 (extend ctx k (Var k d) vT) (f (Var k d)) goal
-          Done (book2, Let k Nothing vV (\x -> bindVar d x fV))
+          Done (book2, Let k Nothing vV (\x -> bindIndex d x fV))
     (Use k v f, _) -> do
       check d span book ctx (f v) goal
     (One, Uni) -> do
@@ -346,7 +346,7 @@ check d span book ctx term      goal =
       Done (book2, Con hV tV)
     (Lam k t f, All a b) -> do
       (book1, fV) <- check (d+1) span book (extend ctx k (Var k d) a) (f (Var k d)) (App b (Var k d))
-      Done (book1, Lam k t (\v -> bindVar d v fV))
+      Done (book1, Lam k t (\v -> bindIndex d v fV))
     (EmpM, All (force book -> Eql t (force book -> Zer) (force book -> Suc y)) rT) -> do
       Done (book, EmpM)
     (EmpM, All (force book -> Eql t (force book -> Suc x) (force book -> Zer)) rT) -> do
@@ -491,7 +491,7 @@ check d span book ctx term      goal =
       Done (book1, EqlM fV)
     (Fix k f, _) -> do
       (book1, fV) <- check (d+1) span book (extend ctx k (Fix k f) goal) (f (Fix k f)) goal
-      Done (book1, Fix k (\x -> bindVar d x fV))
+      Done (book1, Fix k (\x -> bindIndex d x fV))
     (Val v@(U64_V _), Num U64_T) -> do
       Done (book, Val v)
     (Val v@(I64_V _), Num I64_T) -> do
