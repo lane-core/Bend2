@@ -1,6 +1,10 @@
 {-# LANGUAGE MultilineStrings #-}
 
 import Test
+
+-- bug description:
+-- see https://github.com/HigherOrderCO/Bend2/issues/13
+--
 -- scoping of variables when printing a context isn't respected.
 -- notice in the error that in A{(a)((a,()))==a}
 -- the first `a` should be (Σa:A. Unit) -> A, and the second, A.
