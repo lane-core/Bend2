@@ -4,7 +4,6 @@ module Core.Type where
 
 import Data.List (intercalate)
 import Debug.Trace
-import Highlight (highlightError)
 import Data.Int (Int32, Int64)
 import Data.Word (Word32, Word64)
 import Data.Maybe (fromMaybe, fromJust)
@@ -153,7 +152,7 @@ type Subs = [(Term,Term)]
 -- Context (new type)
 data Ctx = Ctx [(Name,Term,Term)]
 
--- Error Location (NEW TYPE)  
+-- Error Location
 data Span = Span
   { spanBeg :: (Int,Int)
   , spanEnd :: (Int,Int)
@@ -161,6 +160,7 @@ data Span = Span
   , spanSrc :: String   -- source content
   }
 
+-- Errors
 data Error
   = CantInfer Span Ctx
   | Undefined Span Ctx Name
@@ -188,194 +188,6 @@ instance Monad Result where
   Done a >>= f = f a
   Fail e >>= _ = Fail e
 
-instance Show Term where
-  show (Var k i)      = k -- ++ "^" ++ show i
-  show (Ref k i)      = k -- ++ "!"
-  show (Sub t)        = show t
-  show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
-  show (Let k t v f)  = case t of
-    Just t  -> k ++ " : " ++ show t ++ " = " ++ show v ++ " " ++ show (f (Var k 0))
-    Nothing -> k ++                    " = " ++ show v ++ " " ++ show (f (Var k 0))
-  show (Use k v f)    = "use " ++ k ++ " = " ++ show v ++ " " ++ show (f (Var k 0))
-  show (Set)          = "Set"
-  show (Chk x t)      = "(" ++ show x ++ "::" ++ show t ++ ")"
-  show (Emp)          = "Empty"
-  show (EmpM)         = "λ{}"
-  show (Uni)          = "Unit"
-  show (One)          = "()"
-  show (UniM f)       = "λ{():" ++ show f ++ "}"
-  show (Bit)          = "Bool"
-  show (Bt0)          = "False"
-  show (Bt1)          = "True"
-  show (BitM f t)     = "λ{False:" ++ show f ++ ";True:" ++ show t ++ "}"
-  show (Nat)          = "Nat"
-  show (Zer)          = "0n"
-  show term@(Suc _) =
-    let (count, rest) = countSucs term in
-    case cut rest of
-      Zer -> show count ++ "n"
-      _   -> show count ++ "n+" ++ show rest
-    where
-      countSucs :: Term -> (Int, Term)
-      countSucs (cut -> Suc t) = let (c, r) = countSucs t in (c + 1, r)
-      countSucs t              = (0, t)
-  show (NatM z s)     = "λ{0n:" ++ show z ++ ";1n+:" ++ show s ++ "}"
-  show (Lst t)        = show t ++ "[]"
-  show (Nil)          = "[]"
-  show (Con h t)      = fromMaybe (show h ++ "<>" ++ show t) (prettyStr (Con h t))
-  show (LstM n c)     = "λ{[]:" ++ show n ++ ";<>:" ++ show c ++ "}"
-  show (Enu s)        = "enum{" ++ intercalate "," (map (\x -> "&" ++ x) s) ++ "}"
-  show (Sym s)        = "&" ++ s
-  show (EnuM c e)     = "λ{" ++ intercalate ";" (map (\(s,t) -> "&" ++ s ++ ":" ++ show t) c) ++ ";" ++ show e ++ "}"
-  show (Sig a b) = case cut b of
-      Lam "_" t f -> showArg a ++ " & " ++ showCodomain (f (Var "_" 0))
-      Lam k t f   -> "Σ" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
-      _           -> "Σ" ++ showArg a ++ ". " ++ show b
-    where
-      showArg t = case cut t of
-          All{} -> "(" ++ show t ++ ")"
-          Sig{} -> "(" ++ show t ++ ")"
-          _     -> show t
-      showCodomain t = case t of
-          Sig _ (Lam k _ _) | k /= "_" -> "(" ++ show t ++ ")"
-          _                           -> show t
-  show tup@(Tup _ _)  = fromMaybe ("(" ++ intercalate "," (map show (flattenTup tup)) ++ ")") (prettyCtr tup)
-  show (SigM f)       = "λ{(,):" ++ show f ++ "}"
-  show (All a b) = case b of
-      Lam "_" t f -> showArg a ++ " -> " ++ showCodomain (f (Var "_" 0))
-      Lam k t f   -> "∀" ++ k ++ ":" ++ showArg a ++ ". " ++ show (f (Var k 0))
-      _           -> "∀" ++ showArg a ++ ". " ++ show b
-    where
-      showArg t = case cut t of
-          All{} -> "(" ++ show t ++ ")"
-          Sig{} -> "(" ++ show t ++ ")"
-          _     -> show t
-      showCodomain t = case t of
-          All _ (Lam k _ _) | k /= "_"  -> "(" ++ show t ++ ")"
-          _                           -> show t
-  show (Lam k t f)      = case t of
-    Just t  -> "λ" ++ k ++ ":" ++ show t ++ ". " ++ show (f (Var k 0))
-    Nothing -> "λ" ++ k ++ ". " ++ show (f (Var k 0))
-  show app@(App _ _)  = fnStr ++ "(" ++ intercalate "," (map show args) ++ ")" where
-           (fn, args) = collectApps app []
-           fnStr      = case cut fn of
-              Var k i -> show (Var k i)
-              Ref k i -> show (Ref k i)
-              fn      -> "(" ++ show fn ++ ")"
-  show (Eql t a b)     = case t of
-    (Sig _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
-    (All _ _) -> "(" ++ show t ++ ")" ++ "{" ++ show a ++ "==" ++ show b ++ "}"
-    _         ->        show t ++        "{" ++ show a ++ "==" ++ show b ++ "}"
-  show (Rfl)           = "{==}"
-  show (EqlM f)        = "λ{{==}:" ++ show f ++ "}"
-  show (Rwt e f)       = "rewrite " ++ show e ++ " " ++ show f
-  show (Loc _ t)       = show t
-  show (Era)           = "*"
-  show (Sup l a b)     = "&" ++ show l ++ "{" ++ show a ++ "," ++ show b ++ "}"
-  show (SupM l f)      = "λ{&" ++ show l ++ "{,}:" ++ show f ++ "}"
-  show (Frk l a b)     = "fork " ++ show l ++ ":" ++ show a ++ " else:" ++ show b
-  show (Met n t ctx)   = "?" ++ n ++ ":" ++ show t ++ "{" ++ intercalate "," (map show ctx) ++ "}"
-  show (Log s x)       = "log " ++ show s ++ " " ++ show x
-  show (Pri p)         = pri p where
-    pri U64_TO_CHAR    = "U64_TO_CHAR"
-    pri CHAR_TO_U64    = "CHAR_TO_U64"
-  show (Num U64_T)     = "U64"
-  show (Num I64_T)     = "I64"
-  show (Num F64_T)     = "F64"
-  show (Num CHR_T)     = "Char"
-  show (Val (U64_V n)) = show n
-  show (Val (I64_V n)) = if n >= 0 then "+" ++ show n else show n
-  show (Val (F64_V n)) = show n
-  show (Val (CHR_V c)) = "'" ++ showChar c ++ "'" where
-         showChar '\n' = "\\n"
-         showChar '\t' = "\\t"
-         showChar '\r' = "\\r"
-         showChar '\0' = "\\0"
-         showChar '\\' = "\\\\"
-         showChar '\'' = "\\'"
-         showChar c    = [c]
-  show (Op2 ADD a b)   = "(" ++ show a ++ " + " ++ show b ++ ")"
-  show (Op2 SUB a b)   = "(" ++ show a ++ " - " ++ show b ++ ")"
-  show (Op2 MUL a b)   = "(" ++ show a ++ " * " ++ show b ++ ")"
-  show (Op2 DIV a b)   = "(" ++ show a ++ " / " ++ show b ++ ")"
-  show (Op2 MOD a b)   = "(" ++ show a ++ " % " ++ show b ++ ")"
-  show (Op2 EQL a b)   = "(" ++ show a ++ " == " ++ show b ++ ")"
-  show (Op2 NEQ a b)   = "(" ++ show a ++ " !== " ++ show b ++ ")"
-  show (Op2 LST a b)   = "(" ++ show a ++ " < " ++ show b ++ ")"
-  show (Op2 GRT a b)   = "(" ++ show a ++ " > " ++ show b ++ ")"
-  show (Op2 LEQ a b)   = "(" ++ show a ++ " <= " ++ show b ++ ")"
-  show (Op2 GEQ a b)   = "(" ++ show a ++ " >= " ++ show b ++ ")"
-  show (Op2 AND a b)   = "(" ++ show a ++ " && " ++ show b ++ ")"
-  show (Op2 OR a b)    = "(" ++ show a ++ " | " ++ show b ++ ")"
-  show (Op2 XOR a b)   = "(" ++ show a ++ " ^ " ++ show b ++ ")"
-  show (Op2 SHL a b)   = "(" ++ show a ++ " << " ++ show b ++ ")"
-  show (Op2 SHR a b)   = "(" ++ show a ++ " >> " ++ show b ++ ")"
-  show (Op2 POW a b)   = "(" ++ show a ++ " ** " ++ show b ++ ")"
-  show (Op1 NOT a)     = "(not " ++ show a ++ ")"
-  show (Op1 NEG a)     = "(-" ++ show a ++ ")"
-  show (Pat t m c)     = "match " ++ unwords (map show t) ++ " {" ++ showMoves ++ showCases ++ " }" where
-             showMoves = if null m then "" else " with " ++ intercalate " with " (map mv m) where
-               mv(k,x) = k ++ "=" ++ show x
-             showCases = if null c then "" else " " ++ intercalate " " (map cs c) where
-               cs(p,x) = "case " ++ unwords (map showPat p) ++ ": " ++ show x
-             showPat p = "(" ++ show p ++ ")"
-
-instance Show Book where
-  show (Book defs names) = unlines (map defn [(name, fromJust (M.lookup name defs)) | name <- names])
-    where defn (k,(_,x,t)) = k ++ " : " ++ show t ++ " = " ++ show x
-
-
-instance Show Span where
-  show span = "\n\x1b[1mLocation:\x1b[0m "
-    ++ "\x1b[2m(line "++show (fst $ spanBeg span)++ ", column "++show (snd $ spanBeg span)++")\x1b[0m\n"
-    ++ highlightError (spanBeg span) (spanEnd span) (spanSrc span)
-
-instance Show Error where
-  show (CantInfer span ctx) = 
-    "\x1b[1mCantInfer:\x1b[0m" ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    show span
-  show (Undefined span ctx name) = 
-    "\x1b[1mUndefined:\x1b[0m " ++ name ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    show span
-  show (TypeMismatch span ctx goal typ) = 
-    "\x1b[1mMismatch:\x1b[0m" ++
-    "\n- Goal: " ++ show goal ++ 
-    "\n- Type: " ++ show typ ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    show span
-  show (TermMismatch span ctx a b) = 
-    "\x1b[1mMismatch:\x1b[0m" ++
-    "\n- " ++ show a ++ 
-    "\n- " ++ show b ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    show span
-  show (IncompleteMatch span ctx) = 
-    "\x1b[1mIncompleteMatch:\x1b[0m" ++
-    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
-    show span
-  show (UnknownTermination term) =
-    "\x1b[1mUnknownTermination:\x1b[0m " ++ show term
-  show (ImportError span msg) = 
-    "\x1b[1mImportError:\x1b[0m " ++ msg ++
-    show span
-
-instance Show Ctx where
-  show (Ctx ctx)
-    | null lines = ""
-    | otherwise  = init (unlines lines)
-    where
-      lines = map snd (reverse (clean S.empty (reverse (map showAnn ctx))))
-
-      showAnn :: (Name,Term,Term) -> (Name,String)
-      showAnn (k,_,t) = (k, "- " ++ k ++ " : " ++ show t)
-    
-      clean :: S.Set Name -> [(Name,String)] -> [(Name,String)]
-      clean _    []                             = []
-      clean seen ((n,l):xs) | n `S.member` seen = clean seen xs
-                            | take 1 n == "_"   = clean seen xs
-                            | otherwise         = (n,l) : clean (S.insert n seen) xs
 
 -- Utils
 -- -----
@@ -408,17 +220,6 @@ flattenTup :: Term -> [Term]
 flattenTup (Tup l r) = l : flattenTup r
 flattenTup t         = [t]
 
-lastElem :: Term -> Maybe Term
-lastElem (Tup _ r) = lastElem r
-lastElem t         = Just t
-
-prettyCtr :: Term -> Maybe String
-prettyCtr (Tup (Sym name) rest) = 
-  case lastElem rest of
-    Just One -> Just ("@" ++ name ++ "{" ++ intercalate "," (map show (init (flattenTup rest))) ++ "}")
-    _        -> Nothing
-prettyCtr _ = Nothing
-
 prettyStr :: Term -> Maybe String
 prettyStr = go [] where
   go :: [Char] -> Term -> Maybe String
@@ -427,135 +228,3 @@ prettyStr = go [] where
   go acc (Loc _ t)                  = go acc t
   go _   _                          = Nothing
 
--- | Returns the free variables in a term by name.
-freeVars :: S.Set Name -> Term -> S.Set Name
-freeVars ctx tm = case tm of
-  Var n _     -> if n `S.member` ctx then S.empty else S.singleton n
-  Sub t       -> freeVars ctx t
-  Fix n f     -> freeVars (S.insert n ctx) (f (Var n 0))
-  Let k t v f -> S.unions [foldMap (freeVars ctx) t, freeVars ctx v, freeVars (S.insert k ctx) (f (Var k 0))]
-  Use k v f   -> S.union (freeVars ctx v) (freeVars (S.insert k ctx) (f (Var k 0)))
-  Chk v t     -> S.union (freeVars ctx v) (freeVars ctx t)
-  EmpM        -> S.empty
-  UniM f      -> freeVars ctx f
-  BitM f t    -> S.union (freeVars ctx f) (freeVars ctx t)
-  Suc n       -> freeVars ctx n
-  NatM z s    -> S.union (freeVars ctx z) (freeVars ctx s)
-  Lst t       -> freeVars ctx t
-  Con h t     -> S.union (freeVars ctx h) (freeVars ctx t)
-  LstM n c    -> S.union (freeVars ctx n) (freeVars ctx c)
-  EnuM c e    -> S.union (S.unions (map (freeVars ctx . snd) c)) (freeVars ctx e)
-  Op2 _ a b   -> S.union (freeVars ctx a) (freeVars ctx b)
-  Op1 _ a     -> freeVars ctx a
-  Sig a b     -> S.union (freeVars ctx a) (freeVars ctx b)
-  Tup a b     -> S.union (freeVars ctx a) (freeVars ctx b)
-  SigM f      -> freeVars ctx f
-  All a b     -> S.union (freeVars ctx a) (freeVars ctx b)
-  Lam n t f   -> S.union (freeVars (S.insert n ctx) (f (Var n 0))) (foldMap (freeVars ctx) t)
-  App f x     -> S.union (freeVars ctx f) (freeVars ctx x)
-  Eql t a b   -> S.unions [freeVars ctx t, freeVars ctx a, freeVars ctx b]
-  EqlM f      -> freeVars ctx f
-  Rwt e f     -> S.union (freeVars ctx e) (freeVars ctx f)
-  Met _ t c   -> S.unions (freeVars ctx t : map (freeVars ctx) c)
-  Sup _ a b   -> S.union (freeVars ctx a) (freeVars ctx b)
-  SupM l f    -> S.union (freeVars ctx l) (freeVars ctx f)
-  Frk l a b   -> S.unions [freeVars ctx l, freeVars ctx a, freeVars ctx b]
-  Log s x     -> S.union (freeVars ctx s) (freeVars ctx x)
-  Loc _ t     -> freeVars ctx t
-  Pat s m c   -> S.unions ((map (freeVars ctx) s) ++ (map (\(_,m) -> freeVars ctx m) m) ++ (map (\(_,c) -> freeVars ctx c) c))
-  _           -> S.empty
-
--- | Check if a term contains a Metavar
-hasMet :: Term -> Bool
-hasMet term = case term of
-  Met {}      -> True
-  Sub t       -> hasMet t
-  Fix _ f     -> hasMet (f (Var "" 0))
-  Let k t v f -> case t of
-    Just t    -> hasMet t || hasMet v || hasMet (f (Var k 0))
-    Nothing   -> hasMet v || hasMet (f (Var k 0))
-  Use k v f   -> hasMet v || hasMet (f (Var k 0))
-  Chk x t     -> hasMet x || hasMet t
-  EmpM        -> False
-  UniM f      -> hasMet f
-  BitM f t    -> hasMet f || hasMet t
-  Suc n       -> hasMet n
-  NatM z s    -> hasMet z || hasMet s
-  Lst t       -> hasMet t
-  Con h t     -> hasMet h || hasMet t
-  LstM n c    -> hasMet n || hasMet c
-  EnuM cs e   -> any (hasMet . snd) cs || hasMet e
-  Op2 _ a b   -> hasMet a || hasMet b
-  Op1 _ a     -> hasMet a
-  Sig a b     -> hasMet a || hasMet b
-  Tup a b     -> hasMet a || hasMet b
-  SigM f      -> hasMet f
-  All a b     -> hasMet a || hasMet b
-  Lam _ t f   -> maybe False hasMet t || hasMet (f (Var "" 0))
-  App f x     -> hasMet f || hasMet x
-  Eql t a b   -> hasMet t || hasMet a || hasMet b
-  EqlM f      -> hasMet f
-  Rwt e f     -> hasMet e || hasMet f
-  Sup _ a b   -> hasMet a || hasMet b
-  SupM l f    -> hasMet l || hasMet f
-  Loc _ t     -> hasMet t
-  Log s x     -> hasMet s || hasMet x
-  Pat s m c   -> any hasMet s || any (hasMet . snd) m || any (\(p,b) -> any hasMet p || hasMet b) c
-  Frk l a b   -> hasMet l || hasMet a || hasMet b
-  _           -> False
-
--- Traverses the term and binds the var of index 'd' to the given term t
-bindVar :: Int -> Term -> Term -> Term
-bindVar i x (Var k i')
-  | i == i'   = x
-  | otherwise = Var k i'
-bindVar i x (Ref k j)      = Ref k j
-bindVar i x (Sub t)        = t
-bindVar i x (Fix k f)      = Fix k (\v -> bindVar i x (f (Sub v)))
-bindVar i x (Let k t v f)  = Let k (fmap (bindVar i x) t) (bindVar i x v) (\v -> bindVar i x (f (Sub v)))
-bindVar i x (Use k v f)    = Use k (bindVar i x v) (\v -> bindVar i x (f (Sub v)))
-bindVar i x Set            = Set
-bindVar i x (Chk v t)      = Chk (bindVar i x v) (bindVar i x t)
-bindVar i x Emp            = Emp
-bindVar i x EmpM           = EmpM
-bindVar i x Uni            = Uni
-bindVar i x One            = One
-bindVar i x (UniM f)       = UniM (bindVar i x f)
-bindVar i x Bit            = Bit
-bindVar i x Bt0            = Bt0
-bindVar i x Bt1            = Bt1
-bindVar i x (BitM f t)     = BitM (bindVar i x f) (bindVar i x t)
-bindVar i x Nat            = Nat
-bindVar i x Zer            = Zer
-bindVar i x (Suc n)        = Suc (bindVar i x n)
-bindVar i x (NatM z s)     = NatM (bindVar i x z) (bindVar i x s)
-bindVar i x (Lst t)        = Lst (bindVar i x t)
-bindVar i x Nil            = Nil
-bindVar i x (Con h t)      = Con (bindVar i x h) (bindVar i x t)
-bindVar i x (LstM n c)     = LstM (bindVar i x n) (bindVar i x c)
-bindVar i x (Enu ss)       = Enu ss
-bindVar i x (Sym s)        = Sym s
-bindVar i x (EnuM cs e)    = EnuM (map (\(s,t) -> (s, bindVar i x t)) cs) (bindVar i x e)
-bindVar i x (Num t)        = Num t
-bindVar i x (Val v)        = Val v
-bindVar i x (Op2 op a b)   = Op2 op (bindVar i x a) (bindVar i x b)
-bindVar i x (Op1 op a)     = Op1 op (bindVar i x a)
-bindVar i x (Sig a b)      = Sig (bindVar i x a) (bindVar i x b)
-bindVar i x (Tup a b)      = Tup (bindVar i x a) (bindVar i x b)
-bindVar i x (SigM f)       = SigM (bindVar i x f)
-bindVar i x (All a b)      = All (bindVar i x a) (bindVar i x b)
-bindVar i x (Lam k t f)    = Lam k (fmap (bindVar i x) t) (\v -> bindVar i x (f (Sub v)))
-bindVar i x (App f a)      = App (bindVar i x f) (bindVar i x a)
-bindVar i x (Eql t a b)    = Eql (bindVar i x t) (bindVar i x a) (bindVar i x b)
-bindVar i x Rfl            = Rfl
-bindVar i x (EqlM f)       = EqlM (bindVar i x f)
-bindVar i x (Rwt e f)      = Rwt (bindVar i x e) (bindVar i x f)
-bindVar i x (Met n t ctx)  = Met n (bindVar i x t) (map (bindVar i x) ctx)
-bindVar i x Era            = Era
-bindVar i x (Sup l a b)    = Sup (bindVar i x l) (bindVar i x a) (bindVar i x b)
-bindVar i x (SupM l f)     = SupM (bindVar i x l) (bindVar i x f)
-bindVar i x (Frk l a b)    = Frk (bindVar i x l) (bindVar i x a) (bindVar i x b)
-bindVar i x (Loc s t)      = Loc s (bindVar i x t)
-bindVar i x (Log s t)      = Log (bindVar i x s) (bindVar i x t)
-bindVar i x (Pri p)        = Pri p
-bindVar i x (Pat ts ms cs) = Pat (map (bindVar i x) ts) (map (\(k,v) -> (k, bindVar i x v)) ms) (map (\(ps,b) -> (map (bindVar i x) ps, bindVar i x b)) cs)

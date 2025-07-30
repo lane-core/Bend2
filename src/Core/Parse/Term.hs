@@ -28,6 +28,7 @@ import Debug.Trace
 import Core.Adjust
 import Core.Parse
 import Core.Type
+import Core.Show
 
 -- | Parse a "core" form
 parseTermIni :: Parser Term
@@ -1131,19 +1132,3 @@ doReadTerm input =
   case doParseTerm "<input>" input of
     Left err  -> error err
     Right res -> res
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    

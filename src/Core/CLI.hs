@@ -27,6 +27,7 @@ import Core.Deps
 import Core.Import (autoImport)
 import Core.Parse.Book (doParseBook)
 import Core.Type
+import Core.Show
 import Core.WHNF
 
 import qualified Target.JavaScript as JS
@@ -157,3 +158,41 @@ collectAllRefs (Book defs _) =
   where
     collectRefsFromDefn (_, term, typ) = S.union (getDeps term) (getDeps typ)
 
+-- | Check if a term contains a Metavar
+hasMet :: Term -> Bool
+hasMet term = case term of
+  Met {}      -> True
+  Sub t       -> hasMet t
+  Fix _ f     -> hasMet (f (Var "" 0))
+  Let k t v f -> case t of
+    Just t    -> hasMet t || hasMet v || hasMet (f (Var k 0))
+    Nothing   -> hasMet v || hasMet (f (Var k 0))
+  Use k v f   -> hasMet v || hasMet (f (Var k 0))
+  Chk x t     -> hasMet x || hasMet t
+  EmpM        -> False
+  UniM f      -> hasMet f
+  BitM f t    -> hasMet f || hasMet t
+  Suc n       -> hasMet n
+  NatM z s    -> hasMet z || hasMet s
+  Lst t       -> hasMet t
+  Con h t     -> hasMet h || hasMet t
+  LstM n c    -> hasMet n || hasMet c
+  EnuM cs e   -> any (hasMet . snd) cs || hasMet e
+  Op2 _ a b   -> hasMet a || hasMet b
+  Op1 _ a     -> hasMet a
+  Sig a b     -> hasMet a || hasMet b
+  Tup a b     -> hasMet a || hasMet b
+  SigM f      -> hasMet f
+  All a b     -> hasMet a || hasMet b
+  Lam _ t f   -> maybe False hasMet t || hasMet (f (Var "" 0))
+  App f x     -> hasMet f || hasMet x
+  Eql t a b   -> hasMet t || hasMet a || hasMet b
+  EqlM f      -> hasMet f
+  Rwt e f     -> hasMet e || hasMet f
+  Sup _ a b   -> hasMet a || hasMet b
+  SupM l f    -> hasMet l || hasMet f
+  Loc _ t     -> hasMet t
+  Log s x     -> hasMet s || hasMet x
+  Pat s m c   -> any hasMet s || any (hasMet . snd) m || any (\(p,b) -> any hasMet p || hasMet b) c
+  Frk l a b   -> hasMet l || hasMet a || hasMet b
+  _           -> False

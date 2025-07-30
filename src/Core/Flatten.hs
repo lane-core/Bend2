@@ -30,15 +30,17 @@
 module Core.Flatten where
 
 import Data.List (nub, find)
-import qualified Data.Map as M
-import qualified Data.Set as S
+import System.Exit
 import System.IO
 import System.IO.Unsafe (unsafePerformIO)
-import System.Exit
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 import Debug.Trace
 
+import Core.FreeVars
 import Core.Type
+import Core.Show
 import Core.WHNF
 
 -- Flattener

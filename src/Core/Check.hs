@@ -1,20 +1,5 @@
 {-./Type.hs-}
 
--- (omitted)
-
--- PROBLEM: the `(λ{f} x)` form is NOT allowed on elaborated terms.  as such, in
--- the (App (Sigm f) x, _) case on check, we need to SPLIT the checked term into
--- `(F x)`, where `F` is a NEW top-level definition, defined as:
--- F : ∀x0:T0. ∀x1:T1. ... TX -> goal = λx0. λx1. ... λ{f}
--- where:
--- - the ∀'s and λ's are created for each var in the context
--- - TX is the inferred type of 'x'
--- to make this possible, we must refactor the type-checker to allow Book updates
--- as such, we'll now have:
--- - infer returns (Book, Term, Term) (updated Book, elaborated Term, inferred Type)
--- - check returns (Book, Term) (updated Book, elaborated Term)
--- write the COMPLETE refactored file below:
-
 {-# LANGUAGE ViewPatterns #-}
 
 module Core.Check where
@@ -34,6 +19,7 @@ import Core.Bind
 import Core.Equal
 import Core.Rewrite
 import Core.Type
+import Core.Show
 import Core.WHNF
 
 -- Utils
