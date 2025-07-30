@@ -2,6 +2,10 @@
 
 import Test
 
+-- bug description:
+-- see https://github.com/HigherOrderCO/Bend2/issues/15
+--
+
 pat_match_undefined_gives_cant_infer :: String
 pat_match_undefined_gives_cant_infer = """
 def t(n:Nat) -> Nat:
