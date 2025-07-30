@@ -25,140 +25,141 @@ extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 -- ------------
 
 -- Infer the type of a term
-infer :: Int -> Span -> Book -> Ctx -> Term -> Result Term
+infer :: Int -> Span -> Book -> Ctx -> Term -> Result (Term,Term)
 infer d span book@(Book defs _) ctx term =
-  -- trace ("- infer: " ++ show (normal book term)) $
+  trace ("- infer: " ++ show d ++ " " ++ show term) $
   case term of
-    Var _ i -> do
+    Var k i -> do
       let Ctx ks = ctx
       if i < length ks
         then let (_, _, typ) = ks !! i
-             in Done typ
+             in Done (Var k i , typ)
         else Fail $ CantInfer span (normalCtx book ctx)
     Ref k i -> do
       case getDefn book k of
-        Just (_, _, typ) -> Done typ
+        Just (_, _, typ) -> Done (Ref k i , typ)
         Nothing          -> Fail $ Undefined span (normalCtx book ctx) k
     Sub x -> do
       infer d span book ctx x
     Let k t v f -> case t of
-      Just t  -> do
-        check d span book ctx v t
-        infer (d+1) span book (extend ctx k v t) (f v)
+      -- NOTE: take the example below as an inspiration to make the rest of the
+      -- file notice how we reconstruct the term with the result of calling
+      -- infer/check recursively
+      -- NOTE: we also took the opportunity to fix the implementation of Let,
+      -- which was missing a call to 'bindVar'. other definitions aren't
+      -- affected by that change.
+      Just t -> do
+        tV      <- check d span book ctx t Set
+        vV      <- check d span book ctx v t
+        (fV,fT) <- infer (d+1) span book (extend ctx k (Var k d) t) (f (Var k d))
+        return $ (Let k (Just tV) vV (\x -> bindVar d x fV), fT)
       Nothing -> do
-        t <- infer d span book ctx v
-        infer (d+1) span book (extend ctx k v t) (f v)
+        (vV,vT) <- infer d span book ctx v
+        (fV,fT) <- infer (d+1) span book (extend ctx k (Var k d) vT) (f (Var k d))
+        return $ (Let k Nothing vV (\x -> bindVar d x fV), fT)
     Use k v f -> do
       infer d span book ctx (f v)
     Fix k f -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Chk v t -> do
-      check d span book ctx v t
-      Done t
+      tV <- check d span book ctx t Set
+      vV <- check d span book ctx v tV
+      Done (Chk vV tV, tV)
     Set -> do
-      Done Set
+      Done (Set, Set)
     Emp -> do
-      Done Set
+      Done (Emp, Set)
     EmpM -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Uni -> do
-      Done Set
+      Done (Uni, Set)
     One -> do
-      Done Uni
-    UniM _ -> do
+      Done (One, Uni)
+    UniM f -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Bit -> do
-      Done Set
+      Done (Bit, Set)
     Bt0 -> do
-      Done Bit
+      Done (Bt0, Bit)
     Bt1 -> do
-      Done Bit
-    BitM _ _ -> do
+      Done (Bt1, Bit)
+    BitM f t -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Nat -> do
-      Done Set
+      Done (Nat, Set)
     Zer -> do
-      Done Nat
+      Done (Zer, Nat)
     Suc n -> do
-      nT <- infer d span book ctx n
-      case force book nT of
-        Nat ->
-          Done $ Nat
-        _ ->
-          Fail $ TypeMismatch span (normalCtx book ctx) (normal book Nat) (normal book nT)
-    NatM _ _ -> do
+      nV <- check d span book ctx n Nat
+      Done (Suc nV, Nat)
+    NatM z s -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Lst t -> do
-      check d span book ctx t Set
-      Done Set
+      tV <- check d span book ctx t Set
+      Done (Lst tV, Set)
     Nil -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Con h t -> do
       Fail $ CantInfer span (normalCtx book ctx)
-    LstM _ _ -> do
+    LstM n c -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Enu s -> do
-      Done Set
+      Done (Enu s, Set)
     Sym s -> do
       let bookEnums = [ Enu tags | (k, (_, (Sig (Enu tags) _), Set)) <- M.toList defs ]
       case find isEnuWithTag bookEnums of
-        Just t  -> Done t
+        Just t  -> Done (Sym s, t)
         Nothing -> Fail $ CantInfer span (normalCtx book ctx)
         where
           isEnuWithTag (Enu tags) = s `elem` tags
           isEnuWithTag _ = False
-    EnuM _ _ -> do
+    EnuM cs e -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Sig a b -> do
-      check d span book ctx a Set
-      check d span book ctx b (All a (Lam "_" Nothing (\_ -> Set)))
-      Done Set
+      aV <- check d span book ctx a Set
+      bV <- check d span book ctx b (All aV (Lam "_" Nothing (\_ -> Set)))
+      Done (Sig aV bV, Set)
     Tup a b -> do
-      aT <- infer d span book ctx a
-      bT <- infer d span book ctx b
-      Done $ Sig aT (Lam "_" Nothing (\_ -> bT))
-    SigM _ -> do
+      (aV,aT) <- infer d span book ctx a
+      (bV,bT) <- infer d span book ctx b
+      Done (Tup aV bV, Sig aT (Lam "_" Nothing (\_ -> bT)))
+    SigM f -> do
       Fail $ CantInfer span (normalCtx book ctx)
     All a b -> do
-      check d span book ctx a Set
-      check d span book ctx b (All a (Lam "_" Nothing (\_ -> Set)))
-      Done Set
+      aV <- check d span book ctx a Set
+      bV <- check d span book ctx b (All aV (Lam "_" Nothing (\_ -> Set)))
+      Done (All aV bV, Set)
     Lam k t b -> case t of
-      Just tk  -> do 
-        let x = Var k d
-        tb <- infer (d+1) span book (extend ctx k x tk) (b x)
-        Done $ All tk (Lam k (Just tk) (\v -> tb))
+      Just tk -> do
+        tkV <- check d span book ctx tk Set
+        (bV,bT) <- infer (d+1) span book (extend ctx k (Var k d) tkV) (b (Var k d))
+        Done (Lam k (Just tkV) (\v -> bindVar d v bV), All tkV (Lam k (Just tkV) (\v -> bindVar d v bT)))
       Nothing -> do
         Fail $ CantInfer span (normalCtx book ctx)
     App f x -> do
-      -- case f of
-        -- Lam k t body -> do
-          -- xT <- infer d span book ctx x
-          -- infer (d+1) span book (extend ctx k x xT) (body x)
-        -- _ -> do
-          fT <- infer d span book ctx f
-          case force book fT of
-            All fA fB -> do
-              check d span book ctx x fA
-              Done $ App fB x
-            _ -> do
-              Fail $ TypeMismatch span (normalCtx book ctx) (normal book (All (Var "_" 0) (Lam "_" Nothing (\_ -> Var "_" 0)))) (normal book fT)
+      (fV,fT) <- infer d span book ctx f
+      case force book fT of
+        All fA fB -> do
+          xV <- check d span book ctx x fA
+          Done (App fV xV, App fB xV)
+        _ -> do
+          Fail $ TypeMismatch span (normalCtx book ctx) (normal book (All (Var "_" 0) (Lam "_" Nothing (\_ -> Var "_" 0)))) (normal book fT)
     Eql t a b -> do
-      check d span book ctx t Set
-      check d span book ctx a t
-      check d span book ctx b t
-      Done Set
+      tV <- check d span book ctx t Set
+      aV <- check d span book ctx a tV
+      bV <- check d span book ctx b tV
+      Done (Eql tV aV bV, Set)
     Rfl -> do
       Fail $ CantInfer span (normalCtx book ctx)
     EqlM f -> do
       Fail $ CantInfer span (normalCtx book ctx)
     Rwt e f -> do
-      eT <- infer d span book ctx e
+      (eV,eT) <- infer d span book ctx e
       case force book eT of
         Eql t a b -> do
-          -- Rewrite a by b in the context and goal, then infer f
           let rewrittenCtx = rewriteCtx d book a b ctx
-          infer d span book rewrittenCtx f
+          (fV,fT) <- infer d span book rewrittenCtx f
+          Done (Rwt eV fV, fT)
         _ ->
           Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (normal book eT)
     Loc l t ->
@@ -171,37 +172,40 @@ infer d span book@(Book defs _) ctx term =
       Fail $ CantInfer span (normalCtx book ctx)
     Frk l a b -> do
       Fail $ CantInfer span (normalCtx book ctx)
-    Met _ _ _ -> do
+    Met n t c -> do
       Fail $ CantInfer span (normalCtx book ctx)
-    Num _ -> do
-      Done Set
-    Val (U64_V _) -> do
-      Done (Num U64_T)
-    Val (I64_V _) -> do
-      Done (Num I64_T)
-    Val (F64_V _) -> do
-      Done (Num F64_T)
-    Val (CHR_V _) -> do
-      Done (Num CHR_T)
+    Num t -> do
+      Done (Num t, Set)
+    Val (U64_V v) -> do
+      Done (Val (U64_V v), Num U64_T)
+    Val (I64_V v) -> do
+      Done (Val (I64_V v), Num I64_T)
+    Val (F64_V v) -> do
+      Done (Val (F64_V v), Num F64_T)
+    Val (CHR_V v) -> do
+      Done (Val (CHR_V v), Num CHR_T)
     Op2 op a b -> do
-      ta <- infer d span book ctx a
-      tb <- infer d span book ctx b
-      inferOp2Type d span book ctx op a b ta tb
+      (aV,ta) <- infer d span book ctx a
+      (bV,tb) <- infer d span book ctx b
+      (opV,tr) <- inferOp2Type d span book ctx op aV bV ta tb
+      Done (opV, tr)
     Op1 op a -> do
-      ta <- infer d span book ctx a
-      inferOp1Type d span book ctx op a ta
+      (aV,ta) <- infer d span book ctx a
+      (opV,tr) <- inferOp1Type d span book ctx op aV ta
+      Done (opV, tr)
     Pri U64_TO_CHAR -> do
-      Done (All (Num U64_T) (Lam "x" Nothing (\_ -> Num CHR_T)))
+      Done (Pri U64_TO_CHAR, All (Num U64_T) (Lam "x" Nothing (\_ -> Num CHR_T)))
     Pri CHAR_TO_U64 -> do
-      Done (All (Num CHR_T) (Lam "x" Nothing (\_ -> Num U64_T)))
+      Done (Pri CHAR_TO_U64, All (Num CHR_T) (Lam "x" Nothing (\_ -> Num U64_T)))
     Log s x -> do
-      check d span book ctx s (Lst (Num CHR_T))
-      infer d span book ctx x
+      sV <- check d span book ctx s (Lst (Num CHR_T))
+      (xV,xT) <- infer d span book ctx x
+      Done (Log sV xV, xT)
     Pat _ _ _ -> do
       error "Pat not supported in infer"
 
 -- Infer the result type of a binary numeric operation
-inferOp2Type :: Int -> Span -> Book -> Ctx -> NOp2 -> Term -> Term -> Term -> Term -> Result Term
+inferOp2Type :: Int -> Span -> Book -> Ctx -> NOp2 -> Term -> Term -> Term -> Term -> Result (Term,Term)
 inferOp2Type d span book ctx op a b ta tb = do
   -- For arithmetic ops, both operands must have the same numeric type
   case op of
@@ -226,179 +230,199 @@ inferOp2Type d span book ctx op a b ta tb = do
     SHR -> integerOp ta tb
   where
     numericOp ta tb = case (force book ta, force book tb) of
-      (Num t1, Num t2) | t1 == t2 -> Done (Num t1)
-      (Nat, Nat) -> Done Nat  -- Allow Nat arithmetic operations
+      (Num t1, Num t2) | t1 == t2 -> Done (Op2 op a b, Num t1)
+      (Nat, Nat) -> Done (Op2 op a b, Nat)  -- Allow Nat arithmetic operations
       _ -> Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Ref "Num" 1)) (normal book ta)
     
     comparisonOp ta tb = case (force book ta, force book tb) of
-      (Num t1, Num t2) | t1 == t2 -> Done Bit
-      (Bit, Bit) -> Done Bit  -- Allow Bool comparison
-      (Nat, Nat) -> Done Bit  -- Allow Nat comparison
+      (Num t1, Num t2) | t1 == t2 -> Done (Op2 op a b, Bit)
+      (Bit, Bit) -> Done (Op2 op a b, Bit)  -- Allow Bool comparison
+      (Nat, Nat) -> Done (Op2 op a b, Bit)  -- Allow Nat comparison
       _ -> Fail $ TypeMismatch span (normalCtx book ctx) (normal book ta) (normal book tb)
     
     integerOp ta tb = case (force book ta, force book tb) of
-      (Num U64_T, Num U64_T) -> Done (Num U64_T)
-      (Num I64_T, Num I64_T) -> Done (Num U64_T)  -- Bitwise on I64 returns U64
-      (Num F64_T, Num F64_T) -> Done (Num U64_T)  -- Bitwise on F64 returns U64
+      (Num U64_T, Num U64_T) -> Done (Op2 op a b, Num U64_T)
+      (Num I64_T, Num I64_T) -> Done (Op2 op a b, Num U64_T)  -- Bitwise on I64 returns U64
+      (Num F64_T, Num F64_T) -> Done (Op2 op a b, Num U64_T)  -- Bitwise on F64 returns U64
       (Num CHR_T, Num CHR_T) -> Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Ref "Num" 1)) (normal book ta)  -- Bitwise not supported for CHR
       _ -> Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Ref "Num" 1)) (normal book ta)
     
     boolOrIntegerOp ta tb = case (force book ta, force book tb) of
-      (Bit, Bit) -> Done Bit  -- Logical operations on booleans
-      (Num U64_T, Num U64_T) -> Done (Num U64_T)  -- Bitwise operations on integers
-      (Num I64_T, Num I64_T) -> Done (Num U64_T)
-      (Num F64_T, Num F64_T) -> Done (Num U64_T)
+      (Bit, Bit) -> Done (Op2 op a b, Bit)  -- Logical operations on booleans
+      (Num U64_T, Num U64_T) -> Done (Op2 op a b, Num U64_T)  -- Bitwise operations on integers
+      (Num I64_T, Num I64_T) -> Done (Op2 op a b, Num U64_T)
+      (Num F64_T, Num F64_T) -> Done (Op2 op a b, Num U64_T)
       _ -> Fail $ TypeMismatch span (normalCtx book ctx) (normal book ta) (normal book tb)
 
 -- Infer the result type of a unary numeric operation
-inferOp1Type :: Int -> Span -> Book -> Ctx -> NOp1 -> Term -> Term -> Result Term
+inferOp1Type :: Int -> Span -> Book -> Ctx -> NOp1 -> Term -> Term -> Result (Term,Term)
 inferOp1Type d span book ctx op a ta = case op of
   NOT -> case force book ta of
-    Bit       -> Done Bit  -- Logical NOT on Bool
-    Num U64_T -> Done (Num U64_T)
-    Num I64_T -> Done (Num U64_T)  -- Bitwise NOT on I64 returns U64
-    Num F64_T -> Done (Num U64_T)  -- Bitwise NOT on F64 returns U64
+    Bit       -> Done (Op1 op a, Bit)  -- Logical NOT on Bool
+    Num U64_T -> Done (Op1 op a, Num U64_T)
+    Num I64_T -> Done (Op1 op a, Num U64_T)  -- Bitwise NOT on I64 returns U64
+    Num F64_T -> Done (Op1 op a, Num U64_T)  -- Bitwise NOT on F64 returns U64
     Num CHR_T -> Fail $ CantInfer span (normalCtx book ctx)  -- Bitwise NOT not supported for CHR
     _         -> Fail $ CantInfer span (normalCtx book ctx)
   NEG -> case force book ta of
-    Num I64_T -> Done (Num I64_T)
-    Num F64_T -> Done (Num F64_T)
+    Num I64_T -> Done (Op1 op a, Num I64_T)
+    Num F64_T -> Done (Op1 op a, Num F64_T)
     Num CHR_T -> Fail $ CantInfer span (normalCtx book ctx)  -- Negation not supported for CHR
     _         -> Fail $ CantInfer span (normalCtx book ctx)
 
 -- Check if a term has the expected type
 -- TODO: review the NEW CASES
-check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
+check :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result Term
 check d span book ctx (Loc l t) goal = check d l book ctx t goal 
 check d span book ctx term      goal =
-  -- trace ("- check: " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
+  trace ("- check: " ++ show d ++ " " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
   case (term, force book goal) of
     (Era, _) -> do
-      Done ()
+      Done Era
     (Let k t v f, _) -> case t of
         Just t  -> do
-          check d span book ctx v t
-          check (d+1) span book (extend ctx k v t) (f v) goal
+          tV <- check d span book ctx t Set
+          vV <- check d span book ctx v tV
+          fV <- check (d+1) span book (extend ctx k (Var k d) tV) (f (Var k d)) goal
+          Done (Let k (Just tV) vV (\x -> bindVar d x fV))
         Nothing -> do
-          t <- infer d span book ctx v
-          check (d+1) span book (extend ctx k v t) (f v) goal
+          (vV,vT) <- infer d span book ctx v
+          fV <- check (d+1) span book (extend ctx k (Var k d) vT) (f (Var k d)) goal
+          Done (Let k Nothing vV (\x -> bindVar d x fV))
     (Use k v f, _) -> do
       check d span book ctx (f v) goal
     (One, Uni) -> do
-      Done ()
+      Done One
     (Bt0, Bit) -> do
-      Done ()
+      Done Bt0
     (Bt1, Bit) -> do
-      Done ()
+      Done Bt1
     (Zer, Nat) -> do
-      Done ()
+      Done Zer
     (Suc n, Nat) -> do
-      check d span book ctx n Nat
+      nV <- check d span book ctx n Nat
+      Done (Suc nV)
     -- NEW CASE:
-    (Suc n, Eql t (force book -> Suc a) (force book -> Suc b)) ->
-      check d span book ctx n (Eql t a b)
-    (Nil, Lst _) -> do
-      Done ()
+    (Suc n, Eql t (force book -> Suc a) (force book -> Suc b)) -> do
+      nV <- check d span book ctx n (Eql t a b)
+      Done (Suc nV)
+    (Nil, Lst t) -> do
+      Done Nil
     (Nil, goal) ->
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Lst (Var "_" 0))) (normal book goal)
     (Con h t, Lst tT) -> do
-      check d span book ctx h tT
-      check d span book ctx t (Lst tT)
+      hV <- check d span book ctx h tT
+      tV <- check d span book ctx t (Lst tT)
+      Done (Con hV tV)
     -- NEW CASE:
     (Con h t, Eql (force book -> Lst tT) (force book -> Con h1 t1) (force book -> Con h2 t2)) -> do
-      check d span book ctx h (Eql tT h1 h2)
-      check d span book ctx t (Eql (Lst tT) t1 t2)
-    (Lam k t f, All a b) -> do
-      let x = Var k d
-      check (d+1) span book (extend ctx k x a) (f x) (App b x)
+      hV <- check d span book ctx h (Eql tT h1 h2)
+      tV <- check d span book ctx t (Eql (Lst tT) t1 t2)
+      Done (Con hV tV)
+    (Lam k t f, All a b) -> trace ("OXI: " ++ show (f (Var k d))) $ do
+      fV <- check (d+1) span book (extend ctx k (Var k d) a) (f (Var k d)) (App b (Var k d))
+      Done (Lam k t (\v -> bindVar d v fV))
     (EmpM, All (force book -> Eql t (force book -> Zer) (force book -> Suc y)) rT) -> do
-      Done ()
+      Done EmpM
     (EmpM, All (force book -> Eql t (force book -> Suc x) (force book -> Zer)) rT) -> do
-      Done ()
+      Done EmpM
     (EmpM, All (force book -> Eql t (force book -> Suc x) (force book -> Suc y)) rT) -> do
       check d span book ctx EmpM (All (Eql t x y) rT)
     (EmpM, All (force book -> Emp) rT) -> do
-      Done ()
+      Done EmpM
     (EmpM, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Emp (Lam "_" Nothing (\_ -> Set))))
     -- NEW CASE:
     (UniM f, All (force book -> Eql (force book -> Uni) (force book -> One) (force book -> One)) rT) -> do
-      check d span book ctx f (App rT Rfl)
+      fV <- check d span book ctx f (App rT Rfl)
+      Done (UniM fV)
     (UniM f, All (force book -> Uni) rT) -> do
-      check d span book ctx f (App rT One)
-      Done ()
+      fV <- check d span book ctx f (App rT One)
+      Done (UniM fV)
     (UniM f, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Uni (Lam "_" Nothing (\_ -> Set))))
     (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt0) (force book -> Bt0)) rT) -> do
-      check d span book ctx f (App rT Rfl)
+      fV <- check d span book ctx f (App rT Rfl)
+      Done (BitM fV t)
     (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt1) (force book -> Bt1)) rT) -> do
-      check d span book ctx t (App rT Rfl)
+      tV <- check d span book ctx t (App rT Rfl)
+      Done (BitM f tV)
     (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt0) (force book -> Bt1)) rT) -> do
-      Done ()
+      Done (BitM f t)
     (BitM f t, All (force book -> Eql (force book -> Bit) (force book -> Bt1) (force book -> Bt0)) rT) -> do
-      Done ()
+      Done (BitM f t)
     (BitM f t, All (force book -> Bit) rT) -> do
-      check d span book ctx f (App rT Bt0)
-      check d span book ctx t (App rT Bt1)
-      Done ()
+      fV <- check d span book ctx f (App rT Bt0)
+      tV <- check d span book ctx t (App rT Bt1)
+      Done (BitM fV tV)
     (BitM f t, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Bit (Lam "_" Nothing (\_ -> Set))))
     (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Zer) (force book -> Zer)) rT) -> do
-      check d span book ctx z (App rT Rfl)
+      zV <- check d span book ctx z (App rT Rfl)
+      Done (NatM zV s)
     (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Suc a) (force book -> Suc b)) rT) -> do
-      check d span book ctx s (All (Eql Nat a b) (Lam "p" Nothing (\p -> App rT (Suc p))))
+      sV <- check d span book ctx s (All (Eql Nat a b) (Lam "p" Nothing (\p -> App rT (Suc p))))
+      Done (NatM z sV)
     (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Zer) (force book -> Suc _)) rT) -> do
-      Done ()
+      Done (NatM z s)
     (NatM z s, All (force book -> Eql (force book -> Nat) (force book -> Suc _) (force book -> Zer)) rT) -> do
-      Done ()
+      Done (NatM z s)
     (NatM z s, All (force book -> Nat) rT) -> do
-      check d span book ctx z (App rT Zer)
-      check d span book ctx s (All Nat (Lam "p" Nothing (\p -> App rT (Suc p))))
-      Done ()
+      zV <- check d span book ctx z (App rT Zer)
+      sV <- check d span book ctx s (All Nat (Lam "p" Nothing (\p -> App rT (Suc p))))
+      Done (NatM zV sV)
     (NatM z s, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All Nat (Lam "_" Nothing (\_ -> Set))))
     -- NEW CASE:
     (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Nil) (force book -> Nil)) rT) -> do
-      check d span book ctx n (App rT Rfl)
+      nV <- check d span book ctx n (App rT Rfl)
+      Done (LstM nV c)
     -- NEW CASE:
     (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Con h1 t1) (force book -> Con h2 t2)) rT) -> do
-      check d span book ctx c (All (Eql a h1 h2) (Lam "hp" Nothing (\hp -> 
+      cV <- check d span book ctx c (All (Eql a h1 h2) (Lam "hp" Nothing (\hp -> 
         All (Eql (Lst a) t1 t2) (Lam "tp" Nothing (\tp -> 
           App rT (Con hp tp))))))
+      Done (LstM n cV)
     -- NEW CASE:
     (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Nil) (force book -> Con _ _)) rT) -> do
-      Done ()
+      Done (LstM n c)
     -- NEW CASE:
     (LstM n c, All (force book -> Eql (force book -> Lst a) (force book -> Con _ _) (force book -> Nil)) rT) -> do
-      Done ()
+      Done (LstM n c)
     (LstM n c, All (force book -> Lst a) rT) -> do
-      check d span book ctx n (App rT Nil)
-      check d span book ctx c $ All a (Lam "h" Nothing (\h -> All (Lst a) (Lam "t" Nothing (\t -> App rT (Con h t)))))
-      Done ()
+      nV <- check d span book ctx n (App rT Nil)
+      cV <- check d span book ctx c $ All a (Lam "h" Nothing (\h -> All (Lst a) (Lam "t" Nothing (\t -> App rT (Con h t)))))
+      Done (LstM nV cV)
     (LstM n c, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All (Lst (Var "_" 0)) (Lam "_" Nothing (\_ -> Set))))
     (Sym s, Enu y) -> do
       if s `elem` y
-        then Done ()
+        then Done (Sym s)
         else Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Enu y)) (normal book (Sym s))
     -- NEW CASE:
     (Sym s, Eql (force book -> Enu syms) (force book -> Sym s1) (force book -> Sym s2)) -> do
       if s `elem` syms && s == s1 && s1 == s2
-        then Done ()
+        then Done (Sym s)
         else Fail $ TermMismatch span (normalCtx book ctx) (normal book (Sym s1)) (normal book (Sym s2))
     -- NEW CASE:
     (EnuM cs df, All (force book -> Eql (force book -> Enu syms) (force book -> Sym s1) (force book -> Sym s2)) rT) -> do
       if s1 == s2
         then case lookup s1 cs of
-          Just t -> check d span book ctx t (App rT Rfl)
-          Nothing -> check d span book ctx df (All (Enu syms) (Lam "_" Nothing (\v -> App rT v)))
-        else Done ()
+          Just t -> do
+            tV <- check d span book ctx t (App rT Rfl)
+            Done (EnuM (map (\(s,t) -> if s == s1 then (s,tV) else (s,t)) cs) df)
+          Nothing -> do
+            dfV <- check d span book ctx df (All (Enu syms) (Lam "_" Nothing (\v -> App rT v)))
+            Done (EnuM cs dfV)
+        else Done (EnuM cs df)
     (EnuM cs df, All (force book -> Enu syms) rT) -> do
-      mapM_ (\(s, t) -> check d span book ctx t (App rT (Sym s))) cs
+      csV <- mapM (\(s, t) -> do
+        tV <- check d span book ctx t (App rT (Sym s))
+        return (s, tV)) cs
       let covered_syms = map fst cs
       let all_covered = length covered_syms >= length syms
                      && all (`elem` syms) covered_syms
-      if not all_covered
+      dfV <- if not all_covered
         then do
           case df of
             (cut -> Lam k Nothing (unlam k d -> One)) -> do
@@ -407,118 +431,182 @@ check d span book ctx term      goal =
               let enu_type = Enu syms
               let lam_goal = All enu_type (Lam "_" Nothing (\v -> App rT v))
               check d span book ctx df lam_goal
-        else Done ()
+        else return df
+      Done (EnuM csV dfV)
     (EnuM cs df, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All (Enu []) (Lam "_" Nothing (\_ -> Set))))
     -- NEW CASE:
     (SigM f, All (force book -> Eql (force book -> Sig a b) (force book -> Tup x1 y1) (force book -> Tup x2 y2)) rT) -> do
-      check d span book ctx f (All (Eql a x1 x2) (Lam "xp" Nothing (\xp -> 
+      fV <- check d span book ctx f (All (Eql a x1 x2) (Lam "xp" Nothing (\xp -> 
         All (Eql (App b x1) y1 y2) (Lam "yp" Nothing (\yp -> 
           App rT (Tup xp yp))))))
+      Done (SigM fV)
     (SigM f, All (force book -> Sig a b) rT) -> do
-      check d span book ctx f $ All a (Lam "x" Nothing (\h -> All (App b h) (Lam "y" Nothing (\t -> App rT (Tup h t)))))
-      Done ()
+      fV <- check d span book ctx f $ All a (Lam "x" Nothing (\h -> All (App b h) (Lam "y" Nothing (\t -> App rT (Tup h t)))))
+      Done (SigM fV)
     (SigM f, _) -> do
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All (Sig (Var "_" 0) (Lam "_" Nothing (\_ -> Var "_" 0))) (Lam "_" Nothing (\_ -> Set))))
     (Tup a b, Sig aT bT) -> do
-      check d span book ctx a aT
-      check d span book ctx b (App bT a)
+      aV <- check d span book ctx a aT
+      bV <- check d span book ctx b (App bT aV)
+      Done (Tup aV bV)
     -- NEW CASE:
     (Tup a b, Eql (force book -> Sig aT bT) (force book -> Tup a1 b1) (force book -> Tup a2 b2)) -> do
-      check d span book ctx a (Eql aT a1 a2)
-      check d span book ctx b (Eql (App bT a1) b1 b2)
+      aV <- check d span book ctx a (Eql aT a1 a2)
+      bV <- check d span book ctx b (Eql (App bT a1) b1 b2)
+      Done (Tup aV bV)
     (Rfl, Eql t a b) -> do
       if equal d book a b
-        then Done ()
+        then Done Rfl
         else Fail $ TermMismatch span (normalCtx book ctx) (normal book a) (normal book b)
     (EqlM f, All (force book -> Eql t a b) rT) -> do
       let rewrittenGoal = rewrite d book a b (App rT Rfl)
       let rewrittenCtx  = rewriteCtx d book a b ctx
-      check d span book rewrittenCtx f rewrittenGoal
+      fV <- check d span book rewrittenCtx f rewrittenGoal
+      Done (EqlM fV)
     (Fix k f, _) -> do
-      check (d+1) span book (extend ctx k (Fix k f) goal) (f (Fix k f)) goal
-    (Val (U64_V _), Num U64_T) -> do
-      Done ()
-    (Val (I64_V _), Num I64_T) -> do
-      Done ()
-    (Val (F64_V _), Num F64_T) -> do
-      Done ()
-    (Val (CHR_V _), Num CHR_T) -> do
-      Done ()
+      fV <- check (d+1) span book (extend ctx k (Fix k f) goal) (f (Fix k f)) goal
+      Done (Fix k (\x -> bindVar d x fV))
+    (Val v@(U64_V _), Num U64_T) -> do
+      Done (Val v)
+    (Val v@(I64_V _), Num I64_T) -> do
+      Done (Val v)
+    (Val v@(F64_V _), Num F64_T) -> do
+      Done (Val v)
+    (Val v@(CHR_V _), Num CHR_T) -> do
+      Done (Val v)
     -- NEW CASE:
     (Val v1, Eql (force book -> Num t) (force book -> Val v2) (force book -> Val v3)) -> do
       if v1 == v2 && v2 == v3
-        then Done ()
+        then Done (Val v1)
         else Fail $ TermMismatch span (normalCtx book ctx) (normal book (Val v2)) (normal book (Val v3))
     (Op2 op a b, _) -> do
-      ta <- infer d span book ctx a
-      tb <- infer d span book ctx b
-      tr <- inferOp2Type d span book ctx op a b ta tb
+      (aV,ta) <- infer d span book ctx a
+      (bV,tb) <- infer d span book ctx b
+      (opV,tr) <- inferOp2Type d span book ctx op aV bV ta tb
       if equal d book tr goal
-        then Done ()
+        then Done opV
         else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book tr)
     (Op1 op a, _) -> do
-      ta <- infer d span book ctx a
-      tr <- inferOp1Type d span book ctx op a ta
+      (aV,ta) <- infer d span book ctx a
+      (opV,tr) <- inferOp1Type d span book ctx op aV ta
       if equal d book tr goal
-        then Done ()
+        then Done opV
         else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book tr)
     (Sup l a b, _) -> do
-      check d span book ctx a goal
-      check d span book ctx b goal
+      aV <- check d span book ctx a goal
+      bV <- check d span book ctx b goal
+      Done (Sup l aV bV)
     -- NEW CASE:
     (SupM l f, All (force book -> Eql t (force book -> Sup l1 a1 b1) (force book -> Sup l2 a2 b2)) rT) -> do
       if equal d book l l1 && equal d book l1 l2
-        then check d span book ctx f (All (Eql t a1 a2) (Lam "ap" Nothing (\ap -> 
-               All (Eql t b1 b2) (Lam "bp" Nothing (\bp -> 
-                 App rT (Sup l ap bp))))))
+        then do
+          fV <- check d span book ctx f (All (Eql t a1 a2) (Lam "ap" Nothing (\ap -> 
+                 All (Eql t b1 b2) (Lam "bp" Nothing (\bp -> 
+                   App rT (Sup l ap bp))))))
+          Done (SupM l fV)
         else Fail $ TermMismatch span (normalCtx book ctx) (normal book l1) (normal book l2)
     (SupM l f, _) -> do
-      check d span book ctx l (Num U64_T)
+      lV <- check d span book ctx l (Num U64_T)
       case force book goal of
         All xT rT -> do
-          check d span book ctx f (All xT (Lam "p" Nothing (\p -> All xT (Lam "q" Nothing (\q -> App rT (Sup l p q))))))
-          Done ()
+          fV <- check d span book ctx f (All xT (Lam "p" Nothing (\p -> All xT (Lam "q" Nothing (\q -> App rT (Sup lV p q))))))
+          Done (SupM lV fV)
         _ -> Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book (All (Var "_" 0) (Lam "_" Nothing (\_ -> Set))))
     (Frk l a b, _) -> do
-      check d span book ctx l (Num U64_T)
-      check d span book ctx a goal
-      check d span book ctx b goal
+      lV <- check d span book ctx l (Num U64_T)
+      aV <- check d span book ctx a goal
+      bV <- check d span book ctx b goal
+      Done (Frk lV aV bV)
     (Rwt e f, _) -> do
-      eT <- infer d span book ctx e
+      (eV,eT) <- infer d span book ctx e
       case force book eT of
         Eql t a b -> do
           let rewrittenCtx  = rewriteCtx d book a b ctx
           let rewrittenGoal = rewrite d book a b goal
-          check d span book rewrittenCtx f rewrittenGoal
+          fV <- check d span book rewrittenCtx f rewrittenGoal
+          Done (Rwt eV fV)
         _ ->
           Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (normal book eT)
     (Pat _ _ _, _) -> do
       error "not-supported"
     (Log s x, _) -> do
-      check d span book ctx s (Lst (Num CHR_T))
-      check d span book ctx x goal
+      sV <- check d span book ctx s (Lst (Num CHR_T))
+      xV <- check d span book ctx x goal
+      Done (Log sV xV)
     (Lam f t x, _) ->
       Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (Ref "Function" 1)
+    (App (SigM f) x, _) -> do
+      (xV,xT) <- infer d span book ctx x
+      case force book xT of
+        Sig a b -> do
+          fV <- check d span book ctx f (All a (Lam "x" Nothing (\x -> All (App b x) (Lam "y" Nothing (\y -> goal)))))
+          Done (App (SigM fV) xV)
+        _ -> do
+          Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Sig (Var "_" 0) (Lam "_" Nothing (\_ -> Var "_" 0)))) (normal book xT)
     (_, _) -> do
       verify d span book ctx term goal
 
 -- Verify that a term has the expected type by inference
-verify :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result ()
+verify :: Int -> Span -> Book -> Ctx -> Term -> Term -> Result Term
 verify d span book ctx term goal = do
-  t <- infer d span book ctx term
+  (termV,t) <- infer d span book ctx term
   if equal d book t goal
-    then Done ()
+    then Done termV
     else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book t)
 
--- Utils
--- -----
-
--- Check all definitions in a Book
-checkBook :: Book -> Result ()
-checkBook book@(Book defs names) = mapM_ checkDef [(name, fromJust (M.lookup name defs)) | name <- names]
-  where
-    checkDef (name, (_, term, typ)) = do
-      trace ("CHECKING DEF: " ++ name) $ do
-        check 0 noSpan book (Ctx []) term typ
-
+-- Traverses the term and binds the var of index 'd' to the given term t
+bindVar :: Int -> Term -> Term -> Term
+bindVar i x (Var k i')
+  | i == i'   = x
+  | otherwise = Var k i'
+bindVar i x (Ref k j)      = Ref k j
+bindVar i x (Sub t)        = t
+bindVar i x (Fix k f)      = Fix k (\v -> bindVar i x (f (Sub v)))
+bindVar i x (Let k t v f)  = Let k (fmap (bindVar i x) t) (bindVar i x v) (\v -> bindVar i x (f (Sub v)))
+bindVar i x (Use k v f)    = Use k (bindVar i x v) (\v -> bindVar i x (f (Sub v)))
+bindVar i x Set            = Set
+bindVar i x (Chk v t)      = Chk (bindVar i x v) (bindVar i x t)
+bindVar i x Emp            = Emp
+bindVar i x EmpM           = EmpM
+bindVar i x Uni            = Uni
+bindVar i x One            = One
+bindVar i x (UniM f)       = UniM (bindVar i x f)
+bindVar i x Bit            = Bit
+bindVar i x Bt0            = Bt0
+bindVar i x Bt1            = Bt1
+bindVar i x (BitM f t)     = BitM (bindVar i x f) (bindVar i x t)
+bindVar i x Nat            = Nat
+bindVar i x Zer            = Zer
+bindVar i x (Suc n)        = Suc (bindVar i x n)
+bindVar i x (NatM z s)     = NatM (bindVar i x z) (bindVar i x s)
+bindVar i x (Lst t)        = Lst (bindVar i x t)
+bindVar i x Nil            = Nil
+bindVar i x (Con h t)      = Con (bindVar i x h) (bindVar i x t)
+bindVar i x (LstM n c)     = LstM (bindVar i x n) (bindVar i x c)
+bindVar i x (Enu ss)       = Enu ss
+bindVar i x (Sym s)        = Sym s
+bindVar i x (EnuM cs e)    = EnuM (map (\(s,t) -> (s, bindVar i x t)) cs) (bindVar i x e)
+bindVar i x (Num t)        = Num t
+bindVar i x (Val v)        = Val v
+bindVar i x (Op2 op a b)   = Op2 op (bindVar i x a) (bindVar i x b)
+bindVar i x (Op1 op a)     = Op1 op (bindVar i x a)
+bindVar i x (Sig a b)      = Sig (bindVar i x a) (bindVar i x b)
+bindVar i x (Tup a b)      = Tup (bindVar i x a) (bindVar i x b)
+bindVar i x (SigM f)       = SigM (bindVar i x f)
+bindVar i x (All a b)      = All (bindVar i x a) (bindVar i x b)
+bindVar i x (Lam k t f)    = Lam k (fmap (bindVar i x) t) (\v -> bindVar i x (f (Sub v)))
+bindVar i x (App f a)      = App (bindVar i x f) (bindVar i x a)
+bindVar i x (Eql t a b)    = Eql (bindVar i x t) (bindVar i x a) (bindVar i x b)
+bindVar i x Rfl            = Rfl
+bindVar i x (EqlM f)       = EqlM (bindVar i x f)
+bindVar i x (Rwt e f)      = Rwt (bindVar i x e) (bindVar i x f)
+bindVar i x (Met n t ctx)  = Met n (bindVar i x t) (map (bindVar i x) ctx)
+bindVar i x Era            = Era
+bindVar i x (Sup l a b)    = Sup (bindVar i x l) (bindVar i x a) (bindVar i x b)
+bindVar i x (SupM l f)     = SupM (bindVar i x l) (bindVar i x f)
+bindVar i x (Frk l a b)    = Frk (bindVar i x l) (bindVar i x a) (bindVar i x b)
+bindVar i x (Loc s t)      = Loc s (bindVar i x t)
+bindVar i x (Log s t)      = Log (bindVar i x s) (bindVar i x t)
+bindVar i x (Pri p)        = Pri p
+bindVar i x (Pat ts ms cs) = Pat (map (bindVar i x) ts) (map (\(k,v) -> (k, bindVar i x v)) ms) (map (\(ps,b) -> (map (bindVar i x) ps, bindVar i x b)) cs)
