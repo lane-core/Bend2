@@ -17,6 +17,7 @@ common warnings
                  -Wno-unused-local-binds
                  -Wno-unused-imports
                  -Wno-x-partial
+                 -Wno-orphans
 
 library
     import:           warnings
@@ -35,7 +36,6 @@ library
                       Core.Adjust.DesugarFrks,
                       Core.FreeVars,
                       Core.Import,
-                      Core.LHS,
                       Core.Parse,
                       Core.Parse.Book,
                       Core.Parse.Term,

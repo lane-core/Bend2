@@ -1,19 +1,26 @@
 {-./Type.hs-}
 
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Core.WHNF where
-
-import Debug.Trace
-
-import Core.Type
-import Core.LHS
 
 import System.IO.Unsafe
 import Data.IORef
 import Data.Bits
 import GHC.Float (castDoubleToWord64, castWord64ToDouble)
+
+import Debug.Trace
+
+import Core.Type
 
 -- Evaluation
 -- ==========
@@ -403,6 +410,31 @@ ieql :: Book -> Term -> Term -> Bool
 ieql book a b = case (termToInt book a, termToInt book b) of
   (Just x, Just y) -> x == y
   _                -> False
+
+-- Left-Hand Side (LHS)
+-- --------------------
+
+lhs_ctr_new :: (Term -> Term) -> SNat n -> Arg n -> (Term -> Arg n)
+lhs_ctr_new l SZ       ctr = \k -> App (l k) ctr
+lhs_ctr_new l (SS n')  ctr = \x -> lhs_ctr_new l n' (ctr x)
+
+lhs_ctr_ext :: SNat k -> (Term -> Arg (S k)) -> SNat n -> Arg n -> Arg (S (Add n k))
+lhs_ctr_ext _ l SZ      ctr = l ctr
+lhs_ctr_ext k l (SS n') ctr = \x -> lhs_ctr_ext k l n' (ctr x)
+
+lhs_ctr :: LHS -> SNat n -> Arg n -> LHS
+lhs_ctr (LHS k l) n ctr = case k of
+  SZ    -> LHS n               (lhs_ctr_new l n ctr)
+  SS k' -> LHS (addSNat n k')  (lhs_ctr_ext k' l n ctr)
+
+getArgs :: Term -> [Term] -> [Term]
+getArgs (App f a) acc = getArgs f (a:acc)
+getArgs t         acc = t:acc
+
+lhs_to_list :: LHS -> [Term]
+lhs_to_list (LHS k l) = case k of
+  SZ     -> getArgs (l Era) []
+  SS _   -> []  -- unreachable per original spec
 
 -- Guarded Deref
 -- -------------

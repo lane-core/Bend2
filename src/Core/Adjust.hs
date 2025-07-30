@@ -1,5 +1,16 @@
 {-./Type.hs-}
 
+-- The Adjust module post-processes a parsed term, preparing it for
+-- type-checking, evaluation and compilation. It has 4 steps:
+-- - FlattenPats: makes all pattern-matches flat and single-scrutinee
+-- - DesugarPats: converts pattern-matches into core lambda-matches
+-- - DesugarFrks: converts forks into sups and dups
+-- - ReduceEtas: turns `λx.(λ{f} x)` into `λ{f}` (case-tree form)
+-- Note that, per convention, top-level defs must be shaped as case trees,
+-- without expressions in the `(λ{f} x)` form. After these passes, there can
+-- still be expressions in these shapes (non-var scrutinees, let-bindings...).
+-- These are then split into separate top-level defs by the type-checker.
+
 module Core.Adjust where
 
 import Control.Monad.State
@@ -26,7 +37,7 @@ adjust book term =
   -- trace ("more: " ++ show more) $
   done
   where
-    flat  = flattenPats 0 noSpan book term
+    flat = flattenPats 0 noSpan book term
     npat = desugarPats 0 flat
     nfrk = desugarFrks 0 npat
     etas = reduceEtas 0 nfrk

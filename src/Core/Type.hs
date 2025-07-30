@@ -1,14 +1,25 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Core.Type where
 
-import Data.List (intercalate)
-import Debug.Trace
 import Data.Int (Int32, Int64)
-import Data.Word (Word32, Word64)
+import Data.List (intercalate)
 import Data.Maybe (fromMaybe, fromJust)
+import Data.Word (Word32, Word64)
+import Debug.Trace
+import qualified Data.Kind as DK
 import qualified Data.Map as M
 import qualified Data.Set as S
+
 
 data Bits = O Bits | I Bits | E deriving Show
 type Name = String
@@ -188,6 +199,31 @@ instance Monad Result where
   Done a >>= f = f a
   Fail e >>= _ = Fail e
 
+-- Peano naturals at both type‑ and value‑level
+data Nat = Z | S Nat
+
+data SNat :: Nat -> DK.Type where
+  SZ :: SNat Z
+  SS :: SNat n -> SNat (S n)
+
+-- Type‑level addition
+type family Add (n :: Nat) (m :: Nat) :: Nat where
+  Add Z     m = m
+  Add (S n) m = S (Add n m)
+
+-- Adds two type-level SNats
+addSNat :: SNat n -> SNat m -> SNat (Add n m)
+addSNat SZ     m = m
+addSNat (SS n) m = SS (addSNat n m)
+
+-- Arg<n> = n‑ary function returning Term
+type family Arg (n :: Nat) :: DK.Type where
+  Arg Z     = Term
+  Arg (S p) = Term -> Arg p
+
+-- LHS = pair of arity and a constructor taking exactly that many args
+data LHS where
+  LHS :: SNat k -> (Term -> Arg k) -> LHS
 
 -- Utils
 -- -----

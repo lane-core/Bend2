@@ -77,9 +77,8 @@ desugarFrksGo d ctx (Pri p)       = Pri p
 desugarFrksGo d ctx (Log s x)     = Log (desugarFrksGo d ctx s) (desugarFrksGo d ctx x)
 desugarFrksGo d ctx (Loc s t)     = Loc s (desugarFrksGo d ctx t)
 desugarFrksGo d ctx (Pat s m c)   = Pat (map (desugarFrksGo d ctx) s) [(k, desugarFrksGo d ctx v) | (k,v) <- m] [(p, desugarFrksGo d (ctxCs p) f) | (p, f) <- c]
-  where
-    ctxCs  p = ctx ++ map (\(k,v) -> (k, d)) m ++ ctxPat p
-    ctxPat p = map (\k -> (k, d)) (S.toList (S.unions (map (freeVars S.empty) p)))
+  where ctxCs  p = ctx ++ map (\(k,v) -> (k, d)) m ++ ctxPat p
+        ctxPat p = map (\k -> (k, d)) (S.toList (S.unions (map (freeVars S.empty) p)))
 
 desugarFrk :: Int -> [(Name, Int)] -> Term -> Term -> Term -> Term
 desugarFrk d ctx l a b = buildSupMs vars where
