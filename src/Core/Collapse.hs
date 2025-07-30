@@ -224,7 +224,6 @@ collapse dep book term = case term of
     c' <- mapM (collapse dep book) c
     return $ Met k t' c'
 
-
   -- Superpositions
   Era -> CEra
 

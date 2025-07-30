@@ -220,11 +220,4 @@ flattenTup :: Term -> [Term]
 flattenTup (Tup l r) = l : flattenTup r
 flattenTup t         = [t]
 
-prettyStr :: Term -> Maybe String
-prettyStr = go [] where
-  go :: [Char] -> Term -> Maybe String
-  go acc Nil                        = Just ("\"" ++ reverse acc ++ "\"")
-  go acc (Con (Val (CHR_V c)) rest) = go (c:acc) rest
-  go acc (Loc _ t)                  = go acc t
-  go _   _                          = Nothing
 
