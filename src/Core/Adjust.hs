@@ -24,7 +24,7 @@ adjust book term =
   -- trace ("more: " ++ show more) $
   done
   where
-    flat  = flatten 0 book term
+    flat  = flatten 0 noSpan book term
     npat = unpat 0 flat
     nfrk = unfrk 0 npat
     etas = etaForm 0 nfrk
@@ -35,7 +35,7 @@ adjust book term =
 adjustWithPats :: Book -> Term -> Term
 adjustWithPats book term =
   ret
-  where ret = bind (unfrk 0 (flatten 0 book term))
+  where ret = bind (unfrk 0 (flatten 0 noSpan book term))
 
 -- The state for the adjustment process. It holds:
 -- 1. The book of already-adjusted definitions.

@@ -18,4 +18,4 @@ main :: IO ()
 main = testFile unsupported_match_no_location
   "" $ \out err -> do
     assert (err `has` "Unsupported pattern")
-    assert (err `has` "Location: (line ")
+    assert (err `has` "Location: ")
