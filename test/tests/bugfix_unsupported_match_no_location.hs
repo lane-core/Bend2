@@ -17,5 +17,5 @@ def main() -> Nat:
 main :: IO ()
 main = testFile unsupported_match_no_location
   "" $ \out err -> do
-    assert (err `has` "Unsupported pattern")
-    assert (err `has` "Location: (line ")
+    assert (err `has` "Cannot assign a value to `Bool` native type")
+    assert (err `has` "At")

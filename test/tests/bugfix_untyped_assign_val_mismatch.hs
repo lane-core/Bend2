@@ -2,6 +2,9 @@
 
 import Test
 
+-- bug description:
+-- see https://github.com/HigherOrderCO/Bend2/issues/19
+--
 -- The following code gives a mismatch type error in the value
 -- of the variable ind at assignment, when no annotation means that
 -- this variable has no type that must be satisfied

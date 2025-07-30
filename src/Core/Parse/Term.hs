@@ -782,13 +782,33 @@ parseAss t = label "location binding" $ do
     _ <- symbol "="
     notFollowedBy (char '=')
     return mtyp
-  v <- parseTerm
-  _ <- parseSemi
-  b <- expectBody "assignment" parseTerm
-  case t of
-    -- Var x _ -> return $ Let v (Lam x Nothing (\_ -> b))
-    Var x _ -> return $ Let x mtyp v (\_ -> b)
-    _       -> return $ Pat [v] [] [([t], b)]
+  -- Check for invalid assignment patterns after confirming it's an assignment
+  case cut t of
+    Bit     -> fail "Cannot assign a value to `Bool` native type"
+    Nat     -> fail "Cannot assign a value to `Nat` native type"
+    Set     -> fail "Cannot assign a value to `Set` native type"
+    Emp     -> fail "Cannot assign a value to `Empty` native type"
+    Uni     -> fail "Cannot assign a value to `Unit` native type"
+    Bt0     -> fail "Cannot assign a value to `False` boolean literal"
+    Bt1     -> fail "Cannot assign a value to `True` boolean literal"
+    Zer     -> fail "Cannot assign a value to `0n` nat literal"
+    Suc _   -> fail "Cannot assign a value to nat literal"
+    Num nt  -> fail $ "Cannot assign a value to `" ++ show (Num nt) ++ "` numeric type"
+    Val v   -> fail $ "Cannot assign a value to `" ++ show (Val v) ++ "` literal"
+    One     -> fail "Cannot assign a value to `()` unit literal"
+    Nil     -> fail "Cannot assign a value to `[]` list literal"
+    Rfl     -> fail "Cannot assign a value to `{==}` reflexivity literal"
+    Era     -> fail "Cannot assign a value to `*` eraser"
+    Var x _ -> do
+      v <- parseTerm
+      _ <- parseSemi
+      b <- expectBody "assignment" parseTerm
+      return $ Let x mtyp v (\_ -> b)
+    _       -> do
+      v <- parseTerm
+      _ <- parseSemi
+      b <- expectBody "assignment" parseTerm
+      return $ Pat [v] [] [([t], b)]
 
 -- | HOAS‐style binders
 

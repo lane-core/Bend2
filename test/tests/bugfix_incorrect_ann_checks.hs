@@ -1,5 +1,8 @@
 {-# LANGUAGE MultilineStrings #-}
 
+-- bug description:
+-- see https://github.com/HigherOrderCO/Bend2/issues/20
+--
 -- Incorrect annotation does not stop it from type checking.
 import Test
 

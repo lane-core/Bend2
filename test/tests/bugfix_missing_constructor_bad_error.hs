@@ -1,6 +1,10 @@
 {-# LANGUAGE MultilineStrings #-}
 
 import Test
+
+-- bug description:
+-- see https://github.com/HigherOrderCO/Bend2/issues/21
+--
 -- The following code results in a type mismatch error which is lacking a location,
 -- but the actual mistake is a missing argument to the @Wrap constructor in the case clause
 

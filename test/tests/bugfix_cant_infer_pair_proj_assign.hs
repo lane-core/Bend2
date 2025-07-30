@@ -2,6 +2,9 @@
 
 import Test
 
+-- bug description:
+-- see https://github.com/HigherOrderCO/Bend2/issues/18
+--
 -- Should be inferrable, adding m : Nat annotation does not fix.
 -- # ✗ proj
 -- # CantInfer:

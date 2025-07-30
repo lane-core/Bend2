@@ -148,7 +148,7 @@ infer d span book@(Book defs names) ctx term =
       let bookEnums = [ Enu tags | (k, (_, (Sig (Enu tags) _), Set)) <- M.toList defs ]
       case find isEnuWithTag bookEnums of
         Just t  -> Done (book, Sym s, t)
-        Nothing -> Fail $ CantInfer span (normalCtx book ctx)
+        Nothing -> Fail $ Undefined span (normalCtx book ctx) ("@" ++ s)
         where
           isEnuWithTag (Enu tags) = s `elem` tags
           isEnuWithTag _ = False
