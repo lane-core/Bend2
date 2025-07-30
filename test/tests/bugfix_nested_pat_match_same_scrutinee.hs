@@ -3,6 +3,8 @@
 import Test
 
 -- bug description:
+-- see https://github.com/HigherOrderCO/Bend2/issues/16
+--
 
 nested_pat_match_same_scrutinee :: String
 nested_pat_match_same_scrutinee = """
