@@ -1,6 +1,5 @@
 module Core.CLI 
   ( parseFile
-  , checkDefinitions
   , runMain
   , processFile
   , processFileToJS
@@ -48,29 +47,6 @@ parseFile file = do
   where
     takeDirectory path = reverse . dropWhile (/= '/') . reverse $ path
 
--- | Type-check all definitions in a book
-checkDefinitions :: Book -> IO ()
-checkDefinitions book@(Book defs names) = do
-  let orderedDefs = [(name, fromJust (M.lookup name defs)) | name <- names]
-  success <- checkAll book orderedDefs
-  unless success exitFailure
-  where
-    checkDef book term typ = do
-      check 0 noSpan book (Ctx []) typ Set
-      check 0 noSpan book (Ctx []) term typ
-      return ()
-    checkAll :: Book -> [(Name, Defn)] -> IO Bool
-    checkAll _ [] = return True
-    checkAll bBook ((name, (_, term, typ)):rest) = do
-      case checkDef bBook term typ of
-        Done () -> do
-          putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
-          checkAll bBook rest
-        Fail e -> do
-          hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
-          hPutStrLn stderr $ show e
-          _ <- checkAll bBook rest
-          return False
 
 -- | Run the main function from a book
 runMain :: Book -> IO ()
@@ -96,8 +72,8 @@ processFile :: FilePath -> IO ()
 processFile file = do
   book <- parseFile file
   let bookAdj = adjustBook book
-  checkDefinitions bookAdj
-  runMain bookAdj
+  bookChk <- checkBook bookAdj
+  runMain bookChk
 
 -- | Try to format JavaScript code using prettier if available
 formatJavaScript :: String -> IO String
@@ -120,7 +96,8 @@ processFileToJS :: FilePath -> IO ()
 processFileToJS file = do
   book <- parseFile file
   let bookAdj = adjustBook book
-  let jsCode = JS.compile bookAdj
+  bookChk <- checkBook bookAdj
+  let jsCode = JS.compile bookChk
   formattedJS <- formatJavaScript jsCode
   putStrLn formattedJS
 

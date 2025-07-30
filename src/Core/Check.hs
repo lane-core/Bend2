@@ -7,6 +7,9 @@ module Core.Check where
 import qualified Data.Map as M
 import Data.List (find)
 import Data.Maybe (fromJust)
+import Control.Monad (unless)
+import System.IO (hPutStrLn, stderr)
+import System.Exit (exitFailure)
 
 import Debug.Trace
 
@@ -42,12 +45,6 @@ infer d span book@(Book defs _) ctx term =
     Sub x -> do
       infer d span book ctx x
     Let k t v f -> case t of
-      -- NOTE: take the example below as an inspiration to make the rest of the
-      -- file notice how we reconstruct the term with the result of calling
-      -- infer/check recursively
-      -- NOTE: we also took the opportunity to fix the implementation of Let,
-      -- which was missing a call to 'bindVar'. other definitions aren't
-      -- affected by that change.
       Just t -> do
         tV      <- check d span book ctx t Set
         vV      <- check d span book ctx v t
@@ -555,58 +552,29 @@ verify d span book ctx term goal = do
     then Done termV
     else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book t)
 
--- Traverses the term and binds the var of index 'd' to the given term t
-bindVar :: Int -> Term -> Term -> Term
-bindVar i x (Var k i')
-  | i == i'   = x
-  | otherwise = Var k i'
-bindVar i x (Ref k j)      = Ref k j
-bindVar i x (Sub t)        = t
-bindVar i x (Fix k f)      = Fix k (\v -> bindVar i x (f (Sub v)))
-bindVar i x (Let k t v f)  = Let k (fmap (bindVar i x) t) (bindVar i x v) (\v -> bindVar i x (f (Sub v)))
-bindVar i x (Use k v f)    = Use k (bindVar i x v) (\v -> bindVar i x (f (Sub v)))
-bindVar i x Set            = Set
-bindVar i x (Chk v t)      = Chk (bindVar i x v) (bindVar i x t)
-bindVar i x Emp            = Emp
-bindVar i x EmpM           = EmpM
-bindVar i x Uni            = Uni
-bindVar i x One            = One
-bindVar i x (UniM f)       = UniM (bindVar i x f)
-bindVar i x Bit            = Bit
-bindVar i x Bt0            = Bt0
-bindVar i x Bt1            = Bt1
-bindVar i x (BitM f t)     = BitM (bindVar i x f) (bindVar i x t)
-bindVar i x Nat            = Nat
-bindVar i x Zer            = Zer
-bindVar i x (Suc n)        = Suc (bindVar i x n)
-bindVar i x (NatM z s)     = NatM (bindVar i x z) (bindVar i x s)
-bindVar i x (Lst t)        = Lst (bindVar i x t)
-bindVar i x Nil            = Nil
-bindVar i x (Con h t)      = Con (bindVar i x h) (bindVar i x t)
-bindVar i x (LstM n c)     = LstM (bindVar i x n) (bindVar i x c)
-bindVar i x (Enu ss)       = Enu ss
-bindVar i x (Sym s)        = Sym s
-bindVar i x (EnuM cs e)    = EnuM (map (\(s,t) -> (s, bindVar i x t)) cs) (bindVar i x e)
-bindVar i x (Num t)        = Num t
-bindVar i x (Val v)        = Val v
-bindVar i x (Op2 op a b)   = Op2 op (bindVar i x a) (bindVar i x b)
-bindVar i x (Op1 op a)     = Op1 op (bindVar i x a)
-bindVar i x (Sig a b)      = Sig (bindVar i x a) (bindVar i x b)
-bindVar i x (Tup a b)      = Tup (bindVar i x a) (bindVar i x b)
-bindVar i x (SigM f)       = SigM (bindVar i x f)
-bindVar i x (All a b)      = All (bindVar i x a) (bindVar i x b)
-bindVar i x (Lam k t f)    = Lam k (fmap (bindVar i x) t) (\v -> bindVar i x (f (Sub v)))
-bindVar i x (App f a)      = App (bindVar i x f) (bindVar i x a)
-bindVar i x (Eql t a b)    = Eql (bindVar i x t) (bindVar i x a) (bindVar i x b)
-bindVar i x Rfl            = Rfl
-bindVar i x (EqlM f)       = EqlM (bindVar i x f)
-bindVar i x (Rwt e f)      = Rwt (bindVar i x e) (bindVar i x f)
-bindVar i x (Met n t ctx)  = Met n (bindVar i x t) (map (bindVar i x) ctx)
-bindVar i x Era            = Era
-bindVar i x (Sup l a b)    = Sup (bindVar i x l) (bindVar i x a) (bindVar i x b)
-bindVar i x (SupM l f)     = SupM (bindVar i x l) (bindVar i x f)
-bindVar i x (Frk l a b)    = Frk (bindVar i x l) (bindVar i x a) (bindVar i x b)
-bindVar i x (Loc s t)      = Loc s (bindVar i x t)
-bindVar i x (Log s t)      = Log (bindVar i x s) (bindVar i x t)
-bindVar i x (Pri p)        = Pri p
-bindVar i x (Pat ts ms cs) = Pat (map (bindVar i x) ts) (map (\(k,v) -> (k, bindVar i x v)) ms) (map (\(ps,b) -> (map (bindVar i x) ps, bindVar i x b)) cs)
+-- Type-check all definitions in a book and return updated book with elaborated terms
+checkBook :: Book -> IO Book
+checkBook book@(Book defs names) = do
+  let orderedDefs = [(name, fromJust (M.lookup name defs)) | name <- names]
+  (success, updatedDefs) <- checkAll book orderedDefs M.empty
+  unless success exitFailure
+  return $ Book updatedDefs names
+  where
+    checkDef book term typ = do
+      typV <- check 0 noSpan book (Ctx []) typ Set
+      termV <- check 0 noSpan book (Ctx []) term typ
+      return (termV, typV)
+    checkAll :: Book -> [(Name, Defn)] -> M.Map Name Defn -> IO (Bool, M.Map Name Defn)
+    checkAll _ [] accDefs = return (True, accDefs)
+    checkAll bBook ((name, (span, term, typ)):rest) accDefs = do
+      case checkDef bBook term typ of
+        Done (termV, typV) -> do
+          putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
+          let updatedDefn = (span, termV, typV)
+          let updatedAccDefs = M.insert name updatedDefn accDefs
+          checkAll bBook rest updatedAccDefs
+        Fail e -> do
+          hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
+          hPutStrLn stderr $ show e
+          (_, finalDefs) <- checkAll bBook rest accDefs
+          return (False, finalDefs)
