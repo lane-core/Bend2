@@ -189,7 +189,7 @@ instance Monad Result where
   Fail e >>= _ = Fail e
 
 instance Show Term where
-  show (Var k i)      = k ++ "^" ++ show i
+  show (Var k i)      = k -- ++ "^" ++ show i
   show (Ref k i)      = k -- ++ "!"
   show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
