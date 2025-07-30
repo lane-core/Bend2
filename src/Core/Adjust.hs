@@ -10,7 +10,7 @@ import Debug.Trace
 
 import Core.Bind
 import Core.Deps
-import Core.Adjust.EtaForm
+import Core.Adjust.ReduceEtas
 import Core.Adjust.FlattenPats
 import Core.Adjust.DesugarPats
 import Core.Adjust.DesugarFrks
@@ -29,8 +29,8 @@ adjust book term =
     flat  = flattenPats 0 noSpan book term
     npat = desugarPats 0 flat
     nfrk = desugarFrks 0 npat
-    etas = etaForm 0 nfrk
-    -- more = etaForm 0 etas
+    etas = reduceEtas 0 nfrk
+    -- more = reduceEtas 0 etas
     done = bind etas
 
 -- | Adjusts a term. simplifying patterns but leaving terms as Pats.

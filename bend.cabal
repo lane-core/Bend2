@@ -29,7 +29,7 @@ library
                       Core.Collapse,
                       Core.Deps,
                       Core.Equal,
-                      Core.Adjust.EtaForm,
+                      Core.Adjust.ReduceEtas,
                       Core.Adjust.FlattenPats,
                       Core.Adjust.DesugarPats,
                       Core.Adjust.DesugarFrks,
