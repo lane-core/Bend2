@@ -55,7 +55,6 @@ import qualified Data.Set        as S
 import qualified Text.Megaparsec.Char.Lexer as L
 
 import Core.Bind
-import Core.Flatten
 import Core.Type
 import qualified Core.Parse.WithSpan as WithSpan
 

@@ -10,8 +10,10 @@ import Debug.Trace
 
 import Core.Bind
 import Core.Deps
-import Core.EtaForm
-import Core.Flatten
+import Core.Adjust.EtaForm
+import Core.Adjust.FlattenPats
+import Core.Adjust.DesugarPats
+import Core.Adjust.DesugarFrks
 import Core.Type
 import Core.WHNF
 
@@ -24,9 +26,9 @@ adjust book term =
   -- trace ("more: " ++ show more) $
   done
   where
-    flat  = flatten 0 noSpan book term
-    npat = unpat 0 flat
-    nfrk = unfrk 0 npat
+    flat  = flattenPats 0 noSpan book term
+    npat = desugarPats 0 flat
+    nfrk = desugarFrks 0 npat
     etas = etaForm 0 nfrk
     -- more = etaForm 0 etas
     done = bind etas
@@ -35,7 +37,7 @@ adjust book term =
 adjustWithPats :: Book -> Term -> Term
 adjustWithPats book term =
   ret
-  where ret = bind (unfrk 0 (flatten 0 noSpan book term))
+  where ret = bind (desugarFrks 0 (flattenPats 0 noSpan book term))
 
 -- The state for the adjustment process. It holds:
 -- 1. The book of already-adjusted definitions.

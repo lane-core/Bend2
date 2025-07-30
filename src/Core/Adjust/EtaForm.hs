@@ -34,7 +34,7 @@
 -- - Scrutinee is reconstructed with 'use' bindings unless field names conflict
 -- - Handles Let, Use, Chk, Loc, Log, and App as passthrough constructs
 
-module Core.EtaForm where
+module Core.Adjust.EtaForm where
 
 import Core.Type
 import qualified Data.Set as S

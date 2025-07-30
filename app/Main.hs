@@ -5,7 +5,7 @@ import qualified Data.Map as M
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import Core.CLI (processFile, processFileToJS, processFileToHVM, listDependencies, getGenDeps)
-import Core.EtaForm
+import Core.Adjust.EtaForm
 
 -- | Show usage information
 showUsage :: IO ()
