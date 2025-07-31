@@ -12,8 +12,8 @@ import qualified Data.Set as S
 import Highlight (highlightError)
 
 instance Show Term where
-  show (Var k i)      = k ++ "^" ++ show i
-  show (Ref k i)      = k ++ "!"
+  show (Var k i)      = k -- ++ "^" ++ show i
+  show (Ref k i)      = k -- ++ "!"
   show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let k t v f)  = case t of
