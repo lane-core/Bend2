@@ -73,5 +73,39 @@ collectDeps bound term = case term of
   Log s x     -> S.union (collectDeps bound s) (collectDeps bound x)
   Pri _       -> S.empty
   Rwt e f     -> S.union (collectDeps bound e) (collectDeps bound f)
-  Pat s m c   -> error "unreachable"
-  Frk l a b   -> error "unreachable"
+  Pat s m c   -> S.unions $ map (collectDeps bound) s ++ map (collectDeps bound . snd) m ++ concatMap (collectCaseDeps bound) c
+  Frk l a b   -> S.unions [collectDeps bound l, collectDeps bound a, collectDeps bound b]
+
+-- | Helper for `collectDeps` to handle dependencies in pattern-match cases.
+collectCaseDeps :: S.Set Name -> Case -> [S.Set Name]
+collectCaseDeps bound (patterns, body) =
+  let binders = S.unions (map collectPatternVars patterns)
+      newBound = S.union bound binders
+  in collectDeps newBound body : map (getPatternDeps bound) patterns
+  where
+
+  -- | Helper for `collectDeps` to extract dependencies from a single pattern.
+  -- In a pattern `f(x,y)`, `f` is a dependency, but `x` and `y` are binders.
+  getPatternDeps :: S.Set Name -> Term -> S.Set Name
+  getPatternDeps bound term = case cut term of
+    Ref k i   -> S.singleton k
+    -- For an application in a pattern, only the function part can be a dependency.
+    -- The arguments are binders, not expressions to be evaluated.
+    App f _   -> collectDeps bound f
+    Tup a b   -> S.union (getPatternDeps bound a) (getPatternDeps bound b)
+    Con h t   -> S.union (getPatternDeps bound h) (getPatternDeps bound t)
+    Suc n     -> getPatternDeps bound n
+    Chk p _   -> getPatternDeps bound p
+    -- Constructors that don't contain further dependencies
+    _         -> S.empty
+
+  -- | Collects all variable names bound by a pattern.
+  collectPatternVars :: Term -> S.Set Name
+  collectPatternVars term = case cut term of
+    Var k _   -> S.singleton k
+    App _ _   -> let (_, args) = collectApps term [] in S.unions (map collectPatternVars args)
+    Tup a b   -> S.union (collectPatternVars a) (collectPatternVars b)
+    Con h t   -> S.union (collectPatternVars h) (collectPatternVars t)
+    Suc n     -> collectPatternVars n
+    Chk p _   -> collectPatternVars p
+    _         -> S.empty
