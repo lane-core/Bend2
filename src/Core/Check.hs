@@ -511,28 +511,3 @@ verify d span book ctx term goal = do
   if equal d book t goal
     then Done ()
     else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book t)
-
--- Type-check all definitions in a book
-checkBook :: Book -> IO Book
-checkBook book@(Book defs names) = do
-  let orderedDefs = [(name, fromJust (M.lookup name defs)) | name <- names]
-  success <- checkAll book orderedDefs
-  unless success exitFailure
-  return book
-  where
-    checkDef bk term typ = do
-      check 0 noSpan bk (Ctx []) typ Set
-      check 0 noSpan bk (Ctx []) term typ
-      return ()
-    checkAll :: Book -> [(Name, Defn)] -> IO Bool
-    checkAll bk [] = return True
-    checkAll bk ((name, (inj, term, typ)):rest) = do
-      case checkDef bk term typ of
-        Done () -> do
-          putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
-          checkAll bk rest
-        Fail e -> do
-          hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
-          hPutStrLn stderr $ show e
-          success <- checkAll bk rest
-          return False

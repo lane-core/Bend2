@@ -32,6 +32,31 @@ import Core.WHNF
 import qualified Target.JavaScript as JS
 import qualified Target.HVM as HVM
 
+-- Type-check all definitions in a book
+checkBook :: Book -> IO Book
+checkBook book@(Book defs names) = do
+  let orderedDefs = [(name, fromJust (M.lookup name defs)) | name <- names]
+  success <- checkAll book orderedDefs
+  unless success exitFailure
+  return book
+  where
+    checkDef bk term typ = do
+      check 0 noSpan bk (Ctx []) typ Set
+      check 0 noSpan bk (Ctx []) term typ
+      return ()
+    checkAll :: Book -> [(Name, Defn)] -> IO Bool
+    checkAll bk [] = return True
+    checkAll bk ((name, (inj, term, typ)):rest) = do
+      case checkDef bk term typ of
+        Done () -> do
+          putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
+          checkAll bk rest
+        Fail e -> do
+          hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
+          hPutStrLn stderr $ show e
+          success <- checkAll bk rest
+          return False
+
 -- | Parse a Bend file into a Book
 parseFile :: FilePath -> IO Book
 parseFile file = do
@@ -46,7 +71,6 @@ parseFile file = do
       return autoImportedBook
   where
     takeDirectory path = reverse . dropWhile (/= '/') . reverse $ path
-
 
 -- | Run the main function from a book
 runMain :: Book -> IO ()
@@ -145,7 +169,6 @@ getGenDeps file = do
   
   -- Print the resulting book
   print $ Book finalDefs finalNames
-
 
 -- | Collect all refs from a Book
 collectAllRefs :: Book -> S.Set Name
