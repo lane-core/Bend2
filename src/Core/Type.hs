@@ -174,6 +174,7 @@ data Span = Span
 -- Errors
 data Error
   = CantInfer Span Ctx
+  | Unsupported Span Ctx
   | Undefined Span Ctx Name
   | TypeMismatch Span Ctx Term Term
   | TermMismatch Span Ctx Term Term
@@ -256,4 +257,16 @@ flattenTup :: Term -> [Term]
 flattenTup (Tup l r) = l : flattenTup r
 flattenTup t         = [t]
 
-
+isLam :: Term -> Bool
+isLam (Loc _ f) = isLam f
+isLam Lam{}     = True
+isLam EmpM      = True
+isLam UniM{}    = True
+isLam BitM{}    = True
+isLam NatM{}    = True
+isLam LstM{}    = True
+isLam EnuM{}    = True
+isLam SigM{}    = True
+isLam SupM{}    = True
+isLam EqlM{}    = True
+isLam _         = False

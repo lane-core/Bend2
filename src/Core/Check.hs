@@ -28,30 +28,6 @@ import Core.WHNF
 extend :: Ctx -> Name -> Term -> Term -> Ctx
 extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 
--- Generate a fresh name for a new definition
-freshName :: Book -> String -> String
-freshName (Book defs _) base = go 0 where
-  go n = let name = base ++ "_" ++ show (n :: Int)
-         in if M.member name defs then go (n + 1) else name
-
--- Add a new definition to the book
-addDefn :: Book -> Name -> Term -> Term -> Book
-addDefn (Book defs names) name term typ = Book (M.insert name (True, term, typ) defs) (names ++ [name])
-
-isLam :: Term -> Bool
-isLam (Loc _ f) = isLam f
-isLam Lam{}     = True
-isLam EmpM      = True
-isLam UniM{}    = True
-isLam BitM{}    = True
-isLam NatM{}    = True
-isLam LstM{}    = True
-isLam EnuM{}    = True
-isLam SigM{}    = True
-isLam SupM{}    = True
-isLam EqlM{}    = True
-isLam _         = False
-
 -- Type Checker
 -- ------------
 
@@ -565,7 +541,7 @@ check d span book ctx term      goal =
     (term, _) -> do
       let (fn, xs) = collectApps term []
       if isLam fn then do
-        detach d span book ctx (fn,xs) goal
+        Fail $ Unsupported span (normalCtx book ctx)
       else do
         verify d span book ctx term goal
 
@@ -606,32 +582,3 @@ checkBook book@(Book defs names) = do
           hPutStrLn stderr $ show e
           (_, finalBook) <- checkAll bk rest
           return (False, finalBook)
-
--- Lifts a term in the form (λ{...} x0 x1 ...) as a new top-level definition.
-detach :: Int -> Span -> Book -> Ctx -> (Term, [Term]) -> Term -> Result (Book, Term)
-detach d span book (Ctx anns) (fn, xs) goal = do
-  -- Infer types of all arguments, threading the book
-  (book, xs) <- foldM (\ (bk, acc) x -> do
-    (bk', xV, xT) <- infer d span bk (Ctx anns) x
-    return (bk', acc ++ [(xV, xT)])) (book, []) xs
-
-  -- New Fn Name: F_N
-  -- New Fn Type: ∀(all_ctx)... -> ∀(args)... -> goal
-  -- New Fn Term: λ(all_ctx)... -> fn
-  -- Result Term: (F all_ctx_vars... args...)
-  fnm <- return $ freshName book "F" -- TODO: improve
-  fty <- return $ goal
-  fty <- return $ foldr (\(_, xT) acc -> All xT (Lam "_" Nothing (\_ -> acc))) fty xs
-  fty <- return $ bind $ foldr (\(k, _, t) acc -> All t (Lam k Nothing (\_ -> acc))) fty anns
-  ftm <- return $ bind $ foldr (\(k, _, _) acc -> Lam k Nothing (\_ -> acc)) fn anns
-  rtm <- return $ Ref fnm 0
-  rtm <- return $ foldl App rtm $ map (\(_,v,_) -> v) anns
-  rtm <- return $ foldl App rtm (map fst xs)
-
-  -- Register and check new top-level definition
-  trace ("+ " ++ fnm ++ " : " ++ show fty ++ " = " ++ show ftm) $ do
-    book       <- return $ addDefn book fnm ftm fty
-    (book,ftm) <- check 0 span book (Ctx []) ftm fty
-    Book df nm <- return $ book
-    book       <- return $ Book (M.adjust (\(inj,_,fty) -> (inj,ftm,fty)) fnm df) nm
-    Done (book, rtm)

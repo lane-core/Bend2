@@ -1,3 +1,5 @@
+{-./Type.hs-}
+
 {-# LANGUAGE ViewPatterns #-}
 
 module Core.Show where
@@ -10,8 +12,8 @@ import qualified Data.Set as S
 import Highlight (highlightError)
 
 instance Show Term where
-  show (Var k i)      = k -- ++ "^" ++ show i
-  show (Ref k i)      = k -- ++ "!"
+  show (Var k i)      = k ++ "^" ++ show i
+  show (Ref k i)      = k ++ "!"
   show (Sub t)        = show t
   show (Fix k f)      = "μ" ++ k ++ ". " ++ show (f (Var k 0))
   show (Let k t v f)  = case t of
@@ -152,6 +154,12 @@ instance Show Span where
 instance Show Error where
   show (CantInfer span ctx) = 
     "\x1b[1mCantInfer:\x1b[0m" ++
+    "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
+    show span
+  show (Unsupported span ctx) = 
+    "\x1b[1mUnsupported:\x1b[0m" ++
+    "\nCurrently, Bend doesn't support matching on non-var expressions." ++
+    "\nThis will be added later. For now, please split this definition." ++
     "\n\x1b[1mContext:\x1b[0m\n" ++ show ctx ++
     show span
   show (Undefined span ctx name) = 
