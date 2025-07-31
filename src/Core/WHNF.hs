@@ -98,8 +98,7 @@ whnfAppLam book f x = whnf book (f x)
 -- ! &L{x0 x1} = x
 -- &L{(a x0) (b x1)}
 whnfAppSup :: Book -> Term -> Term -> Term -> Term -> Term
-whnfAppSup book l a b x = whnf book $ Sup l (App a x0) (App b x1)
-  where (x0,x1) = dup book l x
+whnfAppSup book l a b x = whnf book $ Sup l (App a x) (App b x)
 
 -- Eliminator normalizers
 -- ----------------------
@@ -153,8 +152,7 @@ whnfEnuM book x c f =
 
 -- Normalizes a superposition match
 whnfSupM :: Book -> Term -> Term -> Term -> Term
-whnfSupM book x l f = whnf book (App (App f x0) x1) where
-    (x0, x1) = dup book l (whnf book x)
+whnfSupM book x l f = whnf book (App (App f x) x) where
 
 -- Normalizes an equality match
 whnfEqlM :: Book -> Term -> Term -> Term
@@ -321,96 +319,6 @@ whnfOp1 book op a =
         NEG -> Val (F64_V (-x))
       _ -> Op1 op a'
 
--- Duplication
--- -----------
-
-dup :: Book -> Term -> Term -> (Term, Term)
-dup book l a = (a, a)
-
--- Normalization
--- =============
-
-normal :: Book -> Term -> Term
-normal book term =
-  -- trace ("normal: " ++ show term ++ " ~> " ++ show (whnf book term)) $
-  case whnf book term of
-    Var k i     -> Var k i
-    Ref k i     -> Ref k i
-    Sub t       -> t
-    Fix k f     -> Fix k (\x -> normal book (f (Sub x)))
-    Let k t v f -> Let k (fmap (normal book) t) (normal book v) (\x -> normal book (f (Sub x)))
-    Use k v f   -> Use k (normal book v) (\x -> normal book (f (Sub x)))
-    Set         -> Set
-    Chk x t     -> Chk (normal book x) (normal book t)
-    Emp         -> Emp
-    EmpM        -> EmpM
-    Uni         -> Uni
-    One         -> One
-    UniM f      -> UniM (normal book f)
-    Bit         -> Bit
-    Bt0         -> Bt0
-    Bt1         -> Bt1
-    BitM f t    -> BitM (normal book f) (normal book t)
-    Nat         -> Nat
-    Zer         -> Zer
-    Suc n       -> Suc (normal book n)
-    NatM z s    -> NatM (normal book z) (normal book s)
-    Lst t       -> Lst (normal book t)
-    Nil         -> Nil
-    Con h t     -> Con (normal book h) (normal book t)
-    LstM n c    -> LstM (normal book n) (normal book c)
-    Enu s       -> Enu s
-    Sym s       -> Sym s
-    EnuM c e    -> EnuM (map (\(s, t) -> (s, normal book t)) c) (normal book e)
-    Sig a b     -> Sig (normal book a) (normal book b)
-    Tup a b     -> Tup (normal book a) (normal book b)
-    SigM f      -> SigM (normal book f)
-    All a b     -> All (normal book a) (normal book b)
-    Lam k t f   -> Lam k (fmap (normal book) t) (\x -> normal book (f (Sub x)))
-    App f x     -> foldl (\f' x' -> App f' (normal book x')) fn xs
-      where (fn,xs) = collectApps (App f x) []
-    Eql t a b   -> Eql (normal book t) (normal book a) (normal book b)
-    Rfl         -> Rfl
-    EqlM f      -> EqlM (normal book f)
-    Rwt e f     -> Rwt (normal book e) (normal book f)
-    Loc l t     -> Loc l (normal book t)
-    Log s x     -> Log (normal book s) (normal book x)
-    Era         -> Era
-    Sup l a b   -> Sup l (normal book a) (normal book b)
-    SupM l f    -> SupM (normal book l) (normal book f)
-    Frk l a b   -> error "Fork interactions unsupported in Haskell"
-    Num t       -> Num t
-    Val v       -> Val v
-    Op2 o a b   -> Op2 o (normal book a) (normal book b)
-    Op1 o a     -> Op1 o (normal book a)
-    Pri p       -> Pri p
-    Met _ _ _   -> error "not-supported"
-    Pat _ _ _   -> error "not-supported"
-
-normalCtx :: Book -> Ctx -> Ctx
-normalCtx book (Ctx ctx) = Ctx (map normalAnn ctx)
-  where normalAnn (k,v,t) = (k, normal book v, normal book t)
-
--- Utils
--- =====
-
--- Converts a term to an Int
-termToInt :: Book -> Term -> Maybe Int
-termToInt book term = go term where
-    go (whnf book -> Zer)           = Just 0
-    go (whnf book -> Suc n)         = fmap (+1) (go n)
-    go (whnf book -> Val (U64_V w)) = Just (fromIntegral w)
-    go (whnf book -> Val (I64_V i)) = Just (fromIntegral i)
-    go (whnf book -> Val (F64_V d)) = Just (truncate d)
-    go (whnf book -> Val (CHR_V c)) = Just (fromEnum c)
-    go _                                 = Nothing
-
--- Compares the Int value of two terms
-ieql :: Book -> Term -> Term -> Bool
-ieql book a b = case (termToInt book a, termToInt book b) of
-  (Just x, Just y) -> x == y
-  _                -> False
-
 -- Left-Hand Side (LHS)
 -- --------------------
 
@@ -476,7 +384,7 @@ derefUndo book k i (LHS SZ     l) _    x = App (l (Ref k 0)) x
 derefUndo book k i (LHS (SS n) l) body x = deref book k i (LHS n (l x)) body
 
 -- Forcing
--- -------
+-- =======
 
 --- Evaluates terms that whnf won't, including:
 --- - Injective Refs (whnf skips them for pretty printing)
@@ -490,3 +398,67 @@ force book term =
         otherwise         -> term'
       term' -> term'
       where (fn,xs) = collectApps term' []
+
+-- Normalization
+-- =============
+
+normal :: Book -> Term -> Term
+normal book term =
+  -- trace ("normal: " ++ show term ++ " ~> " ++ show (whnf book term)) $
+  case whnf book term of
+    Var k i     -> Var k i
+    Ref k i     -> Ref k i
+    Sub t       -> t
+    Fix k f     -> Fix k (\x -> normal book (f (Sub x)))
+    Let k t v f -> Let k (fmap (normal book) t) (normal book v) (\x -> normal book (f (Sub x)))
+    Use k v f   -> Use k (normal book v) (\x -> normal book (f (Sub x)))
+    Set         -> Set
+    Chk x t     -> Chk (normal book x) (normal book t)
+    Emp         -> Emp
+    EmpM        -> EmpM
+    Uni         -> Uni
+    One         -> One
+    UniM f      -> UniM (normal book f)
+    Bit         -> Bit
+    Bt0         -> Bt0
+    Bt1         -> Bt1
+    BitM f t    -> BitM (normal book f) (normal book t)
+    Nat         -> Nat
+    Zer         -> Zer
+    Suc n       -> Suc (normal book n)
+    NatM z s    -> NatM (normal book z) (normal book s)
+    Lst t       -> Lst (normal book t)
+    Nil         -> Nil
+    Con h t     -> Con (normal book h) (normal book t)
+    LstM n c    -> LstM (normal book n) (normal book c)
+    Enu s       -> Enu s
+    Sym s       -> Sym s
+    EnuM c e    -> EnuM (map (\(s, t) -> (s, normal book t)) c) (normal book e)
+    Sig a b     -> Sig (normal book a) (normal book b)
+    Tup a b     -> Tup (normal book a) (normal book b)
+    SigM f      -> SigM (normal book f)
+    All a b     -> All (normal book a) (normal book b)
+    Lam k t f   -> Lam k (fmap (normal book) t) (\x -> normal book (f (Sub x)))
+    App f x     -> foldl (\f' x' -> App f' (normal book x')) fn xs
+      where (fn,xs) = collectApps (App f x) []
+    Eql t a b   -> Eql (normal book t) (normal book a) (normal book b)
+    Rfl         -> Rfl
+    EqlM f      -> EqlM (normal book f)
+    Rwt e f     -> Rwt (normal book e) (normal book f)
+    Loc l t     -> Loc l (normal book t)
+    Log s x     -> Log (normal book s) (normal book x)
+    Era         -> Era
+    Sup l a b   -> Sup l (normal book a) (normal book b)
+    SupM l f    -> SupM (normal book l) (normal book f)
+    Frk l a b   -> error "Fork interactions unsupported in Haskell"
+    Num t       -> Num t
+    Val v       -> Val v
+    Op2 o a b   -> Op2 o (normal book a) (normal book b)
+    Op1 o a     -> Op1 o (normal book a)
+    Pri p       -> Pri p
+    Met _ _ _   -> error "not-supported"
+    Pat _ _ _   -> error "not-supported"
+
+normalCtx :: Book -> Ctx -> Ctx
+normalCtx book (Ctx ctx) = Ctx (map normalAnn ctx)
+  where normalAnn (k,v,t) = (k, normal book v, normal book t)

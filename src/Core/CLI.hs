@@ -19,10 +19,9 @@ import System.Exit (ExitCode(..))
 import Control.Exception (catch, IOException)
 import System.IO (hPutStrLn, stderr)
 
-import Core.Adjust (adjustBook, adjustBookWithPats)
+import Core.Adjust.Adjust (adjustBook, adjustBookWithPats)
 import Core.Bind
 import Core.Check
-import Core.Collapse
 import Core.Deps
 import Core.Import (autoImport)
 import Core.Parse.Book (doParseBook)
@@ -62,11 +61,8 @@ runMain book = do
           hPutStrLn stderr $ show e
           exitFailure
         Done typ -> do
-          -- let results = flatten $ collapse 0 book $ normal 0 book mainCall
-          let results = [normal book mainCall]
           putStrLn ""
-          forM_ results $ \ term -> do
-            print term
+          print $ normal book mainCall
 
 -- | Process a Bend file: parse, check, and run
 processFile :: FilePath -> IO ()

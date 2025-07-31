@@ -11,7 +11,7 @@
 -- still be expressions in these shapes (non-var scrutinees, let-bindings...).
 -- These are then split into separate top-level defs by the type-checker.
 
-module Core.Adjust where
+module Core.Adjust.Adjust where
 
 import Control.Monad.State
 import qualified Data.Map as M

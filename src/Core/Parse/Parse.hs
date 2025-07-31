@@ -1,7 +1,7 @@
 {-./Type.hs-}
 
 
-module Core.Parse
+module Core.Parse.Parse
   ( -- * Types
     Parser
   , ParserState(..)

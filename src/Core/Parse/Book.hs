@@ -18,8 +18,8 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 import Debug.Trace
 
-import Core.Adjust
-import Core.Parse
+import Core.Adjust.Adjust
+import Core.Parse.Parse
 import Core.Parse.Term (parseTerm, parseTermBefore)
 import Core.Type
 import Core.Show

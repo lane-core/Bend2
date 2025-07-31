@@ -76,11 +76,11 @@ infer d span book@(Book defs names) ctx term =
       Just t -> do
         (book1, tV) <- check d span book ctx t Set
         (book2, vV) <- check d span book1 ctx v t
-        (book3, fV, fT) <- infer (d+1) span book2 (extend ctx k (Var k d) t) (f (Var k d))
+        (book3, fV, fT) <- infer (d+1) span book2 (extend ctx k vV t) (f vV)
         return $ (book3, Let k (Just tV) vV (\x -> bindIndex d x fV), fT)
       Nothing -> do
         (book1, vV, vT) <- infer d span book ctx v
-        (book2, fV, fT) <- infer (d+1) span book1 (extend ctx k (Var k d) vT) (f (Var k d))
+        (book2, fV, fT) <- infer (d+1) span book1 (extend ctx k vV vT) (f vV)
         return $ (book2, Let k Nothing vV (\x -> bindIndex d x fV), fT)
     Use k v f -> do
       infer d span book ctx (f v)
@@ -308,11 +308,11 @@ check d span book ctx term      goal =
         Just t  -> do
           (book1, tV) <- check d span book ctx t Set
           (book2, vV) <- check d span book1 ctx v tV
-          (book3, fV) <- check (d+1) span book2 (extend ctx k (Var k d) tV) (f (Var k d)) goal
+          (book3, fV) <- check (d+1) span book2 (extend ctx k vV tV) (f vV) goal
           Done (book3, Let k (Just tV) vV (\x -> bindIndex d x fV))
         Nothing -> do
           (book1, vV, vT) <- infer d span book ctx v
-          (book2, fV) <- check (d+1) span book1 (extend ctx k (Var k d) vT) (f (Var k d)) goal
+          (book2, fV) <- check (d+1) span book1 (extend ctx k vV vT) (f vV) goal
           Done (book2, Let k Nothing vV (\x -> bindIndex d x fV))
     (Use k v f, _) -> do
       check d span book ctx (f v) goal
