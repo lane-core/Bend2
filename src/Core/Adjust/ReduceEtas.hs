@@ -37,6 +37,7 @@
 module Core.Adjust.ReduceEtas where
 
 import Core.Type
+import Core.Show
 import qualified Data.Set as S
 import Debug.Trace
 
@@ -105,6 +106,7 @@ reduceEtas d t = case t of
   Frk l a b    -> Frk (reduceEtas d l) (reduceEtas d a) (reduceEtas d b)
   Rwt e f      -> Rwt (reduceEtas d e) (reduceEtas d f)
 
+
 -- Check if a term matches the eta-long pattern: ... (λ{...} x)
 -- Returns the lambda-match and an injection function
 isEtaLong :: Name -> Int -> Term -> Maybe (Term, Term -> Term)
@@ -115,13 +117,17 @@ isEtaLong target depth = go id depth where
     Lam n ty f -> 
       go (\h -> inj (Lam n ty (\_ -> h))) (d+1) (f (Var n d))
     
-    -- Found Let - add to injection
+    -- Found Let - check both branches
     Let k mt v f ->
-      go (\h -> inj (Let k mt v (\_ -> h))) (d+1) (f (Var k d))
+      case go (\h -> inj (Let k mt h f)) d v of
+        Just result -> Just result
+        Nothing -> go (\h -> inj (Let k mt v (\_ -> h))) (d+1) (f (Var k d))
     
-    -- Found Use - add to injection
+    -- Found Use - check both branches
     Use k v f ->
-      go (\h -> inj (Use k v (\_ -> h))) (d+1) (f (Var k d))
+      case go (\h -> inj (Use k h f)) d v of
+        Just result -> Just result
+        Nothing -> go (\h -> inj (Use k v (\_ -> h))) (d+1) (f (Var k d))
     
     -- Found Chk - add to injection
     Chk x t ->
@@ -131,9 +137,11 @@ isEtaLong target depth = go id depth where
     Loc s x ->
       go (\h -> inj (Loc s h)) d x
     
-    -- Found Log - add to injection
+    -- Found Log - check both branches
     Log s x ->
-      go (\h -> inj (Log s h)) d x
+      case go (\h -> inj (Log h x)) d s of
+        Just result -> Just result
+        Nothing -> go (\h -> inj (Log s h)) d x
     
     -- Found application - check if it's (λ{...} x) or if we can pass through
     App f arg ->
@@ -142,10 +150,56 @@ isEtaLong target depth = go id depth where
         (lmat, Var v_n _) | v_n == target && isLambdaMatch lmat ->
           Just (lmat, inj)
         -- Otherwise, pass through the application
-        _ -> go (\h -> inj (app h arg)) d f
+        _ -> go (\h -> inj (App h arg)) d f
+
+    -- Found BitM - check both branches
+    BitM f t ->
+      case go (\h -> inj (BitM h t)) d f of
+        Just result -> Just result
+        Nothing -> go (\h -> inj (BitM f h)) d t
+    
+    -- Found NatM - check both branches
+    NatM z s ->
+      case go (\h -> inj (NatM h s)) d z of
+        Just result -> Just result
+        Nothing -> go (\h -> inj (NatM z h)) d s
+    
+    -- Found LstM - check both branches
+    LstM n c ->
+      case go (\h -> inj (LstM h c)) d n of
+        Just result -> Just result
+        Nothing -> go (\h -> inj (LstM n h)) d c
+    
+    -- Found UniM - check the branch
+    UniM f ->
+      go (\h -> inj (UniM h)) d f
+    
+    -- Found EnuM - check all cases and default
+    EnuM cs e ->
+      let checkCases [] = go (\h -> inj (EnuM cs h)) d e
+          checkCases ((s,v):rest) = 
+            case go (\h -> inj (EnuM (map (\(s',v') -> if s' == s then (s',h) else (s',v')) cs) e)) d v of
+              Just result -> Just result
+              Nothing -> checkCases rest
+      in checkCases cs
+    
+    -- Found SigM - check the branch
+    SigM f ->
+      go (\h -> inj (SigM h)) d f
+    
+    -- Found SupM - check both branches
+    SupM l f ->
+      case go (\h -> inj (SupM h f)) d l of
+        Just result -> Just result
+        Nothing -> go (\h -> inj (SupM l h)) d f
+    
+    -- Found EqlM - check the branch
+    EqlM f ->
+      go (\h -> inj (EqlM h)) d f
     
     -- Any other form doesn't match our pattern
     _ -> Nothing
+
 
 -- Inject the injection function into each case of a lambda-match
 injectInto :: (Term -> Term) -> Name -> Term -> Term
