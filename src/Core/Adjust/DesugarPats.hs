@@ -91,14 +91,14 @@ match d x ms (([(cut -> Suc p)], s) : ([(cut -> Zer)], z) : _) =
 match d x ms (([(cut -> Zer)], z) : ([(cut -> Var k i)], v) : _) =
   apps d (map snd ms) $ App (NatM if_zer if_suc) x
   where if_zer = lam d (map fst ms) $ desugarPats d z
-        if_suc = Lam k (Just Nat) $ \x -> lam d (map fst ms) $ desugarPats (d+1) (bindName k (Suc (Var k 0)) v)
+        if_suc = Lam k (Just Nat) $ \x -> lam d (map fst ms) $ desugarPats (d+1) (bindVarByName k (Suc (Var k 0)) v)
 
 -- match x { 1n+p: s ; k: v }
 -- ------------------------------------
 -- ~x { 0n: v[k := 0n] ; 1n+: λp. s }
 match d x ms (([(cut -> Suc p)], s) : ([(cut -> Var k i)], v) : _) =
   apps d (map snd ms) $ App (NatM if_zer if_suc) x
-  where if_zer = lam d (map fst ms) $ desugarPats d (bindName k Zer v)
+  where if_zer = lam d (map fst ms) $ desugarPats d (bindVarByName k Zer v)
         if_suc = Lam (patOf d p) (Just Nat) $ \x -> lam d (map fst ms) $ desugarPats (d+1) s
 
 -- match x { False: f ; True: t }
@@ -117,13 +117,13 @@ match d x ms (([(cut -> Bt1)], t) : ([(cut -> Bt0)], f) : _) =
 -- --------------------------------------
 -- ~x { False: f ; True: v[k := True] }
 match d x ms (([(cut -> Bt0)], f) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ desugarPats d f) (lam d (map fst ms) $ desugarPats d (bindName k Bt1 v))) x
+  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ desugarPats d f) (lam d (map fst ms) $ desugarPats d (bindVarByName k Bt1 v))) x
 
 -- match x { True: t ; k: v }
 -- ---------------------------------------
 -- ~x { False: v[k := False] ; True: t }
 match d x ms (([(cut -> Bt1)], t) : ([(cut -> Var k i)], v) : _) =
-  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ desugarPats d (bindName k Bt0 v)) (lam d (map fst ms) $ desugarPats d t)) x
+  apps d (map snd ms) $ App (BitM (lam d (map fst ms) $ desugarPats d (bindVarByName k Bt0 v)) (lam d (map fst ms) $ desugarPats d t)) x
 
 -- match x { []: n ; h<>t: c }
 -- ------------------------------
@@ -147,14 +147,14 @@ match d x ms (([(cut -> Con h t)], c) : ([(cut -> Nil)], n) : _) =
 match d x ms (([(cut -> Nil)], n) : ([(cut -> Var k i)], v) : _) =
   apps d (map snd ms) $ App (LstM if_nil if_con) x
   where if_nil = lam d (map fst ms) $ desugarPats d n
-        if_con = Lam (nam d) Nothing $ \_ -> Lam (nam (d+1)) Nothing $ \_ -> lam d (map fst ms) $ desugarPats (d+2) (bindName k (Con (var d) (var (d+1))) v)
+        if_con = Lam (nam d) Nothing $ \_ -> Lam (nam (d+1)) Nothing $ \_ -> lam d (map fst ms) $ desugarPats (d+2) (bindVarByName k (Con (var d) (var (d+1))) v)
 
 -- match x { h<>t: c ; k: v }
 -- ---------------------------------------
 -- ~x { []: v[k := []] ; <>: λh. λt. c }
 match d x ms (([(cut -> Con h t)], c) : ([(cut -> Var k i)], v) : _) =
   apps d (map snd ms) $ App (LstM if_nil if_con) x
-  where if_nil = lam d (map fst ms) $ desugarPats d (bindName k Nil v)
+  where if_nil = lam d (map fst ms) $ desugarPats d (bindVarByName k Nil v)
         if_con = Lam (patOf d h) Nothing $ \_ -> Lam (patOf (d+1) t) Nothing $ \_ -> lam d (map fst ms) $ desugarPats (d+2) c
 
 -- match x { (): u }
@@ -225,7 +225,7 @@ apps d ms t = foldl (\t x -> App t x) t ms
 
 -- Substitutes a move list into an expression
 shove :: Int -> [Move] -> Term -> Term
-shove d ms term = foldr (\ (k,v) x -> bindName k v x) term ms
+shove d ms term = foldr (\ (k,v) x -> bindVarByName k v x) term ms
 
 -- Creates a fresh name at given depth
 nam :: Int -> String

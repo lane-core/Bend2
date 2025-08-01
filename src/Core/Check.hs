@@ -252,7 +252,7 @@ infer d span book@(Book defs names) ctx term =
       Just tk -> do
         check d span book ctx tk Set
         bT <- infer (d+1) span book (extend ctx k (Var k d) tk) (b (Var k d))
-        Done (All tk (Lam k (Just tk) (\v -> bindIndex d v bT)))
+        Done (All tk (Lam k (Just tk) (\v -> bindVarByIndex d v bT)))
       Nothing -> do
         Fail $ CantInfer span (normalCtx book ctx)
 

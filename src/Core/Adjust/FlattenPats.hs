@@ -145,7 +145,7 @@ flattenPat d span book pat =
 -- --------------------------------------------------- joinVarCol k
 -- match y { with k=x case @A: F(k) ; case @B: F(k) }
 joinVarCol :: Int -> Book -> Term -> [Case] -> [Case]
-joinVarCol d book k ((((cut->Var j _):ps),rhs):cs) = (ps, bindName j k rhs) : joinVarCol d book k cs
+joinVarCol d book k ((((cut->Var j _):ps),rhs):cs) = (ps, bindVarByName j k rhs) : joinVarCol d book k cs
 joinVarCol d book k ((((cut->ctr    ):ps),rhs):cs) = error "redundant pattern"
 joinVarCol d book k cs                             = cs
 
@@ -169,28 +169,28 @@ peelCtrCol d span book (cut->k) ((((cut->p):ps),rhs):cs) =
   -- trace (">> peel " ++ show k ++ " ~ " ++ show p) $
   case (k,p) of
     (Zer      , Zer    )   -> ((ps, rhs) : picks , drops)
-    (Zer      , Var k _)   -> ((ps, bindName k Zer rhs) : picks , ((p:ps),rhs) : drops)
+    (Zer      , Var k _)   -> ((ps, bindVarByName k Zer rhs) : picks , ((p:ps),rhs) : drops)
     (Suc _    , Suc x  )   -> (((x:ps), rhs) : picks , drops)
-    (Suc _    , Var k _)   -> (((Var k 0:ps), bindName k (Suc (Var k 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Suc _    , Var k _)   -> (((Var k 0:ps), bindVarByName k (Suc (Var k 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Bt0      , Bt0    )   -> ((ps, rhs) : picks , drops)
-    (Bt0      , Var k _)   -> ((ps, bindName k Bt0 rhs) : picks , ((p:ps),rhs) : drops)
+    (Bt0      , Var k _)   -> ((ps, bindVarByName k Bt0 rhs) : picks , ((p:ps),rhs) : drops)
     (Bt1      , Bt1    )   -> ((ps, rhs) : picks , drops)
-    (Bt1      , Var k _)   -> ((ps, bindName k Bt1 rhs) : picks , ((p:ps),rhs) : drops)
+    (Bt1      , Var k _)   -> ((ps, bindVarByName k Bt1 rhs) : picks , ((p:ps),rhs) : drops)
     (Nil      , Nil    )   -> ((ps, rhs) : picks , drops)
-    (Nil      , Var k _)   -> ((ps, bindName k Nil rhs) : picks , ((p:ps),rhs) : drops)
+    (Nil      , Var k _)   -> ((ps, bindVarByName k Nil rhs) : picks , ((p:ps),rhs) : drops)
     (Con _ _  , Con h t)   -> (((h:t:ps), rhs) : picks , drops)
-    (Con _ _  , Var k _)   -> (((Var (k++"h") 0:Var (k++"t") 0:ps), bindName k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Con _ _  , Var k _)   -> (((Var (k++"h") 0:Var (k++"t") 0:ps), bindVarByName k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (One      , One    )   -> ((ps, rhs) : picks , drops)
-    (One      , Var k _)   -> ((ps, bindName k One rhs) : picks , ((p:ps),rhs) : drops)
+    (One      , Var k _)   -> ((ps, bindVarByName k One rhs) : picks , ((p:ps),rhs) : drops)
     (Tup _ _  , Tup a b)   -> (((a:b:ps), rhs) : picks , drops)
-    (Tup _ _  , Var k _)   -> (((Var (k++"x") 0:Var (k++"y") 0:ps), bindName k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Tup _ _  , Var k _)   -> (((Var (k++"x") 0:Var (k++"y") 0:ps), bindVarByName k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Sym s    , Sym s' )
                | s == s'   -> ((ps, rhs) : picks , drops)
-    (Sym s    , Var k _)   -> ((ps, bindName k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
+    (Sym s    , Var k _)   -> ((ps, bindVarByName k (Sym s) rhs) : picks , ((p:ps),rhs) : drops)
     (Sup l _ _, Sup r a b) -> (((a:b:ps), rhs) : picks , drops)
-    (Sup l _ _, Var k _)   -> (((Var (k++"a") 0:Var (k++"b") 0:ps), bindName k (Sup l (Var (k++"a") 0) (Var (k++"b") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Sup l _ _, Var k _)   -> (((Var (k++"a") 0:Var (k++"b") 0:ps), bindVarByName k (Sup l (Var (k++"a") 0) (Var (k++"b") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Rfl      , Rfl    )   -> ((ps, rhs) : picks , drops)
-    (Rfl      , Var k _)   -> ((ps, bindName k Rfl rhs) : picks , ((p:ps),rhs) : drops)
+    (Rfl      , Var k _)   -> ((ps, bindVarByName k Rfl rhs) : picks , ((p:ps),rhs) : drops)
     (Var _ _  , p      )   -> unsupported span
     (k        , App f x)   -> callPatternSugar d span book k f x p ps rhs cs
     x                      -> (picks , ((p:ps),rhs) : drops)
@@ -218,7 +218,7 @@ callPatternSugar d span book k f x p ps rhs cs =
 
 -- Substitutes a move list into an expression
 shove :: Int -> [Move] -> Term -> Term
-shove d ms term = foldr (\ (k,v) x -> bindName k v x) term ms 
+shove d ms term = foldr (\ (k,v) x -> bindVarByName k v x) term ms 
 
 simplify :: Int -> Term -> Term
 simplify d (Pat ss ms cs) =

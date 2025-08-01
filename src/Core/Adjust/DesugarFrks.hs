@@ -92,8 +92,8 @@ desugarFrk d ctx l a b = buildSupMs vars where
   buildSupMs [] = Sup l a' b' where
     ls = [(n, Var (n++"0") 0) | (n, _) <- vars]
     rs = [(n, Var (n++"1") 0) | (n, _) <- vars]
-    a' = bindNameMany ls (desugarFrksGo d ctx a)
-    b' = bindNameMany rs (desugarFrksGo d ctx b)
+    a' = bindVarByNameMany ls (desugarFrksGo d ctx a)
+    b' = bindVarByNameMany rs (desugarFrksGo d ctx b)
   -- For each variable, create a SupM that binds the superposed versions
   buildSupMs ((n,d):rest) =
     App (SupM l $
