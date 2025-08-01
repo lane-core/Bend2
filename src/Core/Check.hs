@@ -389,9 +389,9 @@ infer d span book@(Book defs names) ctx term =
 
     -- Can't infer HVM priority change primitives
     Pri HVM_INC -> do
-      Fail $ CantInfer span (formatCtx d book ctx)
+      Fail $ CantInfer span (normalCtx book ctx)
     Pri HVM_DEC -> do
-      Fail $ CantInfer span (formatCtx d book ctx)
+      Fail $ CantInfer span (normalCtx book ctx)
 
     -- ctx |- s : Char[]
     -- ctx |- x : T
