@@ -171,7 +171,7 @@ data Span = Span
   , spanEnd :: (Int,Int)
   , spanPth :: FilePath -- original file path
   , spanSrc :: String   -- source content
-  }
+  } deriving (Eq, Ord)
 
 -- Errors
 data Error
