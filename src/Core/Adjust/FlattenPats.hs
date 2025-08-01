@@ -144,7 +144,7 @@ validateConstructorPatterns span book cases =
 -- Check constructor arity matches definition
 checkConstructorArity :: Span -> Book -> String -> Term -> Term -> ()
 checkConstructorArity span book@(Book defs _) tag patFields fullPat =
-  let enumTypes = [(name, body) | 
+  let enumTypes = [(name, body) |
         (name, (_, Sig (Enu tags) body, Set)) <- M.toList defs,
         tag `elem` tags]
   in case enumTypes of
@@ -154,18 +154,13 @@ checkConstructorArity span book@(Book defs _) tag patFields fullPat =
           expectedCount = countExpectedFields book expectedType
           actualCount = countPatternFields patFields
       in if expectedCount /= actualCount
-         then error $ constructorError span tag expectedCount actualCount
+         then errorWithSpan span (
+                "Constructor pattern error:\n" ++
+                "  Constructor '@" ++ tag ++ "' expects " ++ show expectedCount ++ " field(s).\n" ++
+                "  But the pattern provides " ++ show actualCount ++ " field(s).")
          else ()
     _ -> () -- Ambiguous constructor
 
--- Format constructor error message
-constructorError :: Span -> String -> Int -> Int -> String
-constructorError span tag expected actual = unsafePerformIO $ do
-  hPutStrLn stderr $ "\nConstructor pattern error:"
-  hPutStrLn stderr $ "  Constructor '@" ++ tag ++ "' expects " ++ show expected ++ " field(s)"
-  hPutStrLn stderr $ "  But the pattern provides " ++ show actual ++ " field(s)"
-  hPutStrLn stderr $ "  " ++ show span
-  exitFailure
 
 flattenPat :: Int -> Span -> Book -> Term -> Term
 flattenPat d span book pat =
