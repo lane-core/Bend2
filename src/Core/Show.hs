@@ -11,6 +11,10 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Highlight (highlightError)
 
+import System.Exit
+import System.IO
+import System.IO.Unsafe (unsafePerformIO)
+
 instance Show Term where
   show (Var k i)      = k -- ++ "^" ++ show i
   show (Ref k i)      = k -- ++ "!"
@@ -223,3 +227,9 @@ prettyCtr (Tup (Sym name) rest) =
   where lastElem (Tup _ r) = lastElem r
         lastElem t         = Just t
 prettyCtr _ = Nothing
+
+errorWithSpan :: Span -> String -> a
+errorWithSpan span msg = unsafePerformIO $ do
+  hPutStrLn stderr $ msg
+  hPutStrLn stderr $ (show span)
+  exitFailure

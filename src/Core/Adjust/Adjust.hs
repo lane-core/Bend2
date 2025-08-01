@@ -38,7 +38,7 @@ adjust book term =
   done
   where
     flat = flattenPats 0 noSpan book term
-    npat = desugarPats 0 flat
+    npat = desugarPats 0 noSpan flat
     nfrk = desugarFrks 0 npat
     etas = reduceEtas 0 nfrk
     -- more = reduceEtas 0 etas

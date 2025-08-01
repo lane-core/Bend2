@@ -120,7 +120,7 @@ flattenPat d span book pat =
   flattenPatGo d book pat where
     flattenPatGo d book pat@(Pat (s:ss) ms css@((((cut->Var k i):ps),rhs):cs)) | isVarCol css =
       -- trace (">> var: " ++ show pat) $
-      flattenPats d span book $ Pat ss ms (joinVarCol (d+1) book s (((Var k i:ps),rhs):cs))
+      flattenPats d span book $ Pat ss ms (joinVarCol (d+1) span book s (((Var k i:ps),rhs):cs))
       -- flattenPats d span book $ Pat ss (ms++[(k,s)]) (joinVarCol (d+1) (Var k 0) (((Var k i:ps),rhs):cs))
     flattenPatGo d book pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
       -- trace (">> ctr: " ++ show p ++ " " ++ show pat
@@ -144,10 +144,10 @@ flattenPat d span book pat =
 -- match x y { case x0 @A: F(x0) ; case x1 @B: F(x1) }
 -- --------------------------------------------------- joinVarCol k
 -- match y { with k=x case @A: F(k) ; case @B: F(k) }
-joinVarCol :: Int -> Book -> Term -> [Case] -> [Case]
-joinVarCol d book k ((((cut->Var j _):ps),rhs):cs) = (ps, bindVarByName j k rhs) : joinVarCol d book k cs
-joinVarCol d book k ((((cut->ctr    ):ps),rhs):cs) = error "redundant pattern"
-joinVarCol d book k cs                             = cs
+joinVarCol :: Int -> Span -> Book -> Term -> [Case] -> [Case]
+joinVarCol d span book k ((((cut->Var j _):ps),rhs):cs) = (ps, bindVarByName j k rhs) : joinVarCol d span book k cs
+joinVarCol d span book k ((((cut->ctr    ):ps),rhs):cs) = errorWithSpan span "Redundant pattern."
+joinVarCol d span book k cs                             = cs
 
 -- Peels a constructor layer from a column
 -- match x y:
@@ -191,7 +191,7 @@ peelCtrCol d span book (cut->k) ((((cut->p):ps),rhs):cs) =
     (Sup l _ _, Var k _)   -> (((Var (k++"a") 0:Var (k++"b") 0:ps), bindVarByName k (Sup l (Var (k++"a") 0) (Var (k++"b") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Rfl      , Rfl    )   -> ((ps, rhs) : picks , drops)
     (Rfl      , Var k _)   -> ((ps, bindVarByName k Rfl rhs) : picks , ((p:ps),rhs) : drops)
-    (Var _ _  , p      )   -> unsupported span
+    (Var _ _  , p      )   -> errorWithSpan span "Unsupported pattern-match shape.\nSupport for it will be added in a future update."
     (k        , App f x)   -> callPatternSugar d span book k f x p ps rhs cs
     x                      -> (picks , ((p:ps),rhs) : drops)
   where (picks, drops) = peelCtrCol d span book k cs
@@ -208,7 +208,7 @@ callPatternSugar d span book k f x p ps rhs cs =
         ref     = case fn of
           Ref k i   -> Ref k i
           Var k _   -> Ref k 1
-          otherwise -> error $ "invalid-call-pattern:" ++ show (App f x)
+          otherwise -> errorWithSpan span ("Invalid call pattern: " ++ show (App f x))
 
 -- Simplify
 -- ========
@@ -282,10 +282,3 @@ ctrOf d (Sym s)     = (Sym s, [])
 ctrOf d (Sup l a b) = (Sup l (pat d a) (pat (d+1) b), [pat d a, pat (d+1) b])
 ctrOf d Rfl         = (Rfl , [])
 ctrOf d x           = (var d , [var d])
-
-unsupported :: Span -> a
-unsupported span = unsafePerformIO $ do
-  hPutStrLn stderr $ "Unsupported pattern-match shape."
-  hPutStrLn stderr $ "Support for it will be added in a future update."
-  hPutStrLn stderr $ (show span)
-  exitFailure
