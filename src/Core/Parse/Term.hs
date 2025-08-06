@@ -167,6 +167,8 @@ parseVar = label "variable" $ do
     "Char"        -> return (Num CHR_T)
     "U64_TO_CHAR" -> return (Pri U64_TO_CHAR)
     "CHAR_TO_U64" -> return (Pri CHAR_TO_U64)
+    "HVM_INC"     -> return (Pri HVM_INC)
+    "HVM_DEC"     -> return (Pri HVM_DEC)
     _             -> return $ Var n 0
 
 -- | Syntax: ()
@@ -325,7 +327,7 @@ parsePat = label "pattern match" $ do
   _       <- try $ keyword "match"
   scruts  <- some $ parseTermBefore ":"
   delim   <- choice [ ':' <$ symbol ":", '{' <$ symbol "{" ]
-  moves   <- many parseWith
+  moves   <- concat <$> many parseWith
   clauses <- case delim of
     ':' -> parseIndentClauses (unPos (sourceColumn srcPos)) (length scruts)
     '{' -> parseBraceClauses  (length scruts)
@@ -338,9 +340,10 @@ parsePat = label "pattern match" $ do
     -- Parse 'with' statements
     parseWith = try $ do
       _ <- symbol "with"
-      x <- name
-      v <- option (Var x 0) (try (symbol "=" >> parseTerm))
-      return (x, v)
+      sepEndBy (do
+        x <- name
+        v <- option (Var x 0) (try (symbol "=" >> parseTerm))
+        return (x, v)) (symbol ",")
 
 -- | Syntax: case pattern1 pattern2: body
 -- Indentation-sensitive clause list (stops when out-dented)

@@ -387,6 +387,12 @@ infer d span book@(Book defs names) ctx term =
     Pri CHAR_TO_U64 -> do
       Done (All (Num CHR_T) (Lam "x" Nothing (\_ -> Num U64_T)))
 
+    -- Can't infer HVM priority change primitives
+    Pri HVM_INC -> do
+      Fail $ CantInfer span (normalCtx book ctx)
+    Pri HVM_DEC -> do
+      Fail $ CantInfer span (normalCtx book ctx)
+
     -- ctx |- s : Char[]
     -- ctx |- x : T
     -- ------------------ Log
@@ -953,6 +959,18 @@ check d span book ctx term      goal =
     -- ctx |- log s x : T
     (Log s x, _) -> do
       check d span book ctx s (Lst (Num CHR_T))
+      check d span book ctx x goal
+      
+    -- ctx |- x : T
+    -- ------------------ HVM_INC
+    -- ctx |- HVM_INC x : T
+    (App (Pri HVM_INC) x, _) ->
+      check d span book ctx x goal
+
+    -- ctx |- x : T
+    -- ------------------ HVM_DEC
+    -- ctx |- HVM_DEC x : T
+    (App (Pri HVM_DEC) x, _) ->
       check d span book ctx x goal
 
     -- Type mismatch for Lam

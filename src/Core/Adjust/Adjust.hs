@@ -1,5 +1,3 @@
-{-./Type.hs-}
-
 -- The Adjust module post-processes a parsed term, preparing it for
 -- type-checking, evaluation and compilation. It has 4 steps:
 -- - FlattenPats: makes all pattern-matches flat and single-scrutinee
@@ -17,7 +15,7 @@ import Control.Monad.State
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-import Debug.Trace
+import Core.Show (errorWithSpan)
 
 import Core.Bind
 import Core.Deps
@@ -28,27 +26,28 @@ import Core.Adjust.DesugarFrks
 import Core.Type
 import Core.WHNF
 
+import Core.FreeVars
+
 -- | Adjusts a single term, simplifying pattern matching and other constructs.
 -- It uses a book of already-adjusted definitions for context during flattening.
+-- Note: This does NOT check for free variables, as it may be called during
+-- book adjustment where recursive references aren't available yet.
 adjust :: Book -> Term -> Term
 adjust book term =
-  -- trace ("nfrk: " ++ show nfrk) $
-  -- trace ("done: " ++ show done) $
-  -- trace ("more: " ++ show more) $
   done
   where
     flat = flattenPats 0 noSpan book term
-    npat = desugarPats 0 flat
-    nfrk = desugarFrks 0 npat
+    npat = desugarPats 0 noSpan flat
+    nfrk = desugarFrks book 0 npat
     etas = reduceEtas 0 nfrk
-    -- more = reduceEtas 0 etas
     done = bind etas
 
 -- | Adjusts a term. simplifying patterns but leaving terms as Pats.
 adjustWithPats :: Book -> Term -> Term
 adjustWithPats book term =
   ret
-  where ret = bind (desugarFrks 0 (flattenPats 0 noSpan book term))
+  where 
+    ret = bind (desugarFrks book 0 (flattenPats 0 noSpan book term))
 
 -- The state for the adjustment process. It holds:
 -- 1. The book of already-adjusted definitions.
@@ -60,17 +59,34 @@ type AdjustState = (Book, S.Set Name)
 -- and adjusts them in order. This ensures that when a definition is adjusted,
 -- all definitions it depends on have already been adjusted.
 -- This is crucial for functions like `flatten` which may look up references.
+-- After adjusting all definitions, it checks for free variables.
 adjustBook :: Book -> Book
 adjustBook book@(Book defs names) =
-  -- The final adjusted book is extracted from the state after processing all definitions.
-  fst $ execState (mapM_ (adjustDef book S.empty adjust) (M.keys defs)) (Book M.empty names, S.empty)
+  let adjustedBook = fst $ execState (mapM_ (adjustDef book S.empty adjust) (M.keys defs)) (Book M.empty names, S.empty)
+  in checkFreeVarsInBook adjustedBook
 
 -- | Adjusts the entire book, simplifying patterns but without removing Pat terms.
 adjustBookWithPats :: Book -> Book
 adjustBookWithPats book@(Book defs names) =
-  fst $ execState (mapM_ (adjustDef book S.empty adjustWithPats) (M.keys defs)) (Book M.empty names, S.empty)
+  let adjustedBook = fst $ execState (mapM_ (adjustDef book S.empty adjustWithPats) (M.keys defs)) (Book M.empty names, S.empty)
+  in checkFreeVarsInBook adjustedBook
 
--- | The recursive worker function that adjusts a single definition.adjustBook
+-- | Checks all definitions in a book for free variables.
+-- This should be called after all adjustments are complete.
+checkFreeVarsInBook :: Book -> Book
+checkFreeVarsInBook book@(Book defs names) =
+  case [ (name, frees) | 
+         (name, (_, term, typ)) <- M.toList defs,
+         let freeInTerm = freeVars book S.empty term,
+         let freeInType = freeVars book S.empty typ,
+         let frees = S.union freeInTerm freeInType,
+         not (S.null frees) ] of
+    [] -> book
+    ((name, frees):_) -> 
+      let (freeName, span) = S.elemAt 0 frees
+      in errorWithSpan span $ "Unbound variable '" ++ freeName ++ "' in definition '" ++ name ++ "'."
+
+-- | The recursive worker function that adjusts a single definition.
 -- It takes a set of names currently in the recursion stack to detect cycles.
 adjustDef :: Book -> S.Set Name -> (Book -> Term -> Term) -> Name -> State AdjustState ()
 adjustDef book visiting adjustFn name = do
@@ -108,4 +124,3 @@ adjustDef book visiting adjustFn name = do
           let newAdjMap  = M.insert name (inj, adjTerm, adjType) adjMap
               newDoneSet = S.insert name doneSet
           in (Book newAdjMap names, newDoneSet)
-

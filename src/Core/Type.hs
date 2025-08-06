@@ -61,6 +61,8 @@ data NOp1
 data PriF
   = U64_TO_CHAR
   | CHAR_TO_U64
+  | HVM_INC
+  | HVM_DEC
   deriving (Show, Eq)
 
 -- Bend's Term Type
@@ -173,7 +175,7 @@ data Span = Span
   , spanEnd :: (Int,Int)
   , spanPth :: FilePath -- original file path
   , spanSrc :: String   -- source content
-  }
+  } deriving (Eq, Ord)
 
 -- Errors
 data Error
