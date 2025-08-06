@@ -159,17 +159,7 @@ checkConstructorArity span book@(Book defs _) tag patFields fullPat =
                 "  Constructor '@" ++ tag ++ "' expects " ++ show expectedCount ++ " field(s).\n" ++
                 "  But the pattern provides " ++ show actualCount ++ " field(s).")
          else ()
-    types@(_:_:_) -> -- Multiple types with same constructor
-      let validArities = map (\(_, body) -> 
-            let expectedType = normal book (App body (Sym tag))
-            in countExpectedFields book expectedType) types
-          actualCount = countPatternFields patFields
-      in if actualCount `notElem` validArities
-         then warnWithSpan span (
-                "Constructor pattern error:\n" ++
-                "  Constructor '@" ++ tag ++ "' is defined in multiple types with arities: " ++ show validArities ++ "\n" ++
-                "  But the pattern provides " ++ show actualCount ++ " field(s).")
-         else ()
+    _ -> () -- Ambiguous constructor
 
 
 flattenPat :: Int -> Span -> Book -> Term -> Term

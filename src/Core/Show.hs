@@ -233,9 +233,3 @@ errorWithSpan span msg = unsafePerformIO $ do
   hPutStrLn stderr $ msg
   hPutStrLn stderr $ (show span)
   exitFailure
-
-warnWithSpan :: Span -> String -> ()
-warnWithSpan span msg = unsafePerformIO $ do
-  hPutStrLn stderr $ "Warning: " ++ msg
-  hPutStrLn stderr $ (show span)
-  return ()
