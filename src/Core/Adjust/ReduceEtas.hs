@@ -227,10 +227,10 @@ injectInto inj scrutName term = case term of
   -- List match - special handling for cons case (2 fields)
   LstM n c -> LstM (injectBody [] inj scrutName (\_ -> Nil) n) 
                    (injectBody ["h", "t"] inj scrutName (\vars -> case vars of [h,t] -> Con h t; _ -> Era) c)
-  
-  -- Enum match - inject into each case and default
-  EnuM cs e -> EnuM [(s, injectBody [] inj scrutName (\_ -> Sym s) v) | (s,v) <- cs] 
-                    (injectBody [] inj scrutName (\_ -> Era) e)
+
+  -- Enum match - inject into each case and default (apply default-case fix)
+  EnuM cs e -> EnuM [(s, injectBody [] inj scrutName (\_ -> Sym s) v) | (s,v) <- cs]
+                    (injectBody ["_"] inj scrutName (\_ -> Era) e)
   
   -- Sigma match - special handling for pair case (2 fields)
   SigM f -> SigM (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Tup a b; _ -> Era) f)
