@@ -1,4 +1,4 @@
-{-./Type.hs-}
+{-./../Type.hs-}
 
 -- Eta-Form
 -- ========
@@ -39,6 +39,7 @@ module Core.Adjust.ReduceEtas where
 import Core.Type
 import qualified Data.Set as S
 import Debug.Trace
+import Data.Maybe (isJust, fromJust)
 
 -- Main eta-reduction function with lambda-inject optimization
 reduceEtas :: Int -> Term -> Term
@@ -134,7 +135,66 @@ isEtaLong target depth = go id depth where
     -- Found Log - add to injection
     Log s x ->
       go (\h -> inj (Log s h)) d x
-    
+
+    -- Pass through single-body lambda-matches (commuting conversion)
+    UniM b ->
+      case go id d b of
+        Just (lmat, injB) -> Just (lmat, \h -> inj (UniM (injB h)))
+        Nothing           -> Nothing
+
+    SigM b ->
+      case go id d b of
+        Just (lmat, injB) -> Just (lmat, \h -> inj (SigM (injB h)))
+        Nothing           -> Nothing
+
+    SupM l b ->
+      case go id d b of
+        Just (lmat, injB) -> Just (lmat, \h -> inj (SupM l (injB h)))
+        Nothing           -> Nothing
+
+    EqlM b ->
+      case go id d b of
+        Just (lmat, injB) -> Just (lmat, \h -> inj (EqlM (injB h)))
+        Nothing           -> Nothing
+
+    -- Conservative multi-arm pass-through: only if all arms agree on a common λ-match shape
+    BitM t f ->
+      case (go id d t, go id d f) of
+        (Just (l1, injT), Just (l2, injF))
+          | sameLambdaShape l1 l2 ->
+              Just (l1, \h -> inj (BitM (injT h) (injF h)))
+        _ -> Nothing
+
+    NatM z s ->
+      case (go id d z, go id d s) of
+        (Just (l1, injZ), Just (l2, injS))
+          | sameLambdaShape l1 l2 ->
+              Just (l1, \h -> inj (NatM (injZ h) (injS h)))
+        _ -> Nothing
+
+    LstM n c ->
+      case (go id d n, go id d c) of
+        (Just (l1, injN), Just (l2, injC))
+          | sameLambdaShape l1 l2 ->
+              Just (l1, \h -> inj (LstM (injN h) (injC h)))
+        _ -> Nothing
+
+    EnuM cs e ->
+      let rs = [(s, go id d v) | (s,v) <- cs]
+          re = go id d e
+      in
+      if all (isJust . snd) rs && isJust re then
+        let rcs    = [(s, fromJust m) | (s,m) <- rs]
+            (l0, _) = fromJust re
+            shapes = [lmShape l | (_, (l,_)) <- rcs] ++ [lmShape l0]
+        in case sequence shapes of
+             Just (sh0:rest) | all (== sh0) rest ->
+               let injCs = [(s, injB) | (s, (_, injB)) <- rcs]
+                   (lmatE, injE) = fromJust re
+               in Just (lmatE, \h -> inj (EnuM [(s, injB h) | (s, injB) <- injCs] (injE h)))
+             _ -> Nothing
+      else Nothing
+
     -- Found application - check if it's (λ{...} x) or if we can pass through
     App f arg ->
       case (cut f, cut arg) of
@@ -233,6 +293,37 @@ isLambdaMatch term = case term of
   SupM _ _ -> True
   EqlM _   -> True
   _        -> False
+
+-- Shapes of lambda-matches, used to conservatively commute multi-arm frames
+data LmShape
+  = LM_Emp
+  | LM_Uni
+  | LM_Bit
+  | LM_Nat
+  | LM_Lst
+  | LM_Enu [String]
+  | LM_Sig
+  | LM_Sup
+  | LM_Eql
+  deriving (Eq, Show)
+
+lmShape :: Term -> Maybe LmShape
+lmShape t = case cut t of
+  EmpM       -> Just LM_Emp
+  UniM _     -> Just LM_Uni
+  BitM _ _   -> Just LM_Bit
+  NatM _ _   -> Just LM_Nat
+  LstM _ _   -> Just LM_Lst
+  EnuM cs _  -> Just (LM_Enu (map fst cs))
+  SigM _     -> Just LM_Sig
+  SupM _ _   -> Just LM_Sup
+  EqlM _     -> Just LM_Eql
+  Chk x _    -> lmShape x
+  Loc _ x    -> lmShape x
+  _          -> Nothing
+
+sameLambdaShape :: Term -> Term -> Bool
+sameLambdaShape a b = lmShape a == lmShape b
 
 app :: Term -> Term -> Term
 app (Lam k _ f) x = Use k x f
