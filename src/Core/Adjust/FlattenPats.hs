@@ -39,7 +39,6 @@ import qualified Data.Set as S
 import Debug.Trace
 
 import Core.Bind
-import Core.FreeVars
 import Core.Show
 import Core.Type
 import Core.WHNF

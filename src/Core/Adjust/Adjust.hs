@@ -114,13 +114,13 @@ type AdjustState = (Book, S.Set Name)
 adjustBook :: Book -> Book
 adjustBook book@(Book defs names) =
   let adjustedBook = fst $ execState (mapM_ (adjustDef book S.empty adjust) (M.keys defs)) (Book M.empty names, S.empty)
-  in checkFreeVarsInBook adjustedBook
+  in adjustedBook -- checkFreeVarsInBook disabled: not in main branch
 
 -- | Adjusts the entire book, simplifying patterns but without removing Pat terms.
 adjustBookWithPats :: Book -> Book
 adjustBookWithPats book@(Book defs names) =
   let adjustedBook = fst $ execState (mapM_ (adjustDef book S.empty adjustWithPats) (M.keys defs)) (Book M.empty names, S.empty)
-  in checkFreeVarsInBook adjustedBook
+  in adjustedBook -- checkFreeVarsInBook disabled: not in main branch
 
 -- | Checks all definitions in a book for free variables.
 -- This should be called after all adjustments are complete.
@@ -128,14 +128,14 @@ checkFreeVarsInBook :: Book -> Book
 checkFreeVarsInBook book@(Book defs names) =
   case [ (name, frees) | 
          (name, (_, term, typ)) <- M.toList defs,
-         let freeInTerm = freeVars book S.empty term,
-         let freeInType = freeVars book S.empty typ,
+         let freeInTerm = freeVars S.empty term,
+         let freeInType = freeVars S.empty typ,
          let frees = S.union freeInTerm freeInType,
          not (S.null frees) ] of
     [] -> book
     ((name, frees):_) -> 
-      let (freeName, span) = S.elemAt 0 frees
-      in errorWithSpan span $ "Unbound variable '" ++ freeName ++ "' in definition '" ++ name ++ "'."
+      let freeName = S.elemAt 0 frees
+      in error $ "Unbound variable '" ++ freeName ++ "' in definition '" ++ name ++ "'."
 
 -- | The recursive worker function that adjusts a single definition.
 -- It takes a set of names currently in the recursion stack to detect cycles.
