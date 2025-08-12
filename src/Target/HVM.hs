@@ -418,7 +418,11 @@ showHVM lv tm =
     go (HVM.U32 v)         = show v
     go (HVM.Chr v)         = "'" ++ [v] ++ "'"
     go (HVM.Op2 o a b)     = "(" ++ show o ++ " " ++ showHVM lv a ++ " " ++ showHVM lv b ++ ")"
-    go (HVM.Let m k v f)   = "! " ++ show m ++ k ++ " = " ++ showHVM (lv+1) v ++ "\n" ++ indent lv ++ showHVM lv f
+    go (HVM.Let m k v f)   =
+      let rhs = showHVM (lv+1) v in
+      if '\n' `elem` rhs
+        then "! " ++ show m ++ k ++ " =\n" ++ indent (lv+1) ++ rhs ++ "\n" ++ indent lv ++ showHVM lv f
+        else "! " ++ show m ++ k ++ " = " ++ rhs ++ "\n" ++ indent lv ++ showHVM lv f
     go (HVM.Mat k v m ks)  = "~ " ++ showHVM lv v ++ concatMap showMov m ++ " {\n" ++ unlines (map showCase ks) ++ indent lv ++ "}"
         where showMov (k,v)     = " !" ++ k ++ "=" ++ showHVM lv v
               showCase (c,[],b) = indent (lv+1) ++ c ++ ":\n" ++ indent (lv+2) ++ showHVM (lv+2) b
@@ -452,7 +456,6 @@ showHVM lv tm =
     prettyLst (HVM.Ctr "#Cons" [h, t]) acc = prettyLst t (showHVM lv h : acc)
     prettyLst (HVM.Ctr "#Nil" [])      acc = Just $ "[" ++ unwords (reverse acc) ++ "]"
     prettyLst _ _ = Nothing
-
 
 
 
