@@ -155,6 +155,19 @@ termToHVM book term = go term where
         HVM.Lam "x$" (HVM.Dup 0 "x$l" "x$r" (HVM.Var "x$") (HVM.App (HVM.App (termToHVM book f) (HVM.Var "x$l")) (HVM.Var "x$r")))
   go (All _ _)    = HVM.Era
   go (Lam n _ f)  = HVM.Lam (bindNam n) (termToHVM book (f (Var n 0)))
+  -- Special-case: applying a SupM to a scrutinee should compile to a direct DUP
+  go (App (SupM l f) x) =
+    case f of
+      (Lam a _ (subst a -> Lam b _ (subst b -> bod))) ->
+        HVM.Ref "DUP" 0 [ termToHVM book l
+                        , termToHVM book x
+                        , HVM.Lam (bindNam a) (HVM.Lam (bindNam b) (termToHVM book bod))
+                        ]
+      _ ->
+        HVM.Ref "DUP" 0 [ termToHVM book l
+                        , termToHVM book x
+                        , HVM.Lam "x$l" (HVM.Lam "x$r" (HVM.App (HVM.App (termToHVM book f) (HVM.Var "x$l")) (HVM.Var "x$r")))
+                        ]
   go (App f x)    =
     case refAppToHVM book term of
       Just hvm -> hvm
@@ -168,7 +181,21 @@ termToHVM book term = go term where
     HVM.Let HVM.LAZY "sup0$" (termToHVM book a) $
     HVM.Let HVM.LAZY "sup1$" (termToHVM book b) $
     HVM.Ref "SUP" 0 [termToHVM book l, HVM.Var "sup0$", HVM.Var "sup1$"]
-  go (SupM l f)   = termToHVM book f
+  go (SupM l f)   =
+    -- Compile a superposition lambda-match by duplicating the scrutinee
+    -- using the provided label, then evaluating the body with both sides.
+    case f of
+      (Lam a _ (subst a -> Lam b _ (subst b -> bod))) ->
+        HVM.Lam "x$" $ HVM.Ref "DUP" 0 [ termToHVM book l
+                                       , HVM.Var "x$"
+                                       , HVM.Lam (bindNam a) (HVM.Lam (bindNam b) (termToHVM book bod))
+                                       ]
+      _ ->
+        -- If fields aren't explicit, introduce them and apply the matcher.
+        HVM.Lam "x$" $ HVM.Ref "DUP" 0 [ termToHVM book l
+                                       , HVM.Var "x$"
+                                       , HVM.Lam "x$l" (HVM.Lam "x$r" (HVM.App (HVM.App (termToHVM book f) (HVM.Var "x$l")) (HVM.Var "x$r")))
+                                       ]
   go (Frk l a b)  = HVM.Era
   go (Rwt e f)    = HVM.Era  -- Erases at runtime
   go (Loc s t)    = termToHVM book t
@@ -425,8 +452,6 @@ showHVM lv tm =
     prettyLst (HVM.Ctr "#Cons" [h, t]) acc = prettyLst t (showHVM lv h : acc)
     prettyLst (HVM.Ctr "#Nil" [])      acc = Just $ "[" ++ unwords (reverse acc) ++ "]"
     prettyLst _ _ = Nothing
-
-
 
 
 
