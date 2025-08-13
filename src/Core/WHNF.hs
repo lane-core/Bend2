@@ -64,7 +64,7 @@ whnfRef book k i =
   if i == 0
   then Ref k i
   else case getDefn book k of
-    Just (False, term, _) -> deref book k i (LHS SZ id) term
+    Just (False, term, _) -> whnf book $ deref book k i (LHS SZ id) term
     otherwise             -> Ref k 0
 
 -- Normalizes a fixpoint
