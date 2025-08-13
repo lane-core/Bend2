@@ -164,14 +164,12 @@ whnfEqlM book x f =
 -- Normalizes a log operation
 whnfLog :: Book -> Term -> Term -> Term
 whnfLog book s x =
-  let extractString :: Term -> Maybe String
-      extractString Nil = Just ""
-      extractString (Con (Val (CHR_V c)) rest) = do
-        restStr <- extractString (whnf book rest)
-        return (c : restStr)
-      extractString (Loc _ t) = extractString t
-      extractString _ = Nothing
-  in case extractString (whnf book s) of
+  let str :: Term -> Maybe String
+      str (red -> Nil)                           = Just ""
+      str (red -> Con (red -> Val (CHR_V c)) cs) = do cs <- str cs ; return (c : cs)
+      str _                                      = Nothing
+      red = whnf book
+  in case str (whnf book s) of
        Just str -> trace str $ whnf book x
        Nothing  -> whnf book x
 
