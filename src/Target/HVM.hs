@@ -346,19 +346,17 @@ patToHVM book x m c = HVM.Era
 -- Since ctrs are desugared to a Sym + some Tups, the nested matches on the fields happen before the Tup matches on the entire constructor.
 -- We need to somehow reorder the cases so that first we match on the entire constructor and only then on the fields.
 ctrPatToHVM :: Book -> Term -> [Move] -> [Case] -> Maybe HVM.Core
-ctrPatToHVM book scr m cs0 = case cs0 of
-  (([Tup (Var a _) (Var kB _)], Pat [(Var k _)] _ cs) : _)
-    | a == k ->
-      let mv   = [ (bindNam k', termToHVM book v) | (k', v) <- m ]
-          scrH = termToHVM book scr
-          goCase (p, bod) = case head p of
-            Sym ctr  -> caseToHVM ctr [] bod
-            Var kT _ -> Just ( bindNam kT
-                              , []
-                              , HVM.Dup 0 (bindNam kT) (bindNam kB) scrH
-                                          (termToHVM book bod) )
-            _ -> Nothing
-      in HVM.Mat (HVM.MAT 0) scrH mv <$> mapM goCase (filter (not . badPatCase) cs)
+ctrPatToHVM book x m c = case c of
+  (([Tup (Var a _) (Var kB _)], Pat [(Var k _)] _ c) : _) ->
+    if a == k then do
+      let mv = map (\(k,v) -> (bindNam k, termToHVM book v)) m
+      cs <- mapM (\(p, x) -> case head p of
+          Sym ctr  -> caseToHVM ctr [] x
+          Var kT _ -> return (bindNam kT, [], rewriteDflt kT kB (termToHVM book x))
+          _ -> Nothing
+        ) (filter (not . badPatCase) c)
+      return $ HVM.Mat (HVM.MAT 0) (termToHVM book x) mv cs
+    else Nothing
   _ -> Nothing
   where
     caseToHVM :: Name -> [Name] -> Term ->  Maybe HVM.Case
@@ -367,7 +365,6 @@ ctrPatToHVM book scr m cs0 = case cs0 of
     caseToHVM _ _ _ = Nothing
 
     rewriteDflt kT kB x = rewriteHVM (HVM.Sup 0 (HVM.Var kT) (HVM.Var kB)) (HVM.Var kT) x
-
 
 
 -- Utils
