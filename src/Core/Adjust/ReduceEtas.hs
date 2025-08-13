@@ -37,6 +37,7 @@
 module Core.Adjust.ReduceEtas where
 
 import Core.Type
+import Core.Show
 import qualified Data.Set as S
 import Debug.Trace
 import Data.Maybe (isJust, fromJust)
@@ -207,6 +208,8 @@ isEtaLong target depth = go id depth where
     -- Any other form doesn't match our pattern
     _ -> Nothing
 
+-- FIXME: are the TODO cases below reachable? reason about it
+
 -- Inject the injection function into each case of a lambda-match
 injectInto :: (Term -> Term) -> Name -> Term -> Term
 injectInto inj scrutName term = case term of
@@ -222,21 +225,21 @@ injectInto inj scrutName term = case term of
   
   -- Nat match - special handling for successor case (1 field)
   NatM z s -> NatM (injectBody [] inj scrutName (\_ -> Zer) z) 
-                   (injectBody ["p"] inj scrutName (\vars -> case vars of [p] -> Suc p; _ -> Era) s)
+                   (injectBody ["p"] inj scrutName (\vars -> case vars of [p] -> Suc p; _ -> error $ "TODO: " ++ (show term)) s)
   
   -- List match - special handling for cons case (2 fields)
   LstM n c -> LstM (injectBody [] inj scrutName (\_ -> Nil) n) 
-                   (injectBody ["h", "t"] inj scrutName (\vars -> case vars of [h,t] -> Con h t; _ -> Era) c)
+                   (injectBody ["h", "t"] inj scrutName (\vars -> case vars of [h,t] -> Con h t; _ -> error $ "TODO: " ++ (show term)) c)
 
   -- Enum match - inject into each case and default (apply default-case fix)
   EnuM cs e -> EnuM [(s, injectBody [] inj scrutName (\_ -> Sym s) v) | (s,v) <- cs]
-                    (injectBody ["_"] inj scrutName (\_ -> Era) e)
+                    (injectBody ["x"] inj scrutName (\vars -> case vars of [x] -> x; _ -> error $ "TODO: " ++ (show term)) e)
   
   -- Sigma match - special handling for pair case (2 fields)
-  SigM f -> SigM (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Tup a b; _ -> Era) f)
+  SigM f -> SigM (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Tup a b; _ -> error $ "TODO: " ++ (show term)) f)
   
   -- Superposition match - special handling (2 fields)
-  SupM l f -> SupM l (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Sup l a b; _ -> Era) f)
+  SupM l f -> SupM l (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Sup l a b; _ -> error $ "TODO: " ++ (show term)) f)
   
   -- Equality match - inject into the single case
   EqlM f -> EqlM (injectBody [] inj scrutName (\_ -> Rfl) f)
