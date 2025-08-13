@@ -155,6 +155,29 @@ termToHVM book term = go term where
         HVM.Lam "x$" (HVM.Dup 0 "x$l" "x$r" (HVM.Var "x$") (HVM.App (HVM.App (termToHVM book f) (HVM.Var "x$l")) (HVM.Var "x$r")))
   go (All _ _)    = HVM.Era
   go (Lam n _ f)  = HVM.Lam (bindNam n) (termToHVM book (f (Var n 0)))
+  -- Directly compile application of a boolean match to a scrutinee
+  -- Avoids emitting (λx$ ~ x$ {..} x)
+  go (App (BitM f t) x) =
+    HVM.Mat HVM.SWI (termToHVM book x) [] [("0", [], termToHVM book f), ("_", [], termToHVM book t)]
+  -- Directly compile application of a nat match to a scrutinee
+  go (App (NatM z s) x) =
+    HVM.Mat (HVM.MAT 0) (termToHVM book x) [] [("#Z", [], termToHVM book z), ("#S", ["x$p"], HVM.App (termToHVM book s) (HVM.Var "x$p"))]
+  -- Directly compile application of a list match to a scrutinee
+  go (App (LstM n c) x) =
+    HVM.Mat (HVM.MAT 0) (termToHVM book x) [] [("#Nil", [], termToHVM book n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM book c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
+  -- Directly compile application of a pair match to a scrutinee
+  go (App (SigM f) x) =
+    case f of
+      (Lam l _ (subst l -> (Lam r _ (subst r -> bod)))) ->
+        HVM.Dup 0 (bindNam l) (bindNam r) (termToHVM book x) (termToHVM book bod)
+      _ ->
+        HVM.Dup 0 "x$l" "x$r" (termToHVM book x) (HVM.App (HVM.App (termToHVM book f) (HVM.Var "x$l")) (HVM.Var "x$r"))
+  -- Empty match applied: ignores scrutinee, erases
+  go (App EmpM _) = HVM.Era
+  -- Unit match applied: single branch, ignore scrutinee
+  go (App (UniM f) _) = termToHVM book f
+  -- Equality match applied: erased, single branch
+  go (App (EqlM f) _) = termToHVM book f
   -- Special-case: applying a SupM to a scrutinee should compile to a direct DUP
   go (App (SupM l f) x) =
     case f of
@@ -456,8 +479,6 @@ showHVM lv tm =
     prettyLst (HVM.Ctr "#Cons" [h, t]) acc = prettyLst t (showHVM lv h : acc)
     prettyLst (HVM.Ctr "#Nil" [])      acc = Just $ "[" ++ unwords (reverse acc) ++ "]"
     prettyLst _ _ = Nothing
-
-
 
 
 
