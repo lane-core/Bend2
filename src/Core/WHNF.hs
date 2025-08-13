@@ -172,7 +172,7 @@ whnfLog book s x =
       extractString (Loc _ t) = extractString t
       extractString _ = Nothing
   in case extractString (whnf book s) of
-       Just str -> (whnf book x)
+       Just str -> trace str $ whnf book x
        Nothing  -> whnf book x
 
 -- Normalizes a primitive application
