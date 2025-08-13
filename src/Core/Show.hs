@@ -165,7 +165,7 @@ showEnuM shadowed cs d depth = "λ{" ++ intercalate ";" cases ++ ";" ++ showPlai
 -- | Dependent pair type: Σx:A. B or A & B
 showSig :: S.Set String -> Term -> Term -> Int -> String
 showSig shadowed a b depth = case cut b of
-  Lam "_" t f -> showArg a ++ " & " ++ showCodomain (f (Var "_" depth))
+  Lam "_" t f -> "(" ++ showArg a ++ " & " ++ showCodomain (f (Var "_" depth)) ++ ")"
   Lam k t f   -> "Σ" ++ varName shadowed k depth ++ ":" ++ showArg a ++ ". " ++ showPlain shadowed (f (Var k depth)) (depth + 1)
   _           -> "Σ" ++ showArg a ++ ". " ++ showPlain shadowed b depth
   where
