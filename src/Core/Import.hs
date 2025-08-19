@@ -5,7 +5,7 @@ module Core.Import (autoImport) where
 import Data.List (intercalate)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
-import System.Directory (doesFileExist)
+import System.Directory (doesFileExist, doesDirectoryExist)
 import System.Exit (exitFailure)
 import System.FilePath ((</>))
 import System.IO (hPutStrLn, stderr)
@@ -62,8 +62,8 @@ importLoop st pending =
 
 loadRef :: ImportState -> Name -> IO (Either String ImportState)
 loadRef st refName = do
-  let candidates = generateImportPaths refName
-      visitedHit = any (`S.member` stVisited st) candidates
+  candidates <- generateImportPaths refName
+  let visitedHit = any (`S.member` stVisited st) candidates
   if visitedHit
     then
       -- Already visited one of the candidate files earlier (cycle/dup); consider it loaded.
@@ -80,14 +80,23 @@ loadRef st refName = do
                   merged   = mergeBooks (stBook st) imported
                   loaded'  = S.union (stLoaded st) (bookNames imported)
               pure $ Right st { stVisited = visited', stLoaded = loaded', stBook = merged }
-        Nothing ->
-          if hasSlash refName
+        Nothing -> do
+          isDir <- doesDirectoryExist refName
+          if isDir
             then
-              let tried = intercalate ", " candidates
-              in pure $ Left $ "Import error: Could not find file for '" ++ refName ++ "'. Tried: " ++ tried
+              pure $ Left $ unlines
+                [ "Import error:"
+                , "  Found directory for '" ++ refName ++ "', but expected module file was not found."
+                , "  Missing file: " ++ (refName </> "_.bend")
+                ]
             else
-              -- Non-hierarchical names may be provided by the environment; skip without error.
-              pure $ Right st { stLoaded = S.insert refName (stLoaded st) }
+              if hasSlash refName
+                then
+                  let tried = intercalate ", " candidates
+                  in pure $ Left $ "Import error: Could not find file for '" ++ refName ++ "'. Tried: " ++ tried
+                else
+                  -- Non-hierarchical names may be provided by the environment; skip without error.
+                  pure $ Right st { stLoaded = S.insert refName (stLoaded st) }
 
 firstExisting :: [FilePath] -> IO (Maybe FilePath)
 firstExisting [] = pure Nothing
@@ -95,11 +104,11 @@ firstExisting (p:ps) = do
   ok <- doesFileExist p
   if ok then pure (Just p) else firstExisting ps
 
-generateImportPaths :: Name -> [FilePath]
-generateImportPaths name =
-  [ name ++ ".bend"
-  , name </> "_.bend"
-  ]
+-- Prefer Foo/Bar/_.bend if Foo/Bar/ is a directory; otherwise Foo/Bar.bend
+generateImportPaths :: Name -> IO [FilePath]
+generateImportPaths name = do
+  isDir <- doesDirectoryExist name
+  pure [ if isDir then name </> "_.bend" else name ++ ".bend" ]
 
 hasSlash :: String -> Bool
 hasSlash = any (== '/')
@@ -110,3 +119,6 @@ bookNames (Book defs _) = S.fromList (M.keys defs)
 mergeBooks :: Book -> Book -> Book
 mergeBooks (Book defs1 names1) (Book defs2 names2) =
   Book (M.union defs1 defs2) (names1 ++ filter (`notElem` names1) names2)
+
+
+
