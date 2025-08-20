@@ -33,7 +33,7 @@ Bend has Python-like surface syntax, Haskell-like semantics (pure/functional), a
   - Type: `T[]`
 - Enums:
   - Type: `enum{&A, &B, &C}`
-  - Tag literal: `&Tag` (preferred). Old style `@Tag` is accepted only for arity‑0 constructors and desugars to `(&Tag,())`.
+  - Tag literal: `&Tag` (preferred).
  - Superposition: `&L{a, b}` builds a labeled superposition of `a` and `b` with label `L` (advanced; also has eliminator forms in `λ{…}` and `~ … { … }`).
 
 ## Terms and Types
