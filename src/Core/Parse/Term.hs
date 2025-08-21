@@ -411,12 +411,12 @@ parsePat = label "pattern match" $ do
   pure pat
   where
     -- Parse 'with' statements
-    parseWith = try $ do
-      _ <- symbol "with"
-      sepEndBy (do
-        x <- name
+    parseWith = do
+      _ <- try $ symbol "with"
+      many (do
+        x <- try name
         v <- option (Var x 0) (try (symbol "=" >> parseTerm))
-        return (x, v)) (symbol ",")
+        return (x, v))
 
 -- | Syntax: case pattern1 pattern2: body
 -- Indentation-sensitive clause list (stops when out-dented)
