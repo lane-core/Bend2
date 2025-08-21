@@ -82,6 +82,7 @@ data Term
 
   -- Annotation
   | Chk Term Type -- x::t
+  | Tru Term      -- trust x
 
   -- Empty
   | Emp  -- Empty
@@ -241,6 +242,7 @@ getDefn (Book defs _) name = M.lookup name defs
 cut :: Term -> Term
 cut (Loc _ t) = cut t
 cut (Chk x _) = cut x
+cut (Tru x)   = cut x
 cut t         = t
 
 unlam :: Name -> Int -> (Term -> Term) -> Term
@@ -287,6 +289,7 @@ collectVars t = case t of
   Let k t v f -> maybe [] collectVars t ++ collectVars v ++ collectVars (f (Var k 0))
   Use k v f -> collectVars v ++ collectVars (f (Var k 0))
   Chk x t -> collectVars x ++ collectVars t
+  Tru x -> collectVars x
   UniM f -> collectVars f
   BitM f t -> collectVars f ++ collectVars t
   NatM z s -> collectVars z ++ collectVars s

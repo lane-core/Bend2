@@ -95,6 +95,10 @@ infer d span book@(Book defs names) ctx term =
       check d span book ctx v t
       Done t
 
+    -- Can't infer Trust
+    Tru _ -> do
+      Fail $ CantInfer span (normalCtx book ctx)
+
     -- ctx |-
     -- ---------------- Set
     -- ctx |- Set : Set
@@ -479,6 +483,10 @@ check d span book ctx (Loc l t) goal = check d l book ctx t goal
 check d span book ctx term      goal =
   -- trace ("- check: " ++ show d ++ " " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
   case (term, force book goal) of
+    -- ctx |-
+    -- -------------- Trust
+    -- ctx |- trust x : T
+    (Tru _, _) -> Done ()
     -- ctx |- 
     -- ----------- Era
     -- ctx |- * : T
@@ -1000,4 +1008,3 @@ verify d span book ctx term goal = do
   if equal d book t goal
     then Done ()
     else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book t)
-

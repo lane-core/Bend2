@@ -42,6 +42,7 @@ parseTermIni = choice
   , parseRewrite
   , parseAbsurd
   , parseFrk
+  , parseTrust
   , parseLog
   , parseAll
   , parseSig
@@ -480,6 +481,13 @@ parseLog = label "log" $ do
   s <- parseTerm
   x <- parseTerm
   return $ Log s x
+
+-- | Syntax: trust term
+parseTrust :: Parser Term
+parseTrust = label "trust" $ do
+  _ <- try $ keyword "trust"
+  t <- parseTerm
+  return $ Tru t
 
 -- | Syntax: view(functionName)
 parseView :: Parser Term
