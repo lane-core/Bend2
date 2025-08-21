@@ -840,6 +840,8 @@ check d span book ctx term      goal =
       let rewrittenCtx  = rewriteCtx d book a b ctx
       check d span book rewrittenCtx f rewrittenGoal
 
+    
+
     -- ctx, k:T |- f : T
     -- ----------------- Fix
     -- ctx |- μk. f : T
