@@ -487,7 +487,7 @@ parseTrust :: Parser Term
 parseTrust = label "trust" $ do
   _ <- try $ keyword "trust"
   t <- parseTerm
-  return $ Tru t
+  return $ Tst t
 
 -- | Syntax: view(functionName)
 parseView :: Parser Term

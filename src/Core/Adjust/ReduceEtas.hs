@@ -64,7 +64,7 @@ reduceEtas d t = case t of
   Use k v f    -> Use k (reduceEtas d v) (\v' -> reduceEtas (d+1) (f v'))
   Set          -> Set
   Chk a b      -> Chk (reduceEtas d a) (reduceEtas d b)
-  Tru a        -> Tru (reduceEtas d a)
+  Tst a        -> Tst (reduceEtas d a)
   Emp          -> Emp
   EmpM         -> EmpM
   Uni          -> Uni
@@ -129,9 +129,9 @@ isEtaLong target depth = go id depth where
     -- Found Chk - add to injection
     Chk x t ->
       go (\h -> inj (Chk h t)) d x
-    -- Found Tru - add to injection
-    Tru x ->
-      go (\h -> inj (Tru h)) d x
+    -- Found Tst - add to injection
+    Tst x ->
+      go (\h -> inj (Tst h)) d x
     
     -- Found Loc - add to injection
     Loc s x ->

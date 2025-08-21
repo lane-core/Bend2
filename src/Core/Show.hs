@@ -48,7 +48,7 @@ showPlain shadowed term depth = case term of
   -- Types and annotations
   Set          -> "Set"
   Chk x t      -> "(" ++ showPlain shadowed x depth ++ "::" ++ showPlain shadowed t depth ++ ")"
-  Tru x        -> "trust " ++ showPlain shadowed x depth
+  Tst x        -> "trust " ++ showPlain shadowed x depth
 
   -- Empty
   Emp          -> "Empty"
@@ -344,7 +344,7 @@ adjustDepths term depth = case term of
   Use k v f  -> Use k (adjustDepths v depth) (\x -> adjustDepths (f (Var k depth)) (depth + 1))
   Set        -> Set
   Chk x t    -> Chk (adjustDepths x depth) (adjustDepths t depth)
-  Tru x      -> Tru (adjustDepths x depth)
+  Tst x      -> Tst (adjustDepths x depth)
   Emp        -> Emp
   EmpM       -> EmpM
   Uni        -> Uni

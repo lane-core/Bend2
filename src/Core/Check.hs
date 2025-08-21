@@ -96,7 +96,7 @@ infer d span book@(Book defs names) ctx term =
       Done t
 
     -- Can't infer Trust
-    Tru _ -> do
+    Tst _ -> do
       Fail $ CantInfer span (normalCtx book ctx)
 
     -- ctx |-
@@ -484,9 +484,11 @@ check d span book ctx term      goal =
   -- trace ("- check: " ++ show d ++ " " ++ show term ++ " :: " ++ show (force book (normal book goal))) $
   case (term, force book goal) of
     -- ctx |-
-    -- -------------- Trust
+    -- ------------------ Trust
     -- ctx |- trust x : T
-    (Tru _, _) -> Done ()
+    (Tst _, _) ->
+      Done ()
+
     -- ctx |- 
     -- ----------- Era
     -- ctx |- * : T
