@@ -122,14 +122,20 @@ flattenPat d span book pat =
       -- trace (">> var: " ++ show pat) $
       flattenPats d span book $ Pat ss ms (joinVarCol (d+1) span book s (((Var k i:ps),rhs):cs))
       -- flattenPats d span book $ Pat ss (ms++[(k,s)]) (joinVarCol (d+1) (Var k 0) (((Var k i:ps),rhs):cs))
-    flattenPatGo d book pat@(Pat (s:ss) ms cs@((((cut->p):_),_):_)) =
+    flattenPatGo d book pat@(Pat (s:ss) ms cs@(((pp:ps0),rhs0):cs0)) =
       -- trace (">> ctr: " ++ show p ++ " " ++ show pat
           -- ++ "\n>> - picks: " ++ show picks
           -- ++ "\n>> - drops: " ++ show drops) $
       Pat [s] moves [([ct], flattenPats (d+length fs) span book picks), ([var d], flattenPats (d+1) span book drops)] where
-        (ct,fs) = ctrOf d p
-        (ps,ds) = peelCtrCol d span book ct cs
-        moves   = ms
+        p        = cut pp
+        (ct0,fs) = ctrOf d p
+        -- Preserve location if the pattern was a located unit '()' or tuple
+        ct       = case (ct0, pp) of
+                     (One, Loc sp (cut -> One)) -> Loc sp One
+                     (Tup a b, Loc sp (cut -> Tup _ _)) -> Loc sp (Tup a b)
+                     _                           -> ct0
+        (ps,ds)  = peelCtrCol d span book ct cs
+        moves    = ms
         -- moves   = ms ++ map (\ (s,i) -> (patOf (d+i) s, s)) (zip ss [0..])
         picks   = Pat (fs   ++ ss) ms ps
         drops   = Pat (var d : ss) ms ds
@@ -180,9 +186,13 @@ peelCtrCol d span book (cut->k) ((((cut->p):ps),rhs):cs) =
     (Nil      , Var k _)   -> ((ps, bindVarByName k Nil rhs) : picks , ((p:ps),rhs) : drops)
     (Con _ _  , Con h t)   -> (((h:t:ps), rhs) : picks , drops)
     (Con _ _  , Var k _)   -> (((Var (k++"h") 0:Var (k++"t") 0:ps), bindVarByName k (Con (Var (k++"h") 0) (Var (k++"t") 0)) rhs) : picks , ((p:ps),rhs) : drops)
+    (Loc sp One, One    )   -> ((ps, rhs) : picks , drops)
     (One      , One    )   -> ((ps, rhs) : picks , drops)
+    (Loc sp One, Var k _)   -> ((ps, bindVarByName k One rhs) : picks , ((p:ps),rhs) : drops)
     (One      , Var k _)   -> ((ps, bindVarByName k One rhs) : picks , ((p:ps),rhs) : drops)
+    (Loc sp (Tup _ _), Tup a b) -> (((a:b:ps), rhs) : picks , drops)
     (Tup _ _  , Tup a b)   -> (((a:b:ps), rhs) : picks , drops)
+    (Loc sp (Tup _ _), Var k _) -> (((Var (k++"x") 0:Var (k++"y") 0:ps), bindVarByName k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Tup _ _  , Var k _)   -> (((Var (k++"x") 0:Var (k++"y") 0:ps), bindVarByName k (Tup (Var (k++"x") 0) (Var (k++"y") 0)) rhs) : picks , ((p:ps),rhs) : drops)
     (Sym s    , Sym s' )
                | s == s'   -> ((ps, rhs) : picks , drops)
