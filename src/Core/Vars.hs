@@ -1,7 +1,10 @@
-module Core.FreeVars where
+{-# LANGUAGE ViewPatterns #-}
+
+module Core.Vars where
 
 import Core.Type
 import qualified Data.Set as S
+import Data.List.Split.Internals (Splitter(delimiter))
 
 -- | Returns the free variables in a term by name.
 freeVars :: S.Set Name -> Term -> S.Set Name
@@ -40,3 +43,17 @@ freeVars ctx tm = case tm of
   Loc _ t     -> freeVars ctx t
   Pat s m c   -> S.unions ((map (freeVars ctx) s) ++ (map (\(_,m) -> freeVars ctx m) m) ++ (map (\(_,c) -> freeVars ctx c) c))
   _           -> S.empty
+
+-- Creates a name at given depth
+nam :: Int -> String
+nam d = "$x" ++ show d
+
+-- Creates a variable at given depth
+var :: Int -> Term
+var d = Var (nam d) d
+
+-- Creates a fresh variable using the reserved character '$' as delimiter
+-- as users cannot use it in variable names. This is used to derive vars
+-- from related names meant only to be used internally by the typechecker
+freshVarFromName :: String -> String -> Int -> Term
+freshVarFromName name tag = Var (name ++ "$" ++ tag)

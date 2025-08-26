@@ -17,7 +17,7 @@
 module Core.Adjust.DesugarFrks where
 
 import Core.Bind
-import Core.FreeVars
+import Core.Vars
 import Core.Show
 import Core.Type
 import qualified Data.Set as S

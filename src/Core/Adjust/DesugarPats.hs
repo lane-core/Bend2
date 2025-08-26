@@ -12,6 +12,8 @@ import Core.Type
 import Core.WHNF
 import qualified Data.Set as S
 import Debug.Trace (trace)
+import Core.Vars
+import Core.Adjust.FlattenPats ( shove, patOf )
 
 desugarPats :: Int -> Span -> Term -> Result Term
 desugarPats d span (Var n i)       = Done $ Var n i
@@ -373,20 +375,3 @@ lam d ks t = t
 apps :: Int -> [Term] -> Term -> Term
 apps d ms t = t
 -- apps d ms t = foldl (\t x -> App t x) t ms
-
--- Substitutes a move list into an expression
-shove :: Int -> [Move] -> Term -> Term
-shove d ms term = foldr (\ (k,v) x -> bindVarByName k v x) term ms
-
--- Creates a fresh name at given depth
-nam :: Int -> String
-nam d = "_x" ++ show d
-
--- Creates a fresh variable at given depth
-var :: Int -> Term
-var d = Var (nam d) d
-
--- Gets a var name, or creates a fresh one
-patOf :: Int -> Term -> String
-patOf d (cut->Var k i) = k
-patOf d p              = nam d

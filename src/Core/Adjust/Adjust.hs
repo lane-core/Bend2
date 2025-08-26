@@ -75,7 +75,7 @@ import Core.Adjust.ReduceEtas
 import Core.Adjust.ResolveEnums
 import Core.Bind
 import Core.Deps
-import Core.FreeVars
+import Core.Vars
 import Core.Show
 import Core.Type
 import Core.WHNF

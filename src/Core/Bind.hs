@@ -8,7 +8,7 @@ import qualified Data.Set as S
 import Debug.Trace
 
 import Core.Type
-import Core.FreeVars
+import Core.Vars
 
 bind :: Term -> Term
 bind term = bound where
