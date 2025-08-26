@@ -432,9 +432,10 @@ infer d span book@(Book defs names) ctx term =
       check d span book ctx s (Lst (Num CHR_T))
       infer d span book ctx x
 
-    -- Not supported in infer
-    Pat _ _ _ -> do
-      error "Pat not supported in infer"
+    -- Pattern matching should be desugared before type checking
+    Pat scruts moves cases -> do
+      Fail $ Unsupported span ctx (Just 
+        "Pattern matching expressions should be desugared before type checking. This indicates patterns were not properly adjusted during compilation.")
 
 -- Infer the result type of a binary numeric operation
 inferOp2Type :: Int -> Span -> Book -> Ctx -> NOp2 -> Term -> Term -> Result Term
@@ -1007,9 +1008,10 @@ check d span book ctx term      goal =
         _ ->
           Fail $ TypeMismatch span (normalCtx book ctx) (normal book (Eql (Var "_" 0) (Var "_" 0) (Var "_" 0))) (normal book eT) Nothing
 
-    -- Not supported
+    -- Pattern matching should be desugared before type checking
     (Pat _ _ _, _) -> do
-      error "not-supported"
+      Fail $ Unsupported span ctx (Just 
+        "Pattern matching expressions should be desugared before type checking. This indicates patterns were not properly adjusted during compilation.")
 
     -- ctx |- s : Char[]
     -- ctx |- x : T
