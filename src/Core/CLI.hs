@@ -96,6 +96,7 @@ processFile file = do
   let bookAdj = adjustBook book
   -- debug removed
   -- debug removed
+  putStrLn $ show bookAdj
   bookChk <- checkBook bookAdj
   runMain bookChk
 
@@ -130,7 +131,7 @@ processFileToHVM :: FilePath -> IO ()
 processFileToHVM file = do
   book <- parseFile file
   let bookAdj = adjustBookWithPats book
-  -- putStrLn $ show bookAdj
+  putStrLn $ show bookAdj
   let hvmCode = HVM.compile bookAdj
   putStrLn hvmCode
 

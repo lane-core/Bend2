@@ -5,6 +5,7 @@
 module Target.HVM where
 
 import Control.Monad (forM)
+import Core.Show
 import Core.Type
 import Data.Either (partitionEithers)
 import Data.List (unsnoc, sortBy)
@@ -55,27 +56,27 @@ compileFn :: Book -> Name -> Term -> Term -> String
 compileFn book nam tm ty =
   "!@" ++ (defNam nam) ++ "(" ++ unwords argsStr ++ ") =\n  " ++ showHVM 1 bodHVM ++ "\n"
   where
-    (eras,args,body) = collectLamArgs tm ty [] []
+    (eras,args,body) = collectLamArgs (cutDeep tm) (cutDeep ty) [] []
     argsStr          = map (\(k,ty) -> if isStri k ty then "!&"++k else "&"++k) args
     bodHVM           = foldr (\era x -> rewriteHVM (HVM.Var era) HVM.Era x) (termToHVM book body) eras
     isStri k ty      = alwaysMat k body || isNum ty
     isNum ty         = case ty of { Num _ -> True; _ -> False } -- We don't necessarily want to always do this, but most times it guarantees fast u32 duplication at no extra cost.
-    alwaysMat x bod  = case cut bod of
+    alwaysMat x bod  = case bod of
       -- Matches this var
-      App (BitM _ _) (cut -> Var y _)  | x == y -> True
-      App (NatM _ _) (cut -> Var y _)  | x == y -> True
-      App (LstM _ _) (cut -> Var y _)  | x == y -> True
-      App (SigM _) (cut -> Var y _)    | x == y -> True
-      Pat [(cut -> Var y _)] _ _ | x == y -> True
+      App (BitM _ _) (Var y _)  | x == y -> True
+      App (NatM _ _) (Var y _)  | x == y -> True
+      App (LstM _ _) (Var y _)  | x == y -> True
+      App (SigM _) (Var y _)    | x == y -> True
+      Pat [(Var y _)] _ _ | x == y -> True
       -- All branches of the mat eventually match this var
-      BitM f t                                                -> alwaysMat x f && alwaysMat x t
-      NatM z (Lam p _ (subst p -> s))                        -> alwaysMat x z && alwaysMat x s
-      LstM n (Lam h _ (subst h -> Lam t _ (subst t -> c)))   -> alwaysMat x n && alwaysMat x c
-      SigM (Lam l _ (subst l -> (Lam r _ (subst r -> f))))   -> alwaysMat x f
-      Pat _ _ c                                              -> all (\(p,f) -> alwaysMat x f) c
+      BitM f t                                             -> alwaysMat x f && alwaysMat x t
+      NatM z (Lam p _ (subst p -> s))                      -> alwaysMat x z && alwaysMat x s
+      LstM n (Lam h _ (subst h -> Lam t _ (subst t -> c))) -> alwaysMat x n && alwaysMat x c
+      SigM (Lam l _ (subst l -> (Lam r _ (subst r -> f)))) -> alwaysMat x f
+      Pat _ _ c                                            -> all (\(p,f) -> alwaysMat x f) c
       -- Pass through terms that just bind
-      Let k t v f                                            -> alwaysMat x (f (Var k 0))
-      Use k v f                                              -> alwaysMat x (f v)
+      Let k t v f                                          -> alwaysMat x (f (Var k 0))
+      Use k v f                                            -> alwaysMat x (f v)
       SupM _ (Lam a _ (subst a -> Lam b _ (subst b -> f))) -> alwaysMat x f
       _ -> False
 
@@ -308,7 +309,7 @@ patToHVM book [x] m c@(([p], f) : _) =
     (Suc _)   -> simpleMat
     (Nil)     -> simpleMat
     (Con _ _) -> simpleMat
-    (Sym _)   -> error "Nested matches on constructors and matches on symbols are not yet supported on Bend-to-HVM compiler."
+    (Sym _)   -> error $ "Nested matches on constructors and matches on symbols are not yet supported on Bend-to-HVM compiler. " ++ show c
     (Tup (Var a _) (Var b _)) ->
       case ctrPatToHVM book x m c of
         Just hvm -> hvm
@@ -351,7 +352,7 @@ ctrPatToHVM book x m c = case c of
   (([Tup (Var a _) (Var kB _)], Pat [(Var k _)] _ c) : _) ->
     if a == k then do
       let mv = map (\(k,v) -> (bindNam k, termToHVM book v)) m
-      cs <- mapM (\(p, x) -> case head p of
+      cs <- mapM (\(p, x) -> case (head p) of
           Sym ctr  -> caseToHVM ctr [] x
           Var kT _ -> return (bindNam kT, [], rewriteDflt kT kB (termToHVM book x))
           _ -> Nothing
@@ -373,7 +374,7 @@ ctrPatToHVM book x m c = case c of
 
 -- Flattener generates cases with empty Pats when they're unreachable
 badPatCase :: Case -> Bool
-badPatCase ([Var _ _], cut -> Pat _ _ []) = True
+badPatCase ((Var _ _ : _), Pat _ _ []) = True
 badPatCase _ = False
 
 defNam :: Name -> HVM.Name
@@ -384,6 +385,61 @@ bindNam n = if n == "_" then "_" else ('&':n)
 
 subst :: Name -> Body -> Term
 subst a f = f (Var a 0)
+
+cutDeep :: Term -> Term
+cutDeep t = case cut t of
+  (Var n i)     -> Var n i
+  (Ref k i)     -> Ref k i
+  (Sub t)       -> t
+  (Fix n f)     -> Fix n (\x -> cutDeep (f (Sub x)))
+  (Let k t v f) -> Let k (fmap cutDeep t) v (\x -> cutDeep (f (Sub x)))
+  (Use k v f)   -> Use k (cutDeep v) (\x -> cutDeep (f (Sub x)))
+  Set           -> Set
+  (Chk v t)     -> error "cutDeep reached Chk"
+  (Tst v)       -> Tst (cutDeep v)
+  Emp           -> Emp
+  EmpM          -> EmpM
+  Uni           -> Uni
+  One           -> One
+  (UniM f)      -> UniM (cutDeep f)
+  Bit           -> Bit
+  Bt0           -> Bt0
+  Bt1           -> Bt1
+  (BitM f t)    -> BitM (cutDeep f) (cutDeep t)
+  Nat           -> Nat
+  Zer           -> Zer
+  (Suc p)       -> Suc (cutDeep p)
+  (NatM z s)    -> NatM (cutDeep z) (cutDeep s)
+  (Lst t)       -> Lst (cutDeep t)
+  Nil           -> Nil
+  (Con h t)     -> Con (cutDeep h) (cutDeep t)
+  (LstM n c)    -> LstM (cutDeep n) (cutDeep c)
+  (Enu s)       -> Enu s
+  (Sym s)       -> Sym s
+  (EnuM c e)    -> EnuM (map (\(k,v) -> (k, cutDeep v)) c) (cutDeep e)
+  (Log s x)     -> Log s (cutDeep x)
+  (Num n)       -> Num n
+  (Val v)       -> Val v
+  (Op2 o a b)   -> Op2 o (cutDeep a) (cutDeep b)
+  (Op1 o a)     -> Op1 o (cutDeep a)
+  (Sig a b)     -> Sig (cutDeep a) (cutDeep b)
+  (Tup x y)     -> Tup (cutDeep x) (cutDeep y)
+  (SigM f)      -> SigM (cutDeep f)
+  (All a b)     -> All (cutDeep a) (cutDeep b)
+  (Lam n t f)   -> Lam n (fmap cutDeep t) (\x -> cutDeep (f (Sub x)))
+  (App f x)     -> App (cutDeep f) (cutDeep x)
+  (Eql a b c)   -> Eql (cutDeep a) (cutDeep b) (cutDeep c)
+  Rfl           -> Rfl
+  (EqlM a)      -> EqlM (cutDeep a)
+  (Met n t ts)  -> Met n t ts
+  Era           -> Era
+  (Sup l a b)   -> Sup l (cutDeep a) (cutDeep b)
+  (SupM l f)    -> SupM l (cutDeep f)
+  (Frk l a b)   -> Frk l (cutDeep a) (cutDeep b)
+  (Rwt e f)     -> Rwt e (cutDeep f)
+  (Loc s t)     -> error "cutDeep reached Loc"
+  (Pri p)       -> Pri p
+  (Pat x m c)   -> Pat (map cutDeep x) (map (\(k,v) -> (k, cutDeep v)) m) (map (\(p,x) -> (map cutDeep p, cutDeep x)) c)
 
 replace :: Char -> String -> String -> String
 replace old new xs = foldr (\c acc -> if c == old then new ++ acc else c : acc) [] xs
@@ -481,6 +537,3 @@ showHVM lv tm =
     prettyLst (HVM.Ctr "#Cons" [h, t]) acc = prettyLst t (showHVM lv h : acc)
     prettyLst (HVM.Ctr "#Nil" [])      acc = Just $ "[" ++ unwords (reverse acc) ++ "]"
     prettyLst _ _ = Nothing
-
-
-
