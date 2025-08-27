@@ -5,8 +5,8 @@
 
 module Core.Check where
 
-import Control.Monad (unless)
 import Control.Monad (unless, foldM)
+import System.IO.Unsafe (unsafePerformIO)
 import Data.List (find)
 import Data.Maybe (fromJust)
 import System.Exit (exitFailure)
@@ -22,6 +22,7 @@ import Core.Rewrite
 import Core.Type
 import Core.Show
 import Core.WHNF
+import qualified Core.UnificationIntegration
 
 -- Utils
 -- -------
@@ -354,9 +355,13 @@ infer d span book@(Book defs names) ctx term =
     Frk l a b -> do
       Fail $ CantInfer span (normalCtx book ctx) Nothing
 
-    -- Can't infer Met
+    -- Enhanced metavariable inference
     Met n t c -> do
-      Fail $ CantInfer span (normalCtx book ctx) Nothing
+      -- Default fallback for metavariables
+      let defaultResult = Fail $ CantInfer span (normalCtx book ctx) Nothing
+      -- Try improved metavariable inference if enabled
+      let result = unsafePerformIO $ Core.UnificationIntegration.tryImprovedInference d span book ctx (Met n t c) defaultResult
+      result
 
     -- ctx |-
     -- -------------- Num

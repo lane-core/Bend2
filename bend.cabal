@@ -41,6 +41,8 @@ library
                       Core.Parse.WithSpan,
                       Core.Rewrite,
                       Core.Termination,
+                      Core.Unification,
+                      Core.UnificationIntegration,
                       Core.WHNF,
                       Target.HVM,
                       Target.JavaScript
