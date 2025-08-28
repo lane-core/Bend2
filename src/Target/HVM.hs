@@ -137,8 +137,8 @@ termToHVM book term = go term where
   go (Con h t)     = HVM.Ctr "#Cons" [termToHVM book h, termToHVM book t]
   go (LstM n c)    = HVM.Lam "x$" $ HVM.Mat (HVM.MAT 0) (HVM.Var "x$") [] [("#Nil", [], termToHVM book n), ("#Cons", ["x$h", "x$t"], HVM.App (HVM.App (termToHVM book c) (HVM.Var "x$h")) (HVM.Var "x$t"))]
   go (Enu s)       = HVM.Era
-  go (Sym s)       = error "TODO: termToHVM Sym"
-  go (EnuM c e)    = error "TODO: termToHVM EnuM"
+  go (Sym s)       = error $ "TODO: termToHVM Sym. " ++ show term
+  go (EnuM c e)    = error $ "TODO: termToHVM EnuM. " ++ show term
   go (Log s x)     = termToHVM book x  -- For HVM, just return the result expression
   go (Num _)       = HVM.Era
   go (Val v)       = valToHVM book v
@@ -146,7 +146,7 @@ termToHVM book term = go term where
   go (Op1 o a)     = op1ToHVM book o a
   go (Sig _ _)     = HVM.Era
   go (Tup x y)     =
-    case ctrToHVM book x y of
+    case ctrToHVM book term of
       Just hvm -> hvm
       Nothing -> HVM.Sup 0 (termToHVM book x) (termToHVM book y)
   go (SigM f)   =
@@ -227,10 +227,11 @@ termToHVM book term = go term where
   go (Pri p)      = fromJust (refAppToHVM book (Pri p))
   go (Pat x m c)  = patToHVM book x m c
 
-ctrToHVM :: Book -> Term -> Term -> Maybe HVM.Core
-ctrToHVM book x y = case (x, (unsnoc (flattenTup y))) of
-  (Sym k, Just (xs, One)) -> Just (HVM.Ctr ('#':defNam k) (map (termToHVM book) xs))
-  _ -> Nothing
+ctrToHVM :: Book -> Term -> Maybe HVM.Core
+ctrToHVM book t = 
+  case unsnoc (flattenTup t) of
+    Just ((Sym k : ts), One) -> Just (HVM.Ctr ('#':defNam k) (map (termToHVM book) ts))
+    _                        -> Nothing
 
 valToHVM :: Book -> NVal -> HVM.Core
 valToHVM book v = case v of
@@ -392,7 +393,7 @@ cutDeep t = case cut t of
   (Ref k i)     -> Ref k i
   (Sub t)       -> t
   (Fix n f)     -> Fix n (\x -> cutDeep (f (Sub x)))
-  (Let k t v f) -> Let k (fmap cutDeep t) v (\x -> cutDeep (f (Sub x)))
+  (Let k t v f) -> Let k (fmap cutDeep t) (cutDeep v) (\x -> cutDeep (f (Sub x)))
   (Use k v f)   -> Use k (cutDeep v) (\x -> cutDeep (f (Sub x)))
   Set           -> Set
   (Chk v t)     -> error "cutDeep reached Chk"
@@ -431,12 +432,12 @@ cutDeep t = case cut t of
   (Eql a b c)   -> Eql (cutDeep a) (cutDeep b) (cutDeep c)
   Rfl           -> Rfl
   (EqlM a)      -> EqlM (cutDeep a)
-  (Met n t ts)  -> Met n t ts
+  (Met n t ts)  -> Met n (cutDeep t) (map cutDeep ts)
   Era           -> Era
-  (Sup l a b)   -> Sup l (cutDeep a) (cutDeep b)
-  (SupM l f)    -> SupM l (cutDeep f)
-  (Frk l a b)   -> Frk l (cutDeep a) (cutDeep b)
-  (Rwt e f)     -> Rwt e (cutDeep f)
+  (Sup l a b)   -> Sup (cutDeep l) (cutDeep a) (cutDeep b)
+  (SupM l f)    -> SupM (cutDeep l) (cutDeep f)
+  (Frk l a b)   -> Frk (cutDeep l) (cutDeep a) (cutDeep b)
+  (Rwt e f)     -> Rwt (cutDeep e) (cutDeep f)
   (Loc s t)     -> error "cutDeep reached Loc"
   (Pri p)       -> Pri p
   (Pat x m c)   -> Pat (map cutDeep x) (map (\(k,v) -> (k, cutDeep v)) m) (map (\(p,x) -> (map cutDeep p, cutDeep x)) c)
