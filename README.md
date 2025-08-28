@@ -108,4 +108,32 @@ You can run the programs above with `bend file_name.bend`.
 
 TODO: continue...
 
+## Documentation
+
+Comprehensive documentation is available in the `/docs/` directory:
+
+- **📋 [`docs/INDEX.md`](docs/INDEX.md)** - Complete documentation index and navigation guide
+- **🏗️ [`docs/architecture/`](docs/architecture/)** - System architecture and design documents  
+- **📅 [`docs/plans/`](docs/plans/)** - Development plans and roadmaps
+- **📊 [`docs/reports/`](docs/reports/)** - Implementation reports and analysis
+- **🔬 [`docs/analysis/`](docs/analysis/)** - Technical research and analysis
+
+### Quick Start Documentation
+
+- **Syntax Guide**: [`docs/syntax.md`](docs/syntax.md)
+- **Examples**: [`examples/`](examples/) directory
+- **Inductive Types**: [`docs/inductive-datatypes.md`](docs/inductive-datatypes.md)
+
+### Development Documentation
+
+**Current Status**: ✅ **Phase 0.5 Complete** - Type System Renaming + Legacy Module Migration
+
+The project now features an **intrinsic-first architecture** with:
+- Type-safe GADT-based intrinsic representations
+- Clear separation between surface (`Expr`) and intrinsic (`Term`) types  
+- Legacy modules preserved for backward compatibility
+- Foundation ready for advanced intrinsic typing integration
+
+See [`docs/plans/INTRINSIC_INTEGRATION_ROADMAP.md`](docs/plans/INTRINSIC_INTEGRATION_ROADMAP.md) for the complete development timeline.
+
 **THIS REPOSITORY IS A WORK IN PROGRESS**

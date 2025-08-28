@@ -36,136 +36,127 @@
 
 module Core.Adjust.ReduceEtas where
 
-import Core.Type
 import Core.Show
-import qualified Data.Set as S
+import Core.Sort
+import Data.Maybe (fromJust, isJust)
+import Data.Set qualified as S
 import Debug.Trace
-import Data.Maybe (isJust, fromJust)
 
 -- Main eta-reduction function with lambda-inject optimization
-reduceEtas :: Int -> Term -> Term
+reduceEtas :: Int -> Expr -> Expr
 reduceEtas d t = case t of
   -- Check for the lambda-inject pattern: λx. ... (λ{...} x)
   Lam n ty f ->
     case isEtaLong n d (f (Var n d)) of
       Just (lmat, inj, hadTrust) ->
-        let t'  = injectInto inj n lmat in
-        let t'' = reduceEtas d t' in
-        -- If a top-level `trust` was encountered on the path to the match,
-        -- preserve it as an outer wrapper around the reduced case-tree.
-        if hadTrust then Tst t'' else t''
-      Nothing                    -> Lam n (fmap (reduceEtas d) ty) (\v -> reduceEtas (d+1) (f v))
-  
+        let t' = injectInto inj n lmat
+         in let t'' = reduceEtas d t'
+             in -- If a top-level `trust` was encountered on the path to the match,
+                -- preserve it as an outer wrapper around the reduced case-tree.
+                if hadTrust then Tst t'' else t''
+      Nothing -> Lam n (fmap (reduceEtas d) ty) (\v -> reduceEtas (d + 1) (f v))
   -- Recursive cases for all other constructors
-  Var n i      -> Var n i
-  Ref n i      -> Ref n i
-  Sub t'       -> Sub (reduceEtas d t')
-  Fix n f      -> Fix n (\v -> reduceEtas (d+1) (f v))
-  Let k mt v f -> Let k (fmap (reduceEtas d) mt) (reduceEtas d v) (\v' -> reduceEtas (d+1) (f v'))
-  Use k v f    -> Use k (reduceEtas d v) (\v' -> reduceEtas (d+1) (f v'))
-  Set          -> Set
-  Chk a b      -> Chk (reduceEtas d a) (reduceEtas d b)
-  Tst a        -> Tst (reduceEtas d a)
-  Emp          -> Emp
-  EmpM         -> EmpM
-  Uni          -> Uni
-  One          -> One
-  UniM a       -> UniM (reduceEtas d a)
-  Bit          -> Bit
-  Bt0          -> Bt0
-  Bt1          -> Bt1
-  BitM a b     -> BitM (reduceEtas d a) (reduceEtas d b)
-  Nat          -> Nat
-  Zer          -> Zer
-  Suc n        -> Suc (reduceEtas d n)
-  NatM a b     -> NatM (reduceEtas d a) (reduceEtas d b)
-  Lst t'       -> Lst (reduceEtas d t')
-  Nil          -> Nil
-  Con h t'     -> Con (reduceEtas d h) (reduceEtas d t')
-  LstM a b     -> LstM (reduceEtas d a) (reduceEtas d b)
-  Enu ss       -> Enu ss
-  Sym s        -> Sym s
-  EnuM cs e    -> EnuM [(s, reduceEtas d v) | (s,v) <- cs] (reduceEtas d e)
-  Num nt       -> Num nt
-  Val nv       -> Val nv
-  Op2 o a b    -> Op2 o (reduceEtas d a) (reduceEtas d b)
-  Op1 o a      -> Op1 o (reduceEtas d a)
-  Sig a b      -> Sig (reduceEtas d a) (reduceEtas d b)
-  Tup a b      -> Tup (reduceEtas d a) (reduceEtas d b)
-  SigM a       -> SigM (reduceEtas d a)
-  All a b      -> All (reduceEtas d a) (reduceEtas d b)
-  App f x      -> App (reduceEtas d f) (reduceEtas d x)
-  Eql t' a b   -> Eql (reduceEtas d t') (reduceEtas d a) (reduceEtas d b)
-  Rfl          -> Rfl
-  EqlM f       -> EqlM (reduceEtas d f)
-  Met n t' cs  -> Met n (reduceEtas d t') (map (reduceEtas d) cs)
-  Era          -> Era
-  Sup l a b    -> Sup (reduceEtas d l) (reduceEtas d a) (reduceEtas d b)
-  SupM l f'    -> SupM (reduceEtas d l) (reduceEtas d f')
-  Loc s t'     -> Loc s (reduceEtas d t')
-  Log s x      -> Log (reduceEtas d s) (reduceEtas d x)
-  Pri p        -> Pri p
-  Pat ss ms cs -> Pat (map (reduceEtas d) ss) [(k, reduceEtas d v) | (k,v) <- ms] [(map (reduceEtas d) ps, reduceEtas d rhs) | (ps,rhs) <- cs]
-  Frk l a b    -> Frk (reduceEtas d l) (reduceEtas d a) (reduceEtas d b)
-  Rwt e f      -> Rwt (reduceEtas d e) (reduceEtas d f)
+  Var n i -> Var n i
+  Ref n i -> Ref n i
+  Sub t' -> Sub (reduceEtas d t')
+  Fix n f -> Fix n (\v -> reduceEtas (d + 1) (f v))
+  Let k mt v f -> Let k (fmap (reduceEtas d) mt) (reduceEtas d v) (\v' -> reduceEtas (d + 1) (f v'))
+  Use k v f -> Use k (reduceEtas d v) (\v' -> reduceEtas (d + 1) (f v'))
+  Set -> Set
+  Chk a b -> Chk (reduceEtas d a) (reduceEtas d b)
+  Tst a -> Tst (reduceEtas d a)
+  Emp -> Emp
+  EmpM -> EmpM
+  Uni -> Uni
+  One -> One
+  UniM a -> UniM (reduceEtas d a)
+  Bit -> Bit
+  Bt0 -> Bt0
+  Bt1 -> Bt1
+  BitM a b -> BitM (reduceEtas d a) (reduceEtas d b)
+  Nat -> Nat
+  Zer -> Zer
+  Suc n -> Suc (reduceEtas d n)
+  NatM a b -> NatM (reduceEtas d a) (reduceEtas d b)
+  Lst t' -> Lst (reduceEtas d t')
+  Nil -> Nil
+  Con h t' -> Con (reduceEtas d h) (reduceEtas d t')
+  LstM a b -> LstM (reduceEtas d a) (reduceEtas d b)
+  Enu ss -> Enu ss
+  Sym s -> Sym s
+  EnuM cs e -> EnuM [(s, reduceEtas d v) | (s, v) <- cs] (reduceEtas d e)
+  Num nt -> Num nt
+  Val nv -> Val nv
+  Op2 o a b -> Op2 o (reduceEtas d a) (reduceEtas d b)
+  Op1 o a -> Op1 o (reduceEtas d a)
+  Sig a b -> Sig (reduceEtas d a) (reduceEtas d b)
+  Tup a b -> Tup (reduceEtas d a) (reduceEtas d b)
+  SigM a -> SigM (reduceEtas d a)
+  All a b -> All (reduceEtas d a) (reduceEtas d b)
+  App f x -> App (reduceEtas d f) (reduceEtas d x)
+  Eql t' a b -> Eql (reduceEtas d t') (reduceEtas d a) (reduceEtas d b)
+  Rfl -> Rfl
+  EqlM f -> EqlM (reduceEtas d f)
+  Met n t' cs -> Met n (reduceEtas d t') (map (reduceEtas d) cs)
+  Era -> Era
+  Sup l a b -> Sup (reduceEtas d l) (reduceEtas d a) (reduceEtas d b)
+  SupM l f' -> SupM (reduceEtas d l) (reduceEtas d f')
+  Loc s t' -> Loc s (reduceEtas d t')
+  Log s x -> Log (reduceEtas d s) (reduceEtas d x)
+  Pri p -> Pri p
+  Pat ss ms cs -> Pat (map (reduceEtas d) ss) [(k, reduceEtas d v) | (k, v) <- ms] [(map (reduceEtas d) ps, reduceEtas d rhs) | (ps, rhs) <- cs]
+  Frk l a b -> Frk (reduceEtas d l) (reduceEtas d a) (reduceEtas d b)
+  Rwt e f -> Rwt (reduceEtas d e) (reduceEtas d f)
 
 -- Check if a term matches the eta-long pattern: ... (λ{...} x)
 -- Returns the lambda-match, an injection function, and whether a `trust`
 -- marker was seen along the way (to be preserved outside after reduction).
-isEtaLong :: Name -> Int -> Term -> Maybe (Term, Term -> Term, Bool)
-isEtaLong target depth = go id depth False where
-  go :: (Term -> Term) -> Int -> Bool -> Term -> Maybe (Term, Term -> Term, Bool)
+isEtaLong :: Name -> Int -> Expr -> Maybe (Expr, Expr -> Expr, Bool)
+isEtaLong target depth = go id depth False
+ where
+  go :: (Expr -> Expr) -> Int -> Bool -> Expr -> Maybe (Expr, Expr -> Expr, Bool)
   go inj d hadT term = case cut term of
     -- Found intermediate lambda - add to injection
-    Lam n ty f -> 
-      go (\h -> inj (Lam n ty (\_ -> h))) (d+1) hadT (f (Var n d))
-    
+    Lam n ty f ->
+      go (\h -> inj (Lam n ty (const h))) (d + 1) hadT (f (Var n d))
     -- Found Let - add to injection
     Let k mt v f ->
-      go (\h -> inj (Let k mt v (\_ -> h))) (d+1) hadT (f (Var k d))
-    
+      go (\h -> inj (Let k mt v (const h))) (d + 1) hadT (f (Var k d))
     -- Found Use - add to injection
     Use k v f ->
-      go (\h -> inj (Use k v (\_ -> h))) (d+1) hadT (f (Var k d))
-    
+      go (\h -> inj (Use k v (const h))) (d + 1) hadT (f (Var k d))
     -- Found Chk - add to injection
     Chk x t ->
       go (\h -> inj (Chk h t)) d hadT x
     -- Found Tst - record and continue, but don't push it inside branches
     Tst x ->
       go inj d True x
-    
     -- Found Loc - check if it wraps a lambda-match
     Loc s x ->
       if isLambdaMatch x
-        then go inj d hadT (Loc s x)  -- Don't inject Loc if it wraps a lambda-match
-        else go (\h -> inj (Loc s h)) d hadT x  -- Otherwise, add to injection
-    
+        then go inj d hadT (Loc s x) -- Don't inject Loc if it wraps a lambda-match
+        else go (\h -> inj (Loc s h)) d hadT x -- Otherwise, add to injection
+
     -- Found Log - add to injection
     Log s x ->
       go (\h -> inj (Log s h)) d hadT x
-
     -- Pass through single-body lambda-matches (commuting conversion)
     UniM b ->
       case go id d hadT b of
         Just (lmat, injB, tB) -> Just (lmat, \h -> inj (UniM (injB h)), tB)
-        Nothing           -> Nothing
-
+        Nothing -> Nothing
     SigM b ->
       case go id d hadT b of
         Just (lmat, injB, tB) -> Just (lmat, \h -> inj (SigM (injB h)), tB)
-        Nothing           -> Nothing
-
+        Nothing -> Nothing
     SupM l b ->
       case go id d hadT b of
         Just (lmat, injB, tB) -> Just (lmat, \h -> inj (SupM l (injB h)), tB)
-        Nothing           -> Nothing
-
+        Nothing -> Nothing
     EqlM b ->
       case go id d hadT b of
         Just (lmat, injB, tB) -> Just (lmat, \h -> inj (EqlM (injB h)), tB)
-        Nothing           -> Nothing
-
+        Nothing -> Nothing
     -- Conservative multi-arm pass-through: only if all arms agree on a common λ-match shape
     BitM t f ->
       case (go id d hadT t, go id d hadT f) of
@@ -173,146 +164,143 @@ isEtaLong target depth = go id depth False where
           | sameLambdaShape l1 l2 ->
               Just (l1, \h -> inj (BitM (injT h) (injF h)), tT || tF)
         _ -> Nothing
-
     NatM z s ->
       case (go id d hadT z, go id d hadT s) of
         (Just (l1, injZ, tZ), Just (l2, injS, tS))
           | sameLambdaShape l1 l2 ->
               Just (l1, \h -> inj (NatM (injZ h) (injS h)), tZ || tS)
         _ -> Nothing
-
     LstM n c ->
       case (go id d hadT n, go id d hadT c) of
         (Just (l1, injN, tN), Just (l2, injC, tC))
           | sameLambdaShape l1 l2 ->
               Just (l1, \h -> inj (LstM (injN h) (injC h)), tN || tC)
         _ -> Nothing
-
     EnuM cs e ->
-      let rs = [(s, go id d hadT v) | (s,v) <- cs]
+      let rs = [(s, go id d hadT v) | (s, v) <- cs]
           re = go id d hadT e
-      in
-      if all (isJust . snd) rs && isJust re then
-        let rcs       = [(s, fromJust m) | (s,m) <- rs]
-            (l0, _, _) = fromJust re
-            shapes = [lmShape l | (_, (l,_,_)) <- rcs] ++ [lmShape l0]
-        in case sequence shapes of
-             Just (sh0:rest) | all (== sh0) rest ->
-               let injCs          = [(s, injB) | (s, (_, injB, _)) <- rcs]
-                   (lmatE, injE, tE) = fromJust re
-                   tAny          = tE || or [t | (_, (_,_,t)) <- rcs]
-               in Just (lmatE, \h -> inj (EnuM [(s, injB h) | (s, injB) <- injCs] (injE h)), tAny)
-             _ -> Nothing
-      else Nothing
-
+       in if all (isJust . snd) rs && isJust re
+            then
+              let rcs = [(s, fromJust m) | (s, m) <- rs]
+                  (l0, _, _) = fromJust re
+                  shapes = [lmShape l | (_, (l, _, _)) <- rcs] ++ [lmShape l0]
+               in case sequence shapes of
+                    Just (sh0 : rest)
+                      | all (== sh0) rest ->
+                          let injCs = [(s, injB) | (s, (_, injB, _)) <- rcs]
+                              (lmatE, injE, tE) = fromJust re
+                              tAny = tE || or [t | (_, (_, _, t)) <- rcs]
+                           in Just (lmatE, \h -> inj (EnuM [(s, injB h) | (s, injB) <- injCs] (injE h)), tAny)
+                    _ -> Nothing
+            else Nothing
     -- Found application - check if it's (λ{...} x) or if we can pass through
     App f arg ->
       case (f, cut f, cut arg) of
         -- Check if f is a Loc-wrapped lambda-match and arg is our target variable
         -- Keep the Loc wrapper on the lambda-match
-        (Loc s lmat, _, Var v_n _) | v_n == target && isLambdaMatch lmat ->
-          Just (Loc s lmat, inj, hadT)
+        (Loc s lmat, _, Var v_n _)
+          | v_n == target && isLambdaMatch lmat ->
+              Just (Loc s lmat, inj, hadT)
         -- Check if f is a lambda-match and arg is our target variable
-        (_, lmat, Var v_n _) | v_n == target && isLambdaMatch lmat ->
-          Just (lmat, inj, hadT)
+        (_, lmat, Var v_n _)
+          | v_n == target && isLambdaMatch lmat ->
+              Just (lmat, inj, hadT)
         -- Otherwise, pass through the application
         _ -> go (\h -> inj (app h arg)) d hadT f
-    
     -- Any other form doesn't match our pattern
     _ -> Nothing
 
 -- FIXME: are the TODO cases below reachable? reason about it
 
 -- Inject the injection function into each case of a lambda-match
-injectInto :: (Term -> Term) -> Name -> Term -> Term
+injectInto :: (Expr -> Expr) -> Name -> Expr -> Expr
 injectInto inj scrutName term = case term of
   -- If the lambda-match is wrapped in Loc, preserve it
   Loc s lmat -> Loc s (injectInto inj scrutName lmat)
-  
   -- Empty match - no cases to inject into
   EmpM -> EmpM
-  
   -- Unit match - inject into the single case
   UniM f -> UniM (injectBody [] inj scrutName (\_ -> One) f)
-  
   -- Bool match - inject into both cases
-  BitM f t -> BitM (injectBody [] inj scrutName (\_ -> Bt0) f) 
-                   (injectBody [] inj scrutName (\_ -> Bt1) t)
-  
+  BitM f t ->
+    BitM
+      (injectBody [] inj scrutName (\_ -> Bt0) f)
+      (injectBody [] inj scrutName (\_ -> Bt1) t)
   -- Nat match - special handling for successor case (1 field)
-  NatM z s -> NatM (injectBody [] inj scrutName (\_ -> Zer) z) 
-                   (injectBody ["p"] inj scrutName (\vars -> case vars of [p] -> Suc p; _ -> error $ "TODO: " ++ (show term)) s)
-  
+  NatM z s ->
+    NatM
+      (injectBody [] inj scrutName (\_ -> Zer) z)
+      (injectBody ["p"] inj scrutName (\vars -> case vars of [p] -> Suc p; _ -> error $ "TODO: " ++ (show term)) s)
   -- List match - special handling for cons case (2 fields)
-  LstM n c -> LstM (injectBody [] inj scrutName (\_ -> Nil) n) 
-                   (injectBody ["h", "t"] inj scrutName (\vars -> case vars of [h,t] -> Con h t; _ -> error $ "TODO: " ++ (show term)) c)
-
+  LstM n c ->
+    LstM
+      (injectBody [] inj scrutName (\_ -> Nil) n)
+      (injectBody ["h", "t"] inj scrutName (\vars -> case vars of [h, t] -> Con h t; _ -> error $ "TODO: " ++ (show term)) c)
   -- Enum match - inject into each case and default (apply default-case fix)
-  EnuM cs e -> EnuM [(s, injectBody [] inj scrutName (\_ -> Sym s) v) | (s,v) <- cs]
-                    (injectBody ["x"] inj scrutName (\vars -> case vars of [x] -> x; _ -> error $ "TODO: " ++ (show term)) e)
-  
+  EnuM cs e ->
+    EnuM
+      [(s, injectBody [] inj scrutName (\_ -> Sym s) v) | (s, v) <- cs]
+      (injectBody ["x"] inj scrutName (\vars -> case vars of [x] -> x; _ -> error $ "TODO: " ++ (show term)) e)
   -- Sigma match - special handling for pair case (2 fields)
-  SigM f -> SigM (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Tup a b; _ -> error $ "TODO: " ++ (show term)) f)
-  
+  SigM f -> SigM (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a, b] -> Tup a b; _ -> error $ "TODO: " ++ (show term)) f)
   -- Superposition match - special handling (2 fields)
-  SupM l f -> SupM l (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a,b] -> Sup l a b; _ -> error $ "TODO: " ++ (show term)) f)
-  
+  SupM l f -> SupM l (injectBody ["a", "b"] inj scrutName (\vars -> case vars of [a, b] -> Sup l a b; _ -> error $ "TODO: " ++ (show term)) f)
   -- Equality match - inject into the single case
   EqlM f -> EqlM (injectBody [] inj scrutName (\_ -> Rfl) f)
-  
   -- Not a lambda-match
   _ -> term
 
 -- Helper to inject the injection function, skipping existing field lambdas
 -- Also handles scrutinee reconstruction
-injectBody :: [Name] -> (Term -> Term) -> Name -> ([Term] -> Term) -> Term -> Term
-injectBody fields inj scrutName mkScrut body = go 0 fields [] [] body where
-  go :: Int -> [Name] -> [Term] -> [Name] -> Term -> Term
-  go d []     vars fieldNames body = 
+injectBody :: [Name] -> (Expr -> Expr) -> Name -> ([Expr] -> Expr) -> Expr -> Expr
+injectBody fields inj scrutName mkScrut body = go 0 fields [] [] body
+ where
+  go :: Int -> [Name] -> [Expr] -> [Name] -> Expr -> Expr
+  go d [] vars fieldNames body =
     let scrutVal = mkScrut (reverse vars)
         -- Remove shadowed bindings from the injection
         cleanedInj = removeShadowed fieldNames inj
         -- Add scrutinee reconstruction if not shadowed
-        fullInj = if scrutName `notElem` fieldNames
-                  then \h -> Use scrutName scrutVal (\_ -> cleanedInj h)
-                  else cleanedInj
-    in fullInj body
-  go d (f:fs) vars fieldNames body = case cut body of
+        fullInj =
+          if scrutName `notElem` fieldNames
+            then \h -> Use scrutName scrutVal (\_ -> cleanedInj h)
+            else cleanedInj
+     in fullInj body
+  go d (f : fs) vars fieldNames body = case cut body of
     -- Existing field lambda - preserve it
-    Lam n ty b -> Lam n ty (\v -> go (d+1) fs (v:vars) (n:fieldNames) (b v))
+    Lam n ty b -> Lam n ty (\v -> go (d + 1) fs (v : vars) (n : fieldNames) (b v))
     -- Missing field lambda - add it
-    _          -> Lam f Nothing (\v -> go (d+1) fs (v:vars) (f:fieldNames) body)
+    _ -> Lam f Nothing (\v -> go (d + 1) fs (v : vars) (f : fieldNames) body)
 
 -- Remove shadowed bindings from an injection function
-removeShadowed :: [Name] -> (Term -> Term) -> (Term -> Term)
-removeShadowed fieldNames inj = \body -> removeFromTerm fieldNames (inj body) where
-  removeFromTerm :: [Name] -> Term -> Term
-  removeFromTerm names term = case term of
+removeShadowed :: [Name] -> (Expr -> Expr) -> (Expr -> Expr)
+removeShadowed fieldNames inj = \body -> removeFromExpr fieldNames (inj body)
+ where
+  removeFromExpr :: [Name] -> Expr -> Expr
+  removeFromExpr names term = case term of
     -- Skip Use bindings that are shadowed
-    Use k v f | k `elem` names -> removeFromTerm names (f (Var k 0))
-    Use k v f                  -> Use k v (\x -> removeFromTerm names (f x))
-    
+    Use k v f | k `elem` names -> removeFromExpr names (f (Var k 0))
+    Use k v f -> Use k v (\x -> removeFromExpr names (f x))
     -- Skip Let bindings that are shadowed
-    Let k mt v f | k `elem` names -> removeFromTerm names (f (Var k 0))
-    Let k mt v f                  -> Let k mt v (\x -> removeFromTerm names (f x))
-    
+    Let k mt v f | k `elem` names -> removeFromExpr names (f (Var k 0))
+    Let k mt v f -> Let k mt v (\x -> removeFromExpr names (f x))
     -- For other constructs, just return as-is
     _ -> term
 
 -- Check if a term is a lambda-match (one of the match constructors)
-isLambdaMatch :: Term -> Bool
+isLambdaMatch :: Expr -> Bool
 isLambdaMatch term = case term of
-  EmpM     -> True
-  UniM _   -> True
+  EmpM -> True
+  UniM _ -> True
   BitM _ _ -> True
   NatM _ _ -> True
   LstM _ _ -> True
   EnuM _ _ -> True
-  SigM _   -> True
+  SigM _ -> True
   SupM _ _ -> True
-  EqlM _   -> True
-  Loc _ t  -> isLambdaMatch t
-  _        -> False
+  EqlM _ -> True
+  Loc _ t -> isLambdaMatch t
+  _ -> False
 
 -- Shapes of lambda-matches, used to conservatively commute multi-arm frames
 data LmShape
@@ -327,24 +315,24 @@ data LmShape
   | LM_Eql
   deriving (Eq, Show)
 
-lmShape :: Term -> Maybe LmShape
+lmShape :: Expr -> Maybe LmShape
 lmShape t = case cut t of
-  EmpM       -> Just LM_Emp
-  UniM _     -> Just LM_Uni
-  BitM _ _   -> Just LM_Bit
-  NatM _ _   -> Just LM_Nat
-  LstM _ _   -> Just LM_Lst
-  EnuM cs _  -> Just (LM_Enu (map fst cs))
-  SigM _     -> Just LM_Sig
-  SupM _ _   -> Just LM_Sup
-  EqlM _     -> Just LM_Eql
-  Chk x _    -> lmShape x
-  Loc _ x    -> lmShape x
-  _          -> Nothing
+  EmpM -> Just LM_Emp
+  UniM _ -> Just LM_Uni
+  BitM _ _ -> Just LM_Bit
+  NatM _ _ -> Just LM_Nat
+  LstM _ _ -> Just LM_Lst
+  EnuM cs _ -> Just (LM_Enu (map fst cs))
+  SigM _ -> Just LM_Sig
+  SupM _ _ -> Just LM_Sup
+  EqlM _ -> Just LM_Eql
+  Chk x _ -> lmShape x
+  Loc _ x -> lmShape x
+  _ -> Nothing
 
-sameLambdaShape :: Term -> Term -> Bool
+sameLambdaShape :: Expr -> Expr -> Bool
 sameLambdaShape a b = lmShape a == lmShape b
 
-app :: Term -> Term -> Term
+app :: Expr -> Expr -> Expr
 app (Lam k _ f) x = Use k x f
-app f           x = App f x
+app f x = App f x

@@ -1,37 +1,41 @@
-module Core.CLI 
-  ( parseFile
-  , runMain
-  , processFile
-  , processFileToJS
-  , processFileToHVM
-  , listDependencies
-  , getGenDeps
-  ) where
+module Core.CLI (
+  parseFile,
+  runMain,
+  processFile,
+  processFileToJS,
+  processFileToHVM,
+  listDependencies,
+  getGenDeps,
+) where
 
-import Control.Monad (unless, forM_)
-import qualified Data.Map as M
-import qualified Data.Set as S
+import Control.Monad (forM_, unless)
+import Data.Map qualified as M
 import Data.Maybe (fromJust)
+import Data.Set qualified as S
 import System.Environment (getArgs)
-import System.Exit (exitFailure)
+
+-- import System.Exit (exitFailure)
+
+import Control.Exception (IOException, catch)
+import System.Exit
+import System.IO (hPrint, hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode)
-import System.Exit (ExitCode(..))
-import Control.Exception (catch, IOException)
-import System.IO (hPutStrLn, stderr)
 
 import Core.Adjust.Adjust (adjustBook, adjustBookWithPats)
-import Core.Bind
-import Core.Check
-import Core.Deps
+import Core.Check qualified as NewCheck
 import Core.Import (autoImport)
+
+import Core.Legacy.Check qualified as Legacy
+import Core.Legacy.Deps
+import Core.Legacy.WHNF qualified as WHNF
 import Core.Parse.Book (doParseBook)
-import Core.Type
 import Core.Show
-import Core.WHNF
+import Core.Sort
+
 -- debug import removed
 
-import qualified Target.JavaScript as JS
-import qualified Target.HVM as HVM
+import Target.HVM qualified as HVM
+import Target.JavaScript qualified as JS
 
 -- Type-check all definitions in a book
 checkBook :: Book -> IO Book
@@ -40,23 +44,23 @@ checkBook book@(Book defs names) = do
   success <- checkAll book orderedDefs
   unless success exitFailure
   return book
-  where
-    checkDef bk term typ = do
-      check 0 noSpan bk (Ctx []) typ Set
-      check 0 noSpan bk (Ctx []) term typ
-      return ()
-    checkAll :: Book -> [(Name, Defn)] -> IO Bool
-    checkAll bk [] = return True
-    checkAll bk ((name, (inj, term, typ)):rest) = do
-      case checkDef bk term typ of
-        Done () -> do
-          putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
-          checkAll bk rest
-        Fail e -> do
-          hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
-          hPutStrLn stderr $ show e
-          success <- checkAll bk rest
-          return False
+ where
+  checkDef bk term typ = do
+    Legacy.check 0 noSpan bk (SCtx []) typ Set
+    Legacy.check 0 noSpan bk (SCtx []) term typ
+    return ()
+  checkAll :: Book -> [(Name, Defn)] -> IO Bool
+  checkAll bk [] = return True
+  checkAll bk ((name, (inj, term, typ)) : rest) = do
+    case checkDef bk term typ of
+      Done () -> do
+        putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
+        checkAll bk rest
+      Fail e -> do
+        hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
+        hPrint stderr $ show e
+        success <- checkAll bk rest
+        return False
 
 -- | Parse a Bend file into a Book
 parseFile :: FilePath -> IO Book
@@ -64,14 +68,13 @@ parseFile file = do
   content <- readFile file
   case doParseBook file content of
     Left err -> do
-      hPutStrLn stderr $ err
+      hPutStrLn stderr err
       exitFailure
-    Right book -> do
+    Right book ->
       -- Auto-import unbound references
-      autoImportedBook <- autoImport (takeDirectory file) book
-      return autoImportedBook
-  where
-    takeDirectory path = reverse . dropWhile (/= '/') . reverse $ path
+      return autoImport (takeDirectory file) file book
+ where
+  takeDirectory path = reverse . dropWhile (/= '/') . reverse
 
 -- | Run the main function from a book
 runMain :: Book -> IO ()
@@ -81,13 +84,13 @@ runMain book = do
       return ()
     Just _ -> do
       let mainCall = Ref "main" 1
-      case infer 0 noSpan book (Ctx []) mainCall of
+      case Legacy.infer 0 noSpan book (SCtx []) mainCall of
         Fail e -> do
-          hPutStrLn stderr $ show e
+          hPrint stderr $ show e
           exitFailure
         Done typ -> do
           putStrLn ""
-          print $ normal book mainCall
+          print $ WHNF.normal book mainCall
 
 -- | Process a Bend file: parse, check, and run
 processFile :: FilePath -> IO ()
@@ -104,16 +107,17 @@ formatJavaScript :: String -> IO String
 formatJavaScript jsCode = do
   -- Try npx prettier first
   tryPrettier "npx" ["prettier", "--parser", "babel"] jsCode
-    `catch` (\(_ :: IOException) -> 
-      -- Try global prettier
-      tryPrettier "prettier" ["--parser", "babel"] jsCode
-        `catch` (\(_ :: IOException) -> return jsCode))
-  where
-    tryPrettier cmd args input = do
-      (exitCode, stdout, stderr) <- readProcessWithExitCode cmd args input
-      case exitCode of
-        ExitSuccess -> return stdout
-        _ -> return input
+    `catch` ( \(_ :: IOException) ->
+                -- Try global prettier
+                tryPrettier "prettier" ["--parser", "babel"] jsCode
+                  `catch` (\(_ :: IOException) -> return jsCode)
+            )
+ where
+  tryPrettier cmd args input = do
+    (exitCode, stdout, stderr) <- readProcessWithExitCode cmd args input
+    case exitCode of
+      ExitSuccess -> return stdout
+      _ -> return input
 
 -- | Process a Bend file and compile to JavaScript
 processFileToJS :: FilePath -> IO ()
@@ -150,14 +154,14 @@ getGenDeps :: FilePath -> IO ()
 getGenDeps file = do
   book <- parseFile file
   let bookAdj@(Book defs names) = adjustBook book
-  
+
   -- Find all definitions that are `try` definitions (i.e., contain a Met)
   let tryDefs = M.filter (\(_, term, _) -> hasMet term) defs
   let tryNames = M.keysSet tryDefs
 
   -- Find all reverse dependencies (examples)
   let allDefs = M.toList defs
-  let reverseDeps = S.fromList [ name | (name, (_, term, typ)) <- allDefs, not (name `S.member` tryNames), not (S.null (S.intersection tryNames (S.union (getDeps term) (getDeps typ)))) ]
+  let reverseDeps = S.fromList [name | (name, (_, term, typ)) <- allDefs, not (name `S.member` tryNames), not (S.null (S.intersection tryNames (S.union (getDeps term) (getDeps typ))))]
 
   -- Get all dependencies of the `try` definitions and the reverse dependencies
   let targetDefs = M.filterWithKey (\k _ -> k `S.member` tryNames || k `S.member` reverseDeps) defs
@@ -170,52 +174,52 @@ getGenDeps file = do
   -- Filter the book to get the definitions we want to print
   let finalDefs = M.filterWithKey (\k _ -> k `S.member` finalDepNames) defs
   let finalNames = filter (`S.member` finalDepNames) names
-  
+
   -- Print the resulting book
   print $ Book finalDefs finalNames
 
 -- | Collect all refs from a Book
 collectAllRefs :: Book -> S.Set Name
-collectAllRefs (Book defs _) = 
+collectAllRefs (Book defs _) =
   S.unions $ map collectRefsFromDefn (M.elems defs)
-  where
-    collectRefsFromDefn (_, term, typ) = S.union (getDeps term) (getDeps typ)
+ where
+  collectRefsFromDefn (_, term, typ) = S.union (getDeps term) (getDeps typ)
 
 -- | Check if a term contains a Metavar
-hasMet :: Term -> Bool
+hasMet :: Expr -> Bool
 hasMet term = case term of
-  Met {}      -> True
-  Sub t       -> hasMet t
-  Fix _ f     -> hasMet (f (Var "" 0))
+  Met{} -> True
+  Sub t -> hasMet t
+  Fix _ f -> hasMet (f (Var "" 0))
   Let k t v f -> case t of
-    Just t    -> hasMet t || hasMet v || hasMet (f (Var k 0))
-    Nothing   -> hasMet v || hasMet (f (Var k 0))
-  Use k v f   -> hasMet v || hasMet (f (Var k 0))
-  Chk x t     -> hasMet x || hasMet t
-  EmpM        -> False
-  UniM f      -> hasMet f
-  BitM f t    -> hasMet f || hasMet t
-  Suc n       -> hasMet n
-  NatM z s    -> hasMet z || hasMet s
-  Lst t       -> hasMet t
-  Con h t     -> hasMet h || hasMet t
-  LstM n c    -> hasMet n || hasMet c
-  EnuM cs e   -> any (hasMet . snd) cs || hasMet e
-  Op2 _ a b   -> hasMet a || hasMet b
-  Op1 _ a     -> hasMet a
-  Sig a b     -> hasMet a || hasMet b
-  Tup a b     -> hasMet a || hasMet b
-  SigM f      -> hasMet f
-  All a b     -> hasMet a || hasMet b
-  Lam _ t f   -> maybe False hasMet t || hasMet (f (Var "" 0))
-  App f x     -> hasMet f || hasMet x
-  Eql t a b   -> hasMet t || hasMet a || hasMet b
-  EqlM f      -> hasMet f
-  Rwt e f     -> hasMet e || hasMet f
-  Sup _ a b   -> hasMet a || hasMet b
-  SupM l f    -> hasMet l || hasMet f
-  Loc _ t     -> hasMet t
-  Log s x     -> hasMet s || hasMet x
-  Pat s m c   -> any hasMet s || any (hasMet . snd) m || any (\(p,b) -> any hasMet p || hasMet b) c
-  Frk l a b   -> hasMet l || hasMet a || hasMet b
-  _           -> False
+    Just t -> hasMet t || hasMet v || hasMet (f (Var k 0))
+    Nothing -> hasMet v || hasMet (f (Var k 0))
+  Use k v f -> hasMet v || hasMet (f (Var k 0))
+  Chk x t -> hasMet x || hasMet t
+  EmpM -> False
+  UniM f -> hasMet f
+  BitM f t -> hasMet f || hasMet t
+  Suc n -> hasMet n
+  NatM z s -> hasMet z || hasMet s
+  Lst t -> hasMet t
+  Con h t -> hasMet h || hasMet t
+  LstM n c -> hasMet n || hasMet c
+  EnuM cs e -> any (hasMet . snd) cs || hasMet e
+  Op2 _ a b -> hasMet a || hasMet b
+  Op1 _ a -> hasMet a
+  Sig a b -> hasMet a || hasMet b
+  Tup a b -> hasMet a || hasMet b
+  SigM f -> hasMet f
+  All a b -> hasMet a || hasMet b
+  Lam _ t f -> maybe False hasMet t || hasMet (f (Var "" 0))
+  App f x -> hasMet f || hasMet x
+  Eql t a b -> hasMet t || hasMet a || hasMet b
+  EqlM f -> hasMet f
+  Rwt e f -> hasMet e || hasMet f
+  Sup _ a b -> hasMet a || hasMet b
+  SupM l f -> hasMet l || hasMet f
+  Loc _ t -> hasMet t
+  Log s x -> hasMet s || hasMet x
+  Pat s m c -> any hasMet s || any (hasMet . snd) m || any (\(p, b) -> any hasMet p || hasMet b) c
+  Frk l a b -> hasMet l || hasMet a || hasMet b
+  _ -> False
