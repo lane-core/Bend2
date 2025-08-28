@@ -5,7 +5,7 @@
 module Core.Show where
 
 import Core.Type
-import Data.List (intercalate)
+import Data.List (intercalate, unsnoc)
 import Data.Maybe (fromMaybe)
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -300,13 +300,11 @@ showStr shadowed term depth = go [] term
 
 -- | Try to display tuple as constructor: @Ctor{a,b}
 showCtr :: Term -> Maybe String
-showCtr (Tup (Sym name) rest) = case lastElem rest of
-  Just One -> Just ("@" ++ name ++ "{" ++ intercalate "," (map show (init (flattenTup rest))) ++ "}")
-  _        -> Nothing
-  where
-    lastElem (Tup _ r) = lastElem r
-    lastElem t         = Just t
-showCtr _ = Nothing
+showCtr t =
+  let ts = map cut (flattenTup t) in
+  case unsnoc ts of
+    Just ((Sym name : ts), One) -> Just ("@" ++ name ++ "{" ++ intercalate "," (map show ts) ++ "}")
+    _                           -> Nothing
 
 -- Utility functions
 -- =================

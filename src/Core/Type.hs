@@ -261,7 +261,7 @@ noSpan :: Span
 noSpan = Span (0,0) (0,0) "" ""
 
 flattenTup :: Term -> [Term]
-flattenTup (Tup l r) = l : flattenTup r
+flattenTup (Tup l r) = l : flattenTup (cut r)
 flattenTup t         = [t]
 
 isLam :: Term -> Bool
