@@ -1,29 +1,71 @@
--- Intrinsic Type System Evaluation (Ultra Simple)
--- ===============================================
--- Minimal working evaluation for intrinsic types
--- Focuses on compilation over correctness
+-- Intrinsic Type System Evaluation with NbE
+-- =========================================
+-- Normalization by Evaluation using indexed Val type
+-- Type-safe evaluation with proper value domain
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Core.Eval (
-  -- * Core Evaluation Functions
-  eval,
+  -- * New Intrinsic NbE System
+  termToVal,         -- Terms -> Values (without Book)  
+  termToValWithBook, -- Terms -> Values (with Book)
+  nbeTerm,           -- Terms -> Normal Terms (without Book)
+  nbeTermWithBook,   -- Terms -> Normal Terms (with Book)
+  
+  -- * Command Execution (New)
+  exec, nbe,
+  
+  -- * Quotation (re-exported from Core.Val)
   quote,
-  normalize,
-
-  -- * Environment
-  Env,
-  emptyEnv,
-  extendEnv,
-
-  -- * Substitution
-  subst,
+  
+  -- * Substitution Helpers
+  subst, substTermTerm,
 ) where
 
 import Core.Sort
+import Core.Val (Val(..), Ne(..), quote, evalInEnvWithArg, evalInEnvWithArgAndBook, vApp)
 
 import Unsafe.Coerce (unsafeCoerce)
+
+-- * SIMPLE SURFACE TO INTRINSIC CONVERSION (to avoid circular imports)
+
+-- | Simple conversion for basic surface terms to intrinsic (subset of Core.Bridge)
+simpleSurfaceToIntrinsic :: Expr -> Maybe (SomeTerm '[])
+simpleSurfaceToIntrinsic = \case
+  Zer -> Just (SomeTerm TZer)
+  Bt0 -> Just (SomeTerm TBt0)
+  Bt1 -> Just (SomeTerm TBt1)  
+  One -> Just (SomeTerm TOne)
+  Set -> Just (SomeTerm TSet)
+  Uni -> Just (SomeTerm TUni)
+  Bit -> Just (SomeTerm TBit)
+  Nat -> Just (SomeTerm TNat)
+  Nil -> Just (SomeTerm TNil)
+  Rfl -> Just (SomeTerm TRfl)
+  Emp -> Just (SomeTerm TEmp)
+  Suc term -> 
+    case simpleSurfaceToIntrinsic term of
+      Just (SomeTerm exp) -> Just (SomeTerm (TSuc (unsafeCoerce exp)))
+      Nothing -> Nothing
+  Con head tail ->
+    case (simpleSurfaceToIntrinsic head, simpleSurfaceToIntrinsic tail) of
+      (Just (SomeTerm headExp), Just (SomeTerm tailExp)) ->
+        Just (SomeTerm (TCons (unsafeCoerce headExp) (unsafeCoerce tailExp)))
+      _ -> Nothing
+  Lam name argType body ->
+    -- For lambdas, we need context handling - for now, unsupported
+    Nothing
+  App fun arg ->
+    case (simpleSurfaceToIntrinsic fun, simpleSurfaceToIntrinsic arg) of
+      (Just (SomeTerm funExp), Just (SomeTerm argExp)) ->
+        Just (SomeTerm (TApp (unsafeCoerce funExp) (unsafeCoerce argExp)))
+      _ -> Nothing
+  Ref name level ->
+    -- References are the key - they get resolved by termToValWithBook
+    Just (SomeTerm (TRef name level))
+  -- Add more cases as needed for the specific surface terms we encounter
+  _ -> Nothing
 
 -- * PROPER SUBSTITUTION
 
@@ -97,144 +139,172 @@ letSubst val bodyCmd =
     -- Other command cases would need similar handling
     _ -> error "Complex let commands not yet supported"
 
--- * EVALUATION
+-- * NORMALIZATION BY EVALUATION
+--
+-- Primary interface: evaluate to values, then quote back to normal forms
 
--- Type-safe evaluation using proper substitution
+-- | Normalize a term using NbE (for closed terms without references)
+nbeTerm :: Term '[] ty -> Term '[] ty
+nbeTerm term = quote (termToVal term)
 
-eval :: Env -> Cmd '[] ty -> Term '[] ty
-eval _env cmd = case cmd of
-  CReturn exp ->
-    -- PHASE 1: Handle expression-level evaluation
-    case exp of
-      TApp fun arg ->
-        -- Function application at expression level
-        case fun of
-          TLam _name _argTy body -> subst arg body
-          _ -> TApp fun arg -- Cannot reduce further
-      _ -> exp -- Other expressions are already canonical
-  CLet _name _typeAnnotation valCmd bodyCmd ->
-    -- For Let, evaluate the value and subst it into the body
-    -- Type annotation is ignored in evaluation (used only for checking)
-    let val = eval _env valCmd -- Evaluate the value command
-     in -- Substitute the value into the body command and evaluate
-        eval _env (letSubst val bodyCmd)
-  CApp fun arg ->
-    -- For function application, perform proper beta reduction
-    case fun of
-      -- If we have a lambda, do proper beta reduction
-      TLam _name _argTy body ->
-        -- Perform type-safe beta reduction: (λx.body) arg = body[arg/x]
-        subst arg body
-      _ ->
-        -- If not a lambda, we can't reduce - error for now
-        error "Cannot evaluate non-lambda application: function is not a lambda"
-  -- PHASE 2A EXTENSIONS: Pattern matching evaluation
-  CMatch scrutinee eliminator ->
-    -- Pattern matching by applying eliminator to scrutinee
-    -- The eliminator should be a lambda that handles all cases
-    case eliminator of
-      -- Direct eliminator application
-      TBitM falseCase trueCase ->
-        case scrutinee of
-          TBt0 -> falseCase
-          TBt1 -> trueCase
-          _ -> error "Type error: non-bit value in bit match"
-      TNatM zeroCase sucCase ->
-        case scrutinee of
-          TZer -> zeroCase
-          TSuc n -> eval _env (CApp sucCase n) -- CApply successor case to predecessor
-          _ -> error "Type error: non-nat value in nat match"
-      TUniM unitCase ->
-        case scrutinee of
-          TOne -> unitCase
-          _ -> error "Type error: non-unit value in unit match"
-      TLstM nilCase consCase ->
-        case scrutinee of
-          TNil -> nilCase
-          TCons h t ->
-            -- CApply cons case: consCase h t
-            let appH = eval _env (CApp consCase h)
-             in eval _env (CApp appH t)
-          _ -> error "Type error: non-list value in list match"
-      TSigM pairCase ->
-        case scrutinee of
-          TTup a b ->
-            -- CApply pair case: pairCase a b
-            let appA = eval _env (CApp pairCase a)
-             in eval _env (CApp appA b)
-          _ -> error "Type error: non-pair value in pair match"
-      _ ->
-        -- Fall back to general application for other eliminators
-        eval _env (CApp eliminator scrutinee)
+-- | Normalize a term using NbE with Book for reference resolution  
+nbeTermWithBook :: Book -> Term '[] ty -> Term '[] ty
+nbeTermWithBook book term = quote (termToValWithBook (Just book) term)
 
--- * QUOTATION HELPERS
+-- | Normalize a command using NbE (execute then normalize result - for closed commands) 
+nbe :: Cmd '[] ty -> Term '[] ty
+nbe cmd = 
+  let resultTerm = exec cmd
+      resultVal = termToVal resultTerm
+      normalTerm = quote resultVal
+  in normalTerm
 
--- Helper functions for type-safe quotation
+-- * VALUE EVALUATION
+--
+-- Evaluate terms to the value domain for semantic operations
 
-{- | Quote expression in extended context (unsafe but architecturally necessary for quotation)
-This unsafeCoerce is required because quotation doesn't track contexts at the type level
-but the GADT structure ensures the context relationship is correct
--}
-quoteExtended :: Lvl -> Term (arg ': ctx) ty -> Expr
-quoteExtended lvl exp = quote lvl (unsafeCoerce exp)
 
--- * QUOTATION
+-- * PRIMARY EVALUATION FUNCTIONS
+--
+-- Commands execute to produce Terms, Terms embed into Values for semantic operations
 
--- Convert canonical values back to surface syntax
-quote :: Lvl -> Term '[] ty -> Expr
-quote _lvl = \case
-  TVar _idx -> Zer -- Simplified
-  TSet -> Set
-  TUni -> Uni
-  TBit -> Bit
-  TNat -> Nat
-  TOne -> One
-  TBt0 -> Bt0
-  TBt1 -> Bt1
-  TZer -> Zer
-  TApp arg body -> App (quote _lvl arg) (quote _lvl body)
-  TSuc n -> Suc (quote _lvl n)
-  TLam name _argTy _body ->
-    -- Ultra-simplified
-    Lam name Nothing (const Zer)
-  -- PHASE 1 EXTENSIONS: New constructor quotation
-  TAll argTy retTy ->
-    All (quote _lvl argTy) (quoteExtended (inc _lvl) retTy) -- retTy has extended context
-  TSig fstTy sndTy ->
-    Sig (quote _lvl fstTy) (quoteExtended (inc _lvl) sndTy) -- sndTy has extended context
-    -- PHASE 2A EXTENSIONS: Pattern matching eliminator quotation
-  TBitM falseCase trueCase ->
-    BitM (quote _lvl falseCase) (quote _lvl trueCase)
-  TNatM zeroCase sucCase ->
-    NatM (quote _lvl zeroCase) (quote _lvl sucCase)
-  TUniM unitCase ->
-    UniM (quote _lvl unitCase)
-  TLstM nilCase consCase ->
-    LstM (quote _lvl nilCase) (quote _lvl consCase)
-  TSigM pairCase ->
-    SigM (quote _lvl pairCase)
-  -- PHASE 2B EXTENSIONS: New constructor quotation
-  TRef name level ->
-    Ref name level
-  TSub term ->
-    Sub (quote _lvl term)
-  TEmp ->
-    Emp
-  TEmpM ->
-    EmpM
-  TEql ty a b ->
-    Eql (quote _lvl ty) (quote _lvl a) (quote _lvl b)
-  TLst elemTy -> Lst (quote _lvl elemTy)
-  TNil -> Nil
-  TCons h t -> Con (quote _lvl h) (quote _lvl t)
-  TTup a b -> Tup (quote _lvl a) (quote _lvl b)
-  TRfl -> Rfl
+-- | Execute a command to produce a term (main execution function)
+exec :: Cmd ctx ty -> Term ctx ty  
+exec = \case
+  CReturn term -> term  -- Return just gives back the term
+  
+  CLet name maybeTy valCmd bodyCmd ->
+    let valTerm = exec valCmd
+        -- Substitute the value term into the body command  
+        bodyTerm = execWithSubst valTerm bodyCmd
+    in bodyTerm
+    
+  CApp fun arg -> 
+    -- Function application: execute both sides then apply
+    let funTerm = termToVal (unsafeCoerce (exec (CReturn fun)))
+        argTerm = termToVal (unsafeCoerce (exec (CReturn arg)))  
+        resultVal = vApp funTerm argTerm
+    in unsafeCoerce (quote resultVal)
+  
+  CMatch scrut eliminator ->
+    -- Pattern matching: apply eliminator to scrutinee
+    let elimTerm = termToVal (unsafeCoerce (exec (CReturn eliminator)))
+        scrutTerm = termToVal (unsafeCoerce (exec (CReturn scrut)))
+        resultVal = vApp elimTerm scrutTerm
+    in unsafeCoerce (quote resultVal)
 
--- * NORMALIZATION
+-- | Convert a term to a value (unified implementation)
+-- Optionally takes a Book for reference resolution
+termToVal :: Term '[] ty -> Val '[] ty
+termToVal = termToValWithBook Nothing
 
--- Combine evaluation and quotation for normalization
+termToValWithBook :: Maybe Book -> Term '[] ty -> Val '[] ty  
+termToValWithBook maybeBook = \case
+  -- Variables become neutrals
+  TVar idx -> VNe (NeVar idx)
+  
+  -- Constants (no Book needed)
+  TSet -> VSet
+  TUni -> VUni
+  TBit -> VBit  
+  TNat -> VNat
+  TOne -> VOne
+  TBt0 -> VBt0
+  TBt1 -> VBt1
+  TZer -> VZer
+  TRfl -> VRfl
+  TNil -> VNil
+  TEmp -> VEmp
+  
+  -- Recursive cases
+  TSuc n -> VSuc (termToValWithBook maybeBook n)
+  TCons h t -> VCons (termToValWithBook maybeBook h) (termToValWithBook maybeBook t)
+  TTup a b -> VTup (termToValWithBook maybeBook a) (termToValWithBook maybeBook b)
+  TLst elemTy -> VLst (termToValWithBook maybeBook elemTy)
+  TEql ty a b -> VEql (termToValWithBook maybeBook ty) (termToValWithBook maybeBook a) (termToValWithBook maybeBook b)
+  TApp fun arg -> vApp (termToValWithBook maybeBook fun) (termToValWithBook maybeBook arg)
+  TSub term -> termToValWithBook maybeBook term
+  
+  -- Lambda values with Book-aware closures
+  TLam name argTy body -> VLam name argTy (\arg ->
+    case maybeBook of
+      Just book -> evalInEnvWithArgAndBook book arg body
+      Nothing -> evalInEnvWithArg arg body)
+  
+  -- References with optional Book resolution
+  TRef name level -> 
+    case maybeBook of
+      Just book -> 
+        case getDefn book name of
+          Just (_, refTerm, _) -> 
+            case simpleSurfaceToIntrinsic refTerm of
+              Just (SomeTerm intrinsicRefTerm) -> 
+                termToValWithBook maybeBook (unsafeCoerce intrinsicRefTerm)
+              Nothing -> VNe (NeRef name level)
+          Nothing -> VNe (NeRef name level)
+      Nothing -> VNe (NeRef name level)
+  
+  -- Unimplemented cases (clean error messages)
+  TAll _ _ -> error "termToVal: function types not in canonical form"
+  TSig _ _ -> error "termToVal: sigma types not in canonical form"
+  TEmpM -> error "termToVal: empty eliminator not implemented"
+  TBitM _ _ -> error "termToVal: pattern eliminators not in canonical form"  
+  TNatM _ _ -> error "termToVal: pattern eliminators not in canonical form"
+  TUniM _ -> error "termToVal: pattern eliminators not in canonical form"
+  TLstM _ _ -> error "termToVal: pattern eliminators not in canonical form"
+  TSigM _ -> error "termToVal: pattern eliminators not in canonical form"
 
-normalize :: Env -> Cmd '[] ty -> Expr
-normalize env cmd =
-  let val = eval env cmd
-   in quote (Lvl 0) val
+-- Helper for let evaluation with substitution  
+execWithSubst :: Term ctx valTy -> Cmd (valTy ': ctx) resultTy -> Term ctx resultTy
+execWithSubst valTerm cmd = 
+  case cmd of
+    CReturn bodyTerm -> substTermTerm valTerm bodyTerm
+    _ -> error "execWithSubst: complex commands not yet supported"
+
+-- Substitute a term for variable 0 in another term
+substTermTerm :: Term ctx ty -> Term (ty ': ctx) target -> Term ctx target
+substTermTerm arg body = case body of
+  -- Variable cases
+  TVar Here -> unsafeCoerce arg -- Variable 0 becomes the argument
+  TVar (There idx) -> TVar idx -- Other variables shift down
+
+  -- Constants (no variables to substitute)
+  TSet -> TSet
+  TUni -> TUni
+  TBit -> TBit
+  TNat -> TNat
+  TOne -> TOne
+  TBt0 -> TBt0
+  TBt1 -> TBt1
+  TZer -> TZer
+  TRfl -> TRfl
+  TNil -> TNil
+  TEmp -> TEmp
+  TEmpM -> TEmpM
+
+  -- Recursive cases with substitution
+  TSuc n -> TSuc (substTermTerm arg n)
+  TLam name argType lambdaBody ->
+    TLam name argType (unsafeCoerce lambdaBody) -- Temporarily unsafe for lambda body
+  TCons h t -> TCons (substTermTerm arg h) (substTermTerm arg t)
+  TTup a b -> TTup (substTermTerm arg a) (substTermTerm arg b)
+  TLst ty -> TLst (substTermTerm arg ty)
+  
+  -- Function types with substitution
+  TAll argTy retTy -> TAll (substTermTerm arg argTy) (unsafeCoerce retTy)
+  TSig fstTy sndTy -> TSig (substTermTerm arg fstTy) (unsafeCoerce sndTy)
+  TApp fun arg' -> TApp (substTermTerm arg fun) (substTermTerm arg arg')
+  
+  -- Pattern matching eliminators
+  TBitM f t -> TBitM (substTermTerm arg f) (substTermTerm arg t)
+  TNatM z s -> TNatM (substTermTerm arg z) (unsafeCoerce s)
+  TUniM u -> TUniM (substTermTerm arg u)
+  TLstM n c -> TLstM (substTermTerm arg n) (unsafeCoerce c)
+  TSigM p -> TSigM (unsafeCoerce p)
+  
+  -- References and wrappers
+  TRef name level -> TRef name level -- No substitution needed
+  TSub term -> TSub (substTermTerm arg term)
+  TEql ty a b -> TEql (substTermTerm arg ty) (substTermTerm arg a) (substTermTerm arg b)
+
+-- End of Core.Eval - Legacy functions moved to Core.Legacy.Eval

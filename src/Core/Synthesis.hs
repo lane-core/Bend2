@@ -32,7 +32,8 @@ module Core.Synthesis (
   resetSynthesisStats,
 ) where
 
-import Core.Eval (quote)
+import Core.Eval (termToVal)
+import Core.Legacy.Eval (quoteLegacy)
 import Core.Sort
 import Core.Sort (Lvl (..), SomeTerm (..), Term (..))
 import Data.IORef
@@ -183,7 +184,7 @@ surfaceToIntrinsicTyped term =
 -- | Type-safe intrinsic to surface conversion
 intrinsicToSurfaceTyped :: SomeTypedTerm '[] -> Expr
 intrinsicToSurfaceTyped (SomeTypedTerm exp _typeRep) =
-  quote (Lvl 0) exp
+  quoteLegacy (Lvl 0) exp
 
 -- * TYPE REPRESENTATION UTILITIES
 

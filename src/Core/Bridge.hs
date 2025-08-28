@@ -9,7 +9,7 @@
 module Core.Bridge where
 
 import Core.Equal
-import Core.Eval
+import Core.Legacy.Eval (quoteLegacy, eval, LegacyEnv, emptyLegacyEnv)
 import Core.Legacy.Equal qualified as Surface
 import Core.Sort
 import Core.Sort qualified as Surface
@@ -18,22 +18,8 @@ import Data.Map qualified as M
 import System.IO.Unsafe (unsafePerformIO)
 import Unsafe.Coerce (unsafeCoerce)
 
--- Re-export Type Synthesis functionality
-import Core.Synthesis (
-  SomeTypedTerm (..),
-  SynthesisStats (..),
-  TypeEq (..),
-  TypeRep (..),
-  getSynthesisStats,
-  intrinsicToSurfaceTyped,
-  resetSynthesisStats,
-  surfaceToIntrinsicTyped,
-  surfaceToTypeRep,
-  synthesizeType,
-  synthesizeTyped,
-  typeEq,
-  typeRepToSurface,
- )
+-- Type Synthesis functionality temporarily disabled
+-- import Core.Synthesis (...)
 
 -- * SURFACE TO INTRINSIC CONVERSION
 
@@ -236,7 +222,7 @@ convertLambda ctx name mArgType body = do
 -- Convert intrinsic values back to surface terms
 
 intrinsicToSurface :: Term '[] ty -> Surface.Expr
-intrinsicToSurface = quote (Lvl 0)
+intrinsicToSurface = quoteLegacy (Lvl 0)
 
 -- * TYPE-SAFE WRAPPERS
 
@@ -255,7 +241,7 @@ normalizeWithIntrinsic term =
   case surfaceToIntrinsic term of
     Just (SomeTerm exp) ->
       let cmd = CReturn exp
-          normalExp = eval emptyEnv cmd
+          normalExp = eval emptyLegacyEnv cmd
        in intrinsicToSurface normalExp
     Nothing -> term -- Fall back to original term
 

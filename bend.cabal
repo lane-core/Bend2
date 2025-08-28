@@ -44,10 +44,12 @@ library
                       Core.Legacy.WHNF,
                       Core.Legacy.Check,
                       Core.Legacy.Equal,
+                      Core.Legacy.Eval,
                       Core.Sort,
+                      Core.Val,
                       Core.Eval,
                       Core.Bridge,
-                      Core.Synthesis,
+                      -- Core.Synthesis,  -- Temporarily disabled for NbE work
                       Target.HVM,
                       Target.JavaScript
     build-depends:    base ^>= 4.21.0.0,

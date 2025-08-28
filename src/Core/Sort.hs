@@ -298,17 +298,7 @@ maxDepth = Depth 1000
 
 -- * SIMPLE ENVIRONMENT (No GADT complexity)
 
--- Simple association list environment
-
-type Env = [(String, SomeTerm '[])]
-
--- | Empty environment
-emptyEnv :: Env
-emptyEnv = []
-
--- | Extend environment
-extendEnv :: String -> SomeTerm '[] -> Env -> Env
-extendEnv name term env = (name, term) : env
+-- Legacy environment types moved to Core.Legacy.Eval
 
 -- * CONVERSION UTILITIES
 

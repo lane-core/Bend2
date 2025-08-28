@@ -16,7 +16,7 @@ module Core.Equal (
   equalCmd,
 ) where
 
-import Core.Eval
+import Core.Legacy.Eval (eval, LegacyEnv, emptyLegacyEnv)
 import Core.Sort
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -163,10 +163,8 @@ functionalEqual depth body1 body2 =
 
 definitionalEqual :: Term '[] ty -> Term '[] ty -> Bool
 definitionalEqual exp1 exp2 =
-  let term1 = quote (Lvl 0) exp1
-      term2 = quote (Lvl 0) exp2
-      exp1' = eval emptyEnv (CReturn exp1)
-      exp2' = eval emptyEnv (CReturn exp2)
+  let exp1' = eval emptyLegacyEnv (CReturn exp1)
+      exp2' = eval emptyLegacyEnv (CReturn exp2)
    in identicalTerms exp1' exp2'
 
 -- * COMMAND EQUALITY
@@ -175,8 +173,8 @@ definitionalEqual exp1 exp2 =
 
 equalCmd :: Cmd '[] ty -> Cmd '[] ty -> Bool
 equalCmd cmd1 cmd2 =
-  let exp1 = eval emptyEnv cmd1
-      exp2 = eval emptyEnv cmd2
+  let exp1 = eval emptyLegacyEnv cmd1
+      exp2 = eval emptyLegacyEnv cmd2
    in exp1 === exp2
 
 -- * EQUALITY FOR EXPRESSIONS
