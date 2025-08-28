@@ -71,11 +71,11 @@ import Core.Adjust.DesugarFrks
 import Core.Adjust.DesugarPats
 import Core.Adjust.FlattenPats
 import Core.Adjust.ReduceEtas
-import Core.FreeVars
+import Core.Legacy.FreeVars
 import Core.Legacy.Bind
 import Core.Legacy.Deps
 import Core.Legacy.WHNF
-import Core.Show
+import Core.Legacy.Show
 import Core.Sort
 
 {- | Adjusts a single term, simplifying pattern matching and other constructs.

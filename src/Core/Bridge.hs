@@ -8,7 +8,7 @@
 
 module Core.Bridge where
 
-import Core.Equal
+import Core.Legacy.Equal
 import Core.Legacy.Eval (quoteLegacy, eval, LegacyEnv, emptyLegacyEnv)
 import Core.Legacy.Equal qualified as Surface
 import Core.Sort

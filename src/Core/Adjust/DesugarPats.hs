@@ -8,7 +8,7 @@ module Core.Adjust.DesugarPats where
 
 import Core.Legacy.Bind
 import Core.Legacy.WHNF
-import Core.Show
+import Core.Legacy.Show
 import Core.Sort
 import Data.Set qualified as S
 import Debug.Trace (trace)

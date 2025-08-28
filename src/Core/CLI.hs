@@ -24,13 +24,13 @@ import System.Process (readProcessWithExitCode)
 import Core.Adjust.Adjust (adjustBook, adjustBookWithPats)
 import Core.Check qualified as NewCheck
 import Core.Eval (nbeTerm, nbeTermWithBook)
-import Core.Import (autoImport)
+import Core.Legacy.Import (autoImport)
 
 import Core.Legacy.Check qualified as Legacy
 import Core.Legacy.Deps
 import Core.Legacy.WHNF qualified as WHNF
 import Core.Parse.Book (doParseBook)
-import Core.Show
+import Core.Legacy.Show
 import Core.Sort
 import Core.Bridge (surfaceToIntrinsic, intrinsicToSurface)
 import Unsafe.Coerce (unsafeCoerce)

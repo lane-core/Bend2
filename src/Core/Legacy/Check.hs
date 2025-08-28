@@ -18,8 +18,8 @@ import Debug.Trace
 import Core.Legacy.Bind
 import Core.Legacy.Equal
 import Core.Legacy.WHNF
-import Core.Rewrite
-import Core.Show
+import Core.Legacy.Rewrite
+import Core.Legacy.Show
 import Core.Sort
 
 -- Utils

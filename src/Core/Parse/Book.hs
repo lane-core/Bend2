@@ -21,7 +21,7 @@ import Debug.Trace
 import Core.Adjust.Adjust
 import Core.Parse.Parse
 import Core.Parse.Term (parseExpr, parseExprBefore)
-import Core.Show
+import Core.Legacy.Show
 import Core.Sort
 
 -- | Book parsing

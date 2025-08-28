@@ -36,7 +36,7 @@
 
 module Core.Adjust.ReduceEtas where
 
-import Core.Show
+import Core.Legacy.Show
 import Core.Sort
 import Data.Maybe (fromJust, isJust)
 import Data.Set qualified as S

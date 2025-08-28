@@ -22,7 +22,7 @@ module Core.Check (
 ) where
 
 import Core.Bridge
-import Core.Equal
+import Core.Legacy.Equal
 import Core.Eval (termToVal, quote, nbeTerm)
 import Core.Legacy.Check qualified as Legacy
 import Core.Sort

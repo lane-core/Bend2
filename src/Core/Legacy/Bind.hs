@@ -7,7 +7,7 @@ import Data.Set qualified as S
 
 import Debug.Trace
 
-import Core.FreeVars
+import Core.Legacy.FreeVars
 import Core.Sort
 
 bind :: Expr -> Expr

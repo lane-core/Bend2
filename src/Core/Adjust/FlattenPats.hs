@@ -41,7 +41,7 @@ import Debug.Trace
 
 import Core.Legacy.Bind
 import Core.Legacy.WHNF
-import Core.Show
+import Core.Legacy.Show
 import Core.Sort
 
 -- Flattener
