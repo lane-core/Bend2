@@ -1,32 +1,298 @@
--- Intrinsic Type System Evaluation with NbE
--- =========================================
--- Normalization by Evaluation using indexed Val type
--- Type-safe evaluation with proper value domain
+-- Streamlined Intrinsic Evaluation System
+-- ======================================
+-- Complete NbE pipeline with Values, Neutrals, and Evaluation
+-- Combines Val and Eval modules for better ergonomics
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Core.Eval (
-  -- * New Intrinsic NbE System
+  -- * Value Types
+  Val(..), Ne(..), 
+  
+  -- * Core NbE Pipeline
   termToVal,         -- Terms -> Values (without Book)  
   termToValWithBook, -- Terms -> Values (with Book)
   nbeTerm,           -- Terms -> Normal Terms (without Book)
   nbeTermWithBook,   -- Terms -> Normal Terms (with Book)
   
-  -- * Command Execution (New)
+  -- * Command Execution
   exec, nbe,
   
-  -- * Quotation (re-exported from Core.Val)
-  quote,
+  -- * Quotation
+  quote, quoteNe,
+  
+  -- * Semantic Operations
+  vApp, weakenVal, weakenNe, substVal,
+  
+  -- * Environment-Based Evaluation
+  evalInEnvWithArg,
+  evalInEnvWithArgAndBook,
   
   -- * Substitution Helpers
   subst, substTermTerm,
 ) where
 
 import Core.Sort
-import Core.Val (Val(..), Ne(..), quote, evalInEnvWithArg, evalInEnvWithArgAndBook, vApp)
-
+import Data.Kind (Type)
 import Unsafe.Coerce (unsafeCoerce)
+
+-- * CANONICAL VALUES (Normal Forms)
+--
+-- Values represent canonical/normal forms in the semantic domain
+-- These are fully evaluated and cannot be reduced further
+
+data Val :: [Expr] -> Expr -> Type where
+  -- Universe hierarchy  
+  VSet :: Val ctx 'Set
+  
+  -- Type constructors as values
+  VUni :: Val ctx 'Set -- Unit : Set
+  VBit :: Val ctx 'Set -- Bool : Set  
+  VNat :: Val ctx 'Set -- Nat : Set
+  
+  -- Unit type values (canonical)
+  VOne :: Val ctx 'Uni -- () : Unit
+  
+  -- Boolean values (canonical) 
+  VBt0 :: Val ctx 'Bit -- False : Bool
+  VBt1 :: Val ctx 'Bit -- True : Bool
+  
+  -- Natural number values (canonical)
+  VZer :: Val ctx 'Nat -- 0 : Nat
+  VSuc :: Val ctx 'Nat -> Val ctx 'Nat -- S(n) : Nat
+  
+  -- Function values (hybrid closures - canonical)
+  VLam :: 
+    String ->
+    Expr -> -- argument type  
+    (Val ctx arg -> Val ctx ret) -> -- functional closure for body
+    Val ctx ('All arg ret)
+    
+  -- List types and values (canonical)
+  VLst :: Val ctx 'Set -> Val ctx 'Set -- [T] : Set
+  VNil :: Val ctx ('Lst a) -- [] : [a]
+  VCons :: Val ctx a -> Val ctx ('Lst a) -> Val ctx ('Lst a) -- h::t
+  
+  -- Pair values (canonical)
+  VTup :: Val ctx a -> Val ctx b -> Val ctx ('Sig a b) -- (a,b)
+  
+  -- Equality values (canonical)
+  VRfl :: Val ctx ('Eql t a a) -- refl : a = a
+  
+  -- Empty type (canonical)
+  VEmp :: Val ctx 'Emp -- Empty type (⊥)
+  
+  -- Equality types (canonical)
+  VEql :: Val ctx 'Set -> Val ctx ty -> Val ctx ty -> Val ctx 'Set
+  
+  -- NEUTRAL EMBEDDINGS: Stuck computations embedded as values
+  VNe :: Ne ctx ty -> Val ctx ty
+
+-- * NEUTRAL FORMS (Stuck Computations)  
+--
+-- Neutrals represent computations that are stuck (cannot proceed)
+-- due to free variables or undefined references
+
+data Ne :: [Expr] -> Expr -> Type where
+  -- Variables (stuck - we don't know what they are)
+  NeVar :: Idx ctx ty -> Ne ctx ty
+  
+  -- Function application (stuck - function is neutral)
+  NeApp :: Ne ctx ('All arg ret) -> Val ctx arg -> Ne ctx ret
+  
+  -- References (stuck - name not found)
+  NeRef :: String -> Int -> Ne ctx ty
+
+-- * SEMANTIC OPERATIONS
+--
+-- Operations on the semantic domain (Values and Neutrals)
+
+-- | Apply a function value to an argument (semantic application)
+vApp :: Val ctx ('All arg ret) -> Val ctx arg -> Val ctx ret
+vApp (VLam _ _ f) arg = f arg -- Direct functional application - no substitution needed!
+vApp (VNe ne) arg = VNe (NeApp ne arg)
+
+-- | Substitute a value for the topmost variable in a value (simplified placeholder)
+substVal :: Idx (ty ': ctx) target -> Val ctx ty -> Val (ty ': ctx) target -> Val ctx target  
+substVal _ _ _ = error "substVal: intrinsic substitution too complex - consider closure-based approach"
+
+-- | Weaken a value by extending the context
+-- This shifts all De Bruijn indices to account for the new binding
+weakenVal :: Val ctx ty -> Val (newTy ': ctx) ty
+weakenVal = \case
+  -- Canonical forms: no variables to weaken
+  VSet -> VSet
+  VUni -> VUni
+  VBit -> VBit
+  VNat -> VNat
+  VOne -> VOne
+  VBt0 -> VBt0
+  VBt1 -> VBt1
+  VZer -> VZer
+  VSuc v -> VSuc (weakenVal v)
+  VNil -> VNil
+  VCons h t -> VCons (weakenVal h) (weakenVal t)
+  VTup a b -> VTup (weakenVal a) (weakenVal b)
+  VRfl -> VRfl
+  VEmp -> VEmp
+  VLst elemTy -> VLst (weakenVal elemTy)
+  VEql ty a b -> VEql (weakenVal ty) (weakenVal a) (weakenVal b)
+  
+  -- Lambda: weaken the closure
+  VLam name argTy f -> VLam name argTy (\arg -> weakenVal (f (unsafeCoerce arg)))
+  
+  -- Neutral forms: weaken the neutral
+  VNe ne -> VNe (weakenNe ne)
+
+-- | Weaken a neutral form  
+weakenNe :: Ne ctx ty -> Ne (newTy ': ctx) ty
+weakenNe = \case
+  NeVar idx -> NeVar (There idx) -- Shift variable index
+  NeApp fun arg -> NeApp (weakenNe fun) (weakenVal arg)
+  NeRef name level -> NeRef name level -- References don't change
+
+-- * ENVIRONMENT-BASED EVALUATION FOR LAMBDA CONVERSION
+--
+-- Specialized evaluation to handle TLam → VLam without circular dependencies
+
+-- | Evaluate a lambda body term with an additional argument binding
+-- This handles the case: TLam body -> VLam (\arg -> evalInEnvWithArg arg body)
+evalInEnvWithArg :: Val ctx arg -> Term (arg ': ctx) ret -> Val ctx ret
+evalInEnvWithArg argVal term = case term of
+  -- Variable cases: Handle the bound variable (Here) and free variables (There)
+  TVar Here -> unsafeCoerce argVal  -- Variable 0 is the argument (temporarily unsafe)
+  TVar (There idx) -> VNe (NeVar idx)  -- Free variables become neutrals
+  
+  -- Constants (no environment needed)
+  TSet -> VSet
+  TUni -> VUni
+  TBit -> VBit
+  TNat -> VNat
+  TOne -> VOne
+  TBt0 -> VBt0
+  TBt1 -> VBt1
+  TZer -> VZer
+  TRfl -> VRfl
+  TNil -> VNil
+  TEmp -> VEmp
+  
+  -- Recursive structural cases
+  TSuc n -> VSuc (evalInEnvWithArg argVal n)
+  TCons h t -> VCons (evalInEnvWithArg argVal h) (evalInEnvWithArg argVal t)
+  TTup a b -> VTup (evalInEnvWithArg argVal a) (evalInEnvWithArg argVal b)
+  TLst elemTy -> VLst (evalInEnvWithArg argVal elemTy)
+  TEql ty a b -> VEql (evalInEnvWithArg argVal ty) (evalInEnvWithArg argVal a) (evalInEnvWithArg argVal b)
+  
+  -- Function application via semantic vApp
+  TApp fun arg -> vApp (evalInEnvWithArg argVal fun) (evalInEnvWithArg argVal arg)
+  
+  -- Nested lambda: create another closure
+  TLam name argTy body -> VLam name argTy (\newArg ->
+    -- For nested lambdas, we need to handle the extended context properly
+    -- This is a complex case that might need more sophisticated environment handling
+    error "evalInEnvWithArg: nested lambdas not yet implemented")
+  
+  -- Other constructors
+  TRef name level -> VNe (NeRef name level)
+  TSub subterm -> evalInEnvWithArg argVal subterm
+  
+  -- Pattern matching eliminators and other complex terms
+  _ -> error "evalInEnvWithArg: constructor not yet implemented"
+
+-- | Book-aware environment evaluation for lambda bodies with references
+-- Note: This is a simplified version that doesn't resolve references in lambda bodies
+-- Full reference resolution is handled by termToValWithBook in Core.Eval
+evalInEnvWithArgAndBook :: Book -> Val ctx arg -> Term (arg ': ctx) ret -> Val ctx ret
+evalInEnvWithArgAndBook book argVal term = case term of
+  -- Variable cases: Handle the bound variable (Here) and free variables (There)
+  TVar Here -> unsafeCoerce argVal  -- Variable 0 is the argument (temporarily unsafe)
+  TVar (There idx) -> VNe (NeVar idx)  -- Free variables become neutrals
+  
+  -- Constants (no environment needed)
+  TSet -> VSet
+  TUni -> VUni
+  TBit -> VBit
+  TNat -> VNat
+  TOne -> VOne
+  TBt0 -> VBt0
+  TBt1 -> VBt1
+  TZer -> VZer
+  TRfl -> VRfl
+  TNil -> VNil
+  TEmp -> VEmp
+  
+  -- Recursive structural cases with Book
+  TSuc n -> VSuc (evalInEnvWithArgAndBook book argVal n)
+  TCons h t -> VCons (evalInEnvWithArgAndBook book argVal h) (evalInEnvWithArgAndBook book argVal t)
+  TTup a b -> VTup (evalInEnvWithArgAndBook book argVal a) (evalInEnvWithArgAndBook book argVal b)
+  TLst elemTy -> VLst (evalInEnvWithArgAndBook book argVal elemTy)
+  TEql ty a b -> VEql (evalInEnvWithArgAndBook book argVal ty) (evalInEnvWithArgAndBook book argVal a) (evalInEnvWithArgAndBook book argVal b)
+  
+  -- Function application via semantic vApp
+  TApp fun arg -> vApp (evalInEnvWithArgAndBook book argVal fun) (evalInEnvWithArgAndBook book argVal arg)
+  
+  -- Nested lambda: create another closure with Book support
+  TLam name argTy body -> VLam name argTy (\newArg ->
+    -- For nested lambdas, we need to handle the extended context properly
+    -- This is a complex case that might need more sophisticated environment handling
+    error "evalInEnvWithArgAndBook: nested lambdas not yet implemented")
+  
+  -- References - keep as neutrals (reference resolution happens at top level)
+  TRef name level -> VNe (NeRef name level)
+  
+  -- Other constructors
+  TSub subterm -> evalInEnvWithArgAndBook book argVal subterm
+  
+  -- Pattern matching eliminators and other complex terms
+  _ -> error "evalInEnvWithArgAndBook: constructor not yet implemented"
+
+-- * QUOTATION: VALUES AND NEUTRALS BACK TO TERMS
+--
+-- Quote canonical values and neutrals back to normal form terms
+
+quote :: Val ctx ty -> Term ctx ty
+quote = \case
+  -- Canonical forms quote directly
+  VSet -> TSet
+  VUni -> TUni
+  VBit -> TBit
+  VNat -> TNat
+  VOne -> TOne
+  VBt0 -> TBt0
+  VBt1 -> TBt1
+  VZer -> TZer
+  VSuc v -> TSuc (quote v)
+  
+  VLam name argTy f ->
+    -- Intrinsic lambda quotation: create fresh variable and quote the closure application
+    -- Since we're intrinsic, fresh variable is just Here in extended context
+    let freshVar = VNe (NeVar Here)      -- Fresh variable :: Val (arg ': ctx) arg
+        bodyVal = f (unsafeCoerce freshVar)  -- Apply closure (temporarily unsafe for context)
+        bodyTerm = quote bodyVal          -- Quote result :: Term (arg ': ctx) ret  
+    in TLam name argTy (unsafeCoerce bodyTerm)  -- Return :: Term ctx ('All arg ret)
+    
+  VNil -> TNil
+  VCons h t -> TCons (quote h) (quote t)
+  VTup a b -> TTup (quote a) (quote b)  
+  VRfl -> TRfl
+  VEmp -> TEmp
+  
+  -- Type constructors
+  VLst elemTy -> TLst (quote elemTy)
+  VEql ty a b -> TEql (quote ty) (quote a) (quote b)
+  
+  -- Neutral forms delegate to neutral quotation
+  VNe ne -> quoteNe ne
+
+-- | Quote neutral forms back to terms
+quoteNe :: Ne ctx ty -> Term ctx ty  
+quoteNe = \case
+  NeVar idx -> TVar idx
+  NeApp fun arg -> TApp (quoteNe fun) (quote arg)
+  NeRef name level -> TRef name level
 
 -- * SIMPLE SURFACE TO INTRINSIC CONVERSION (to avoid circular imports)
 
@@ -114,30 +380,6 @@ subst arg body = case body of
   TSub term -> TSub (subst arg term)
   TEql ty a b -> TEql (subst arg ty) (subst arg a) (subst arg b)
 
--- | Perform let substitution
-letSubst :: Term '[] valTy -> Cmd '[valTy] resultTy -> Cmd '[] resultTy
-letSubst val bodyCmd =
-  case bodyCmd of
-    CReturn bodyTerm ->
-      case bodyTerm of
-        TVar Here -> CReturn val -- Variable 0 becomes the value
-        TVar (There _) -> error "Free variable in let body - not well-typed"
-        -- For constants, ignore the binding
-        TSet -> CReturn TSet
-        TUni -> CReturn TUni
-        TBit -> CReturn TBit
-        TNat -> CReturn TNat
-        TOne -> CReturn TOne
-        TBt0 -> CReturn TBt0
-        TBt1 -> CReturn TBt1
-        TZer -> CReturn TZer
-        -- Handle common constant cases in let bodies
-        TSuc TZer -> CReturn (TSuc TZer) -- S(0) = 1
-        TSuc (TSuc TZer) -> CReturn (TSuc (TSuc TZer)) -- S(S(0)) = 2
-        TSuc (TSuc (TSuc TZer)) -> CReturn (TSuc (TSuc (TSuc TZer))) -- S(S(S(0))) = 3
-        _ -> error "Complex let bodies with variable usage not yet supported"
-    -- Other command cases would need similar handling
-    _ -> error "Complex let commands not yet supported"
 
 -- * NORMALIZATION BY EVALUATION
 --

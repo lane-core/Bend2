@@ -45,7 +45,6 @@ library
                       Core.Legacy.Check,
                       Core.Legacy.Eval,
                       Core.Sort,
-                      Core.Val,
                       Core.Eval,
                       Core.Bridge,
                       Core.Legacy.Synthesis,

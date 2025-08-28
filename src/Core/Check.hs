@@ -23,10 +23,9 @@ module Core.Check (
 
 import Core.Bridge
 import Core.Legacy.Equal
-import Core.Eval (termToVal, quote, nbeTerm)
+import Core.Eval (termToVal, quote, nbeTerm, Val(..), Ne(..), vApp)
 import Core.Legacy.Check qualified as Legacy
 import Core.Sort
-import Core.Val (Val(..), Ne(..), vApp)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- * CONTEXT REPRESENTATION
