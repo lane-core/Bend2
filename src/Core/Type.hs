@@ -24,8 +24,8 @@ module Core.Type (
   -- * Type Checking (from Core.Check)
   check, infer, checkProof,
   
-  -- * Surface Conversion (from Core.Bridge)
-  surfaceToIntrinsic, intrinsicToSurface
+  -- * Surface Conversion (integrated in type checker)
+  -- surfaceToIntrinsic, intrinsicToSurface  -- REMOVED: unsafe Bridge functions
 ) where
 
 -- Foundation types
@@ -37,8 +37,7 @@ import Core.Eval (Val(..), Ne(..), quote, vApp, weakenVal, weakenNe, termToVal, 
 -- Type checking
 import Core.Check (check, infer, checkProof)
 
--- Surface conversion
-import Core.Bridge (surfaceToIntrinsic, intrinsicToSurface)
+-- Surface conversion (removed - was unsafe Bridge module)
 
 -- Convenient aliases for main operations
 eval :: Term '[] ty -> Val '[] ty

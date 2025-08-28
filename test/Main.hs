@@ -29,7 +29,7 @@ runAllTests = do
       let failed = length results - passed
       
       putStrLn ""
-      putStrLn $ "\ESC[1mTest summary: " ++ show passed ++ " passed, " ++ show failed ++ " failed\ESC[0m"
+      putStrLn $ "Test summary: \x1b[32m" ++ show passed ++ " passed\x1b[0m, \x1b[31m" ++ show failed ++ " failed\x1b[0m"
       
       when (failed > 0) exitFailure
 
@@ -54,7 +54,7 @@ runSpecificTests testNames = do
       let failed = length results - passed
       
       putStrLn ""
-      putStrLn $ "\ESC[1mTest summary: " ++ show passed ++ " passed, " ++ show failed ++ " failed\ESC[0m"
+      putStrLn $ "Test summary: \x1b[32m" ++ show passed ++ " passed\x1b[0m, \x1b[31m" ++ show failed ++ " failed\x1b[0m"
       
       when (failed > 0) exitFailure
 
@@ -79,13 +79,13 @@ runTestFile file = do
   
   case exitCode of
     ExitSuccess -> do
-      putStrLn $ "\ESC[1m\ESC[32m✓ " ++ testName ++ "\ESC[0m"
+      putStrLn $ "\x1b[32m✓ " ++ testName ++ "\x1b[0m"
       -- Show the output indented
       when (not $ null out) $ putStr $ unlines $ map ("  " ++) $ lines out
       when (not $ null err) $ putStr $ unlines $ map ("  " ++) $ lines err
       return True
     ExitFailure n -> do
-      putStrLn $ "\ESC[1m\ESC[31m✗ " ++ testName ++ "\ESC[0m"
+      putStrLn $ "\x1b[31m✗ " ++ testName ++ "\x1b[0m"
       -- Show the output indented
       when (not $ null out) $ putStr $ unlines $ map ("  " ++) $ lines out
       when (not $ null err) $ putStr $ unlines $ map ("  " ++) $ lines err

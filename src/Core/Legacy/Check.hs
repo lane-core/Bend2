@@ -19,7 +19,7 @@ import Core.Legacy.Bind
 import Core.Legacy.Equal
 import Core.Legacy.WHNF
 import Core.Legacy.Rewrite
-import Core.Legacy.Show
+-- import Core.Legacy.Show -- Merged into Sort.hs
 import Core.Sort
 
 -- Utils

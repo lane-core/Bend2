@@ -18,7 +18,7 @@ module Core.Adjust.DesugarFrks where
 
 import Core.Legacy.FreeVars
 import Core.Legacy.Bind
-import Core.Legacy.Show
+-- import Core.Legacy.Show -- Merged into Sort.hs
 import Core.Sort
 import Data.Set qualified as S
 

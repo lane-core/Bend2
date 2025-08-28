@@ -18,6 +18,9 @@ import Data.Int (Int32, Int64)
 import Data.Kind
 import Data.List (intercalate)
 import Data.Map qualified as M
+import System.Exit (exitFailure)
+import System.IO (hPrint, hPutStrLn, stderr)
+import System.IO.Unsafe (unsafePerformIO)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set qualified as S
 import Data.Word (Word32, Word64)
@@ -96,6 +99,40 @@ data Expr
   | -- Sugars
     Pat [Expr] [Move] [Case] -- match x ... { with k=v ... ; case @A ...: F ; ... }
   | Frk Expr Expr Expr -- fork L:a else:b
+
+-- Manual Eq instance that handles function types
+instance Eq Expr where
+  Var n1 i1 == Var n2 i2 = n1 == n2 && i1 == i2
+  Ref n1 i1 == Ref n2 i2 = n1 == n2 && i1 == i2
+  Sub e1 == Sub e2 = e1 == e2
+  Set == Set = True
+  Chk e1 t1 == Chk e2 t2 = e1 == e2 && t1 == t2
+  Tst e1 == Tst e2 = e1 == e2
+  Emp == Emp = True
+  EmpM == EmpM = True
+  Uni == Uni = True
+  One == One = True
+  Bit == Bit = True
+  Bt0 == Bt0 = True
+  Bt1 == Bt1 = True
+  Nat == Nat = True
+  Zer == Zer = True
+  Suc e1 == Suc e2 = e1 == e2
+  Nil == Nil = True
+  Con h1 t1 == Con h2 t2 = h1 == h2 && t1 == t2
+  Sig e1 f1 == Sig e2 f2 = e1 == e2 && f1 == f2
+  Tup a1 b1 == Tup a2 b2 = a1 == a2 && b1 == b2
+  All t1 f1 == All t2 f2 = t1 == t2 && f1 == f2
+  App f1 a1 == App f2 a2 = f1 == f2 && a1 == a2
+  Eql t1 a1 b1 == Eql t2 a2 b2 = t1 == t2 && a1 == a2 && b1 == b2
+  Rfl == Rfl = True
+  Era == Era = True
+  -- For function-containing constructors, we can't compare functions
+  -- So we'll return False for different constructors and use structural comparison where possible
+  Fix n1 _ == Fix n2 _ = n1 == n2  -- Can't compare bodies
+  Lam n1 mt1 _ == Lam n2 mt2 _ = n1 == n2 && mt1 == mt2  -- Can't compare bodies
+  -- Add other cases as needed - for now default to False for unhandled cases
+  _ == _ = False
 
 -- * TYPE FAMILIES FOR CONTEXT MANIPULATION
 
@@ -316,6 +353,91 @@ extendVarEnv name env = (name, SomeIdx Here) : shiftVarEnv env
 shiftVarEnv :: VarEnv ctx -> VarEnv (ty ': ctx)
 shiftVarEnv = map (\(name, SomeIdx idx) -> (name, SomeIdx (There idx)))
 
+-- * SHOW INSTANCES
+
+-- Simple Show instances for debugging and CLI output
+instance Show Expr where
+  show = \case
+    -- Variables and references
+    Var name depth -> name ++ if depth > 0 then "^" ++ show depth else ""
+    Ref name level -> name
+    Sub e -> show e
+    
+    -- Types
+    Set -> "Set"
+    Bit -> "Bool"
+    Nat -> "Nat"
+    Uni -> "Unit"
+    Emp -> "Empty"
+    
+    -- Values
+    Bt0 -> "False"
+    Bt1 -> "True"
+    Zer -> "0n"
+    One -> "()"
+    Nil -> "[]"
+    Rfl -> "{==}"
+    
+    -- Recursive structures
+    Suc e -> "S(" ++ show e ++ ")"
+    Con h t -> show h ++ " :: " ++ show t
+    
+    -- Function types and terms
+    All a b -> "∀" ++ showArg a ++ ". " ++ show b
+      where showArg t = case t of
+              All{} -> "(" ++ show t ++ ")"
+              Sig{} -> "(" ++ show t ++ ")"
+              _ -> show t
+    
+    Lam name (Just typ) body -> "λ" ++ name ++ ":" ++ show typ ++ ". " ++ show (body (Var name 0))
+    Lam name Nothing body -> "λ" ++ name ++ ". " ++ show (body (Var name 0))
+    
+    App f x -> case collectApps' f [x] of
+      (fn, args) -> showFn fn ++ "(" ++ intercalate "," (map show args) ++ ")"
+        where showFn (Var n _) = n
+              showFn (Ref n _) = n  
+              showFn t = "(" ++ show t ++ ")"
+    
+    -- Products
+    Sig a b -> "Σ" ++ showArg a ++ ". " ++ show b
+      where showArg t = case t of
+              All{} -> "(" ++ show t ++ ")"
+              Sig{} -> "(" ++ show t ++ ")"
+              _ -> show t
+    Tup a b -> "(" ++ show a ++ ", " ++ show b ++ ")"
+    
+    -- Equality
+    Eql t a b -> show t ++ "{" ++ show a ++ " == " ++ show b ++ "}"
+    
+    -- Location wrapper: show the inner expression
+    Loc _ expr -> show expr
+    
+    -- Other cases - simplified
+    _ -> "<expr>"
+
+-- Helper function to collect applications
+collectApps' :: Expr -> [Expr] -> (Expr, [Expr])
+collectApps' (App f x) acc = collectApps' f (x : acc)
+collectApps' f acc = (f, acc)
+
+instance Show Book where
+  show (Book defs names) = unlines [name ++ " : " ++ show typ ++ " = " ++ show term | 
+                                   name <- names, 
+                                   Just (_, term, typ) <- [M.lookup name defs]]
+
+instance Show Error where
+  show = \case
+    TypeMismatch _ _ goal typ (Just hint) -> 
+      "Mismatch:\n- Goal: " ++ show goal ++ "\n- Type: " ++ show typ ++ "\nHint: " ++ hint
+    TypeMismatch _ _ goal typ Nothing -> 
+      "Mismatch:\n- Goal: " ++ show goal ++ "\n- Type: " ++ show typ
+    CantInfer _ _ (Just hint) -> "Cannot infer type\nHint: " ++ hint
+    CantInfer _ _ Nothing -> "Cannot infer type"
+    _ -> "Error"
+
+instance Show SCtx where
+  show (SCtx ctx) = unlines ["- " ++ name ++ " : " ++ show typ | (name, typ, _) <- ctx]
+
 -- * CONTEXT OPERATIONS
 
 -- Type-safe context manipulation functions
@@ -378,8 +500,7 @@ data Span = Span
   , spanEnd :: (Int, Int)
   , spanPth :: FilePath -- original file path
   , spanSrc :: String -- source content
-  }
-  deriving (Eq, Ord)
+  } deriving (Show, Eq, Ord)
 
 data NTyp
   = U64_T
@@ -595,3 +716,10 @@ collectVars t = case t of
       ++ concatMap (\(ps, t) -> concatMap collectVars ps ++ collectVars t) cs
   Frk l a b -> collectVars l ++ collectVars a ++ collectVars b
   _ -> []
+
+-- Error helper function from Legacy Show
+errorWithSpan :: Span -> String -> a
+errorWithSpan span msg = unsafePerformIO $ do
+  hPutStrLn stderr msg
+  hPrint stderr (show span)
+  exitFailure

@@ -17,7 +17,7 @@ test cmd files desc callback = testWithTimeout cmd files desc callback (30 * 100
 testWithTimeout :: String -> [(String, String)] -> String -> (String -> String -> IO ()) -> Int -> IO ()
 testWithTimeout cmd files desc callback timeoutMicros = do
   -- Print description if not empty
-  when (not $ null desc) $ putStrLn $ "  \ESC[2m" ++ desc ++ "\ESC[0m"  -- dim/gray
+  when (not $ null desc) $ putStrLn $ "  " ++ desc
   tmpDir <- getTemporaryDirectory
   testDir <- findUniqueTestDir tmpDir (0 :: Int)
   createDirectory testDir
@@ -31,12 +31,17 @@ testWithTimeout cmd files desc callback timeoutMicros = do
                   Right _ -> True
                   Left _  -> False
 
-  -- Print the bend output with appropriate color
+  -- Print the bend output (keep ANSI codes for proper formatting)
   let output = out ++ err
   let outputLines = lines output
-  let color = if success then "\ESC[32m" else "\ESC[31m"
-  let resetColor = "\ESC[0m"
-  mapM_ (\line -> putStrLn $ "  " ++ color ++ ">" ++ resetColor ++ " " ++ line) outputLines
+  let prefix = if success then "  \x1b[32m✓\x1b[0m " else "  \x1b[31m✗\x1b[0m "
+  let addPrefix line 
+        | null line = ""
+        | line `startsWith` "✓ " = "  \x1b[32m" ++ line ++ "\x1b[0m"
+        | line `startsWith` "✗ " = "  \x1b[31m" ++ line ++ "\x1b[0m"
+        | otherwise = prefix ++ line
+      startsWith str prefix = take (length prefix) str == prefix
+  mapM_ (putStrLn . addPrefix) outputLines
 
   -- Re-throw if test failed
   case testPassed of
@@ -68,7 +73,9 @@ testWithTimeout cmd files desc callback timeoutMicros = do
             , create_group = True -- IMPORTANT: For POSIX systems (Linux/macOS)
             }
 
-      withCreateProcess procSpec $ \_ (Just stdout_h) (Just stderr_h) ph -> do
+      withCreateProcess procSpec $ \_ mstdout_h mstderr_h ph -> do
+        let (Just stdout_h) = mstdout_h
+        let (Just stderr_h) = mstderr_h
         -- Use timeout on waiting for the process to complete
         result <- timeout timeoutMicros (waitForProcess ph)
 
@@ -126,7 +133,7 @@ stripAnsiColors :: String -> String
 stripAnsiColors = stripAnsi
   where
     stripAnsi [] = []
-    stripAnsi ('\ESC':'[':xs) = stripAnsi (dropWhile (/= 'm') xs)
+    stripAnsi ('\ESC':'[':xs) = stripAnsi (drop 1 (dropWhile (/= 'm') xs))  -- drop the 'm' too
     stripAnsi (x:xs) = x : stripAnsi xs
 
 -- Find the project root by looking for bend.cabal

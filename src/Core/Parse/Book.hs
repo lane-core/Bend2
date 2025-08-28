@@ -21,7 +21,7 @@ import Debug.Trace
 import Core.Adjust.Adjust
 import Core.Parse.Parse
 import Core.Parse.Term (parseExpr, parseExprBefore)
-import Core.Legacy.Show
+-- import Core.Legacy.Show -- Merged into Sort.hs
 import Core.Sort
 
 -- | Book parsing
@@ -73,7 +73,11 @@ parseDefFunction f = label "function definition" $ do
  where
   -- parseArg = (,) <$> name <*> (symbol ":" *> parseExpr)
   -- TODO: refactor parseArg to use a do-block instead. DO IT BELOW:
-  nestTypeBod (argName, argType) (currType, currBod) = (All argType (Lam argName (Just argType) (const currType)), Lam argName (Just argType) (const currBod))
+  nestTypeBod (argName, argType) (currType, currBod) = 
+    -- For function types like (x: Bool) -> Bool, we want: ∀x:Bool. Bool
+    -- The type should be: All argType retType (where retType can depend on x)
+    -- The body should be: λx:argType. body
+    (All argType currType, Lam argName (Just argType) (const currBod))
 
 -- | Parse a module path like Path/To/Lib
 parseModulePath :: Parser String
@@ -132,7 +136,7 @@ parseType = label "datatype declaration" $ do
       -- The body of the definition (see docstring).
       body0 = Sig (Enu tags) (Lam "ctr" (Just $ Enu tags) branches)
       -- Wrap the body with lambdas for the parameters.
-      nest (n, ty) (tyAcc, bdAcc) = (All ty (Lam n (Just ty) (const tyAcc)), Lam n (Just ty) (const bdAcc))
+      nest (n, ty) (tyAcc, bdAcc) = (All ty tyAcc, Lam n (Just ty) (const bdAcc))
       (fullTy, fullBody) = foldr nest (retTy, body0) args
       term = fullBody
   return (tName, (True, term, fullTy))

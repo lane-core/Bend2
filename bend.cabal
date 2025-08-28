@@ -22,11 +22,11 @@ common warnings
 library
     import:           warnings
     exposed-modules:  ,
-                      Core.Legacy.Show,
                       Core.Adjust.Adjust,
                       Core.Legacy.Bind,
                       Core.CLI,
                       Core.Check,
+                      Core.Equal,
                       Core.Legacy.Deps,
                       Core.Legacy.Equal,
                       Core.Adjust.ReduceEtas,
@@ -46,7 +46,7 @@ library
                       Core.Legacy.Eval,
                       Core.Sort,
                       Core.Eval,
-                      Core.Bridge,
+                      -- Core.Bridge,  -- REMOVED: unsafe Bridge module
                       Core.Legacy.Synthesis,
                       Target.HVM,
                       Target.JavaScript

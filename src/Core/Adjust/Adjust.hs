@@ -75,7 +75,7 @@ import Core.Legacy.FreeVars
 import Core.Legacy.Bind
 import Core.Legacy.Deps
 import Core.Legacy.WHNF
-import Core.Legacy.Show
+-- import Core.Legacy.Show -- Merged into Sort.hs
 import Core.Sort
 
 {- | Adjusts a single term, simplifying pattern matching and other constructs.

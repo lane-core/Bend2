@@ -22,52 +22,32 @@ import System.IO (hPrint, hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode)
 
 import Core.Adjust.Adjust (adjustBook, adjustBookWithPats)
-import Core.Check qualified as NewCheck
-import Core.Eval (nbeTerm, nbeTermWithBook)
-import Core.Legacy.Import (autoImport)
-
-import Core.Legacy.Check qualified as Legacy
-import Core.Legacy.Deps
-import Core.Legacy.WHNF qualified as WHNF
+import Core.Check (elaborate, check, infer, SCtx(..))
+import qualified Core.Check as Check
+import Core.Eval (nbeTerm, nbeTermWithBook, quote, termToVal)
 import Core.Parse.Book (doParseBook)
-import Core.Legacy.Show
 import Core.Sort
-import Core.Bridge (surfaceToIntrinsic, intrinsicToSurface)
-import Unsafe.Coerce (unsafeCoerce)
 
--- debug import removed
+-- Import unbound reference resolution (kept from legacy for now)
+import Core.Legacy.Import (autoImport)
+import Core.Legacy.Deps (getDeps)  -- For dependency analysis only
 
 import Target.HVM qualified as HVM
 import Target.JavaScript qualified as JS
 
--- Type-check all definitions in a book
+-- Type-check all definitions in a book using streamlined intrinsic checker
 checkBook :: Book -> IO Book
 checkBook book@(Book defs names) = do
-  let orderedDefs = [(name, fromJust (M.lookup name defs)) | name <- names]
-  success <- checkAll book orderedDefs
-  unless success exitFailure
-  return book
- where
-  checkDef bk term typ = do
-    -- Use new intrinsic checker instead of legacy
-    case NewCheck.check bk (SCtx []) typ Set of
-      Fail e -> error $ "Type checking failed for type: " ++ show e
-      Done _ -> return ()
-    case NewCheck.check bk (SCtx []) term typ of
-      Fail e -> error $ "Type checking failed for term: " ++ show e
-      Done _ -> return ()
-  checkAll :: Book -> [(Name, Defn)] -> IO Bool
-  checkAll bk [] = return True
-  checkAll bk ((name, (inj, term, typ)) : rest) = do
-    case checkDef bk term typ of
-      Done () -> do
-        putStrLn $ "\x1b[32m✓ " ++ name ++ "\x1b[0m"
-        checkAll bk rest
-      Fail e -> do
-        hPutStrLn stderr $ "\x1b[31m✗ " ++ name ++ "\x1b[0m"
-        hPrint stderr $ show e
-        success <- checkAll bk rest
-        return False
+  -- Use the streamlined intrinsic type checker
+  case Check.checkBook book of
+    Done checkedBook -> do
+      -- Print success for each definition
+      mapM_ (\name -> putStrLn $ "✓ " ++ name) names
+      return checkedBook
+    Fail e -> do
+      hPutStrLn stderr $ "✗ Type checking failed"
+      hPutStrLn stderr $ show e
+      exitFailure
 
 -- | Parse a Bend file into a Book
 parseFile :: FilePath -> IO Book
@@ -91,22 +71,15 @@ runMain book = do
       return ()
     Just _ -> do
       let mainCall = Ref "main" 1
-      case NewCheck.infer book (SCtx []) mainCall of
+      case infer book (SCtx []) mainCall of
         Fail e -> do
-          hPrint stderr $ show e
+          hPutStrLn stderr $ show e
           exitFailure
         Done typ -> do
           putStrLn ""
-          -- Use Book-aware NbE evaluation with reference resolution!
-          case surfaceToIntrinsic mainCall of
-            Just (SomeTerm intrinsicMain) -> do
-              let normalizedTerm = nbeTermWithBook book intrinsicMain
-              -- For now, fall back to legacy printing since intrinsicToSurface has circular import
-              print $ WHNF.normal book mainCall
-              putStrLn "-- NbE normalized (internal verification completed)"
-            Nothing -> 
-              -- Fall back to legacy WHNF if intrinsic conversion fails
-              print $ WHNF.normal book mainCall
+          -- Simple evaluation fallback - just print the expression for now
+          -- TODO: Implement proper surface-level evaluation
+          print mainCall
 
 -- | Process a Bend file: parse, check, and run
 processFile :: FilePath -> IO ()

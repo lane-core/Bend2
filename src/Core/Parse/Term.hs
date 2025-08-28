@@ -25,7 +25,7 @@ import Debug.Trace
 
 import Core.Adjust.Adjust
 import Core.Parse.Parse
-import Core.Legacy.Show
+-- import Core.Legacy.Show -- Merged into Sort.hs
 import Core.Sort
 
 -- | Parse a "core" form
