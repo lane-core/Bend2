@@ -4,6 +4,7 @@ module Core.CLI
   , processFile
   , processFileToJS
   , processFileToHVM
+  , processFileToHS
   , listDependencies
   , getGenDeps
   ) where
@@ -32,6 +33,7 @@ import Core.WHNF
 
 import qualified Target.JavaScript as JS
 import qualified Target.HVM as HVM
+import qualified Target.Haskell as HS
 
 -- Type-check all definitions in a book
 checkBook :: Book -> IO Book
@@ -131,9 +133,18 @@ processFileToHVM :: FilePath -> IO ()
 processFileToHVM file = do
   book <- parseFile file
   let bookAdj = adjustBookWithPats book
-  putStrLn $ show bookAdj
+  -- putStrLn $ show bookAdj
   let hvmCode = HVM.compile bookAdj
   putStrLn hvmCode
+
+-- | Process a Bend file and compile to Haskell
+processFileToHS :: FilePath -> IO ()
+processFileToHS file = do
+  book <- parseFile file
+  let bookAdj = adjustBookWithPats book
+  -- putStrLn $ show bookAdj
+  let hsCode = HS.compile bookAdj
+  putStrLn hsCode
 
 -- | List all dependencies of a Bend file (including transitive dependencies)
 listDependencies :: FilePath -> IO ()
