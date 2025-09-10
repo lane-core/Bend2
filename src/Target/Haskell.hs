@@ -22,6 +22,7 @@ compile book@(Book defs _) =
 prelude :: String
 prelude = unlines [
     "{-# LANGUAGE ViewPatterns #-}",
+    "import Prelude (print, fromIntegral, (==), (>=), (/=), (+), (-), (*), div, mod, (^), (<), (>), (<=), negate, id, pred, Integer, Bool(..), IO)",
     "import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR, complement)",
     "import Data.Char (chr, ord)",
     "import Data.Int (Int64)",
@@ -35,13 +36,13 @@ prelude = unlines [
 -- Compile a function definition
 compileFn :: Book -> Name -> Term -> Term -> String
 compileFn book name term typ =
-  let htm = termToHT book term
-      hty = typeToHT book typ
-      cleanedName = cleanName name
+  let htm  = termToHT book 0 term
+      hty  = typeToHT book typ
+      namH = refNam name
       args = collectArgs htm
-      typeSig = cleanedName ++ " :: " ++ showTerm 0 hty
-      fnDef = cleanedName ++ concat (map (\a -> " " ++ a) args) ++ " =\n" ++ indent 2 ++ showTerm 2 (removeArgs (length args) htm)
-  in typeSig ++ "\n" ++ fnDef
+      sig  = namH ++ " :: " ++ showTerm 0 hty
+      body = namH ++ " =\n" ++ indent 2 ++ showTerm 2 htm
+  in sig ++ "\n" ++ body
   where
     collectArgs :: HT -> [String]
     collectArgs (HLam n body) = n : collectArgs body
@@ -95,87 +96,92 @@ data HT
   | HEra
 
 -- Convert Bend Term to Haskell Term
-termToHT :: Book -> Term -> HT
-termToHT book term = case term of
+termToHT :: Book -> Int -> Term -> HT
+termToHT book i term = case term of
   Var n _     -> HVar n
   Ref k _     -> HRef k -- TODO: remove erased args from the reference
-  Sub t       -> termToHT book t
-  Fix n f     -> HLet n (termToHT book (f (Var n 0))) (HVar n)
-  Let k _ v f -> HLet k (termToHT book v) (termToHT book (f (Var k 0))) -- TODO: deal with repeated bind names (lets are recursive in HS)
-  Use k v f   -> termToHT book (f v)
+  Sub t       -> termToHT book i t
+  Fix n f     -> HLet n (termToHT book i (f (Var n 0))) (HVar n)
+  Let k _ v f -> HLet (varNam i k) (termToHT book (i+1) v) (termToHT book (i+1) (f (Var (varNam i k) 0)))
+  Use k v f   -> termToHT book i(f v)
   Set         -> typeToHT book term
-  Chk v t     -> HAnn (termToHT book v) (termToHT book t)
-  Tst v       -> termToHT book v
+  Chk v t     -> HAnn (termToHT book i v) (termToHT book i t)
+  Tst v       -> termToHT book i v
   Emp         -> typeToHT book term
-  EmpM        -> HLam "x" HEra
+  EmpM        -> HLam "_'x" HEra
   Uni         -> typeToHT book term
   One         -> HOne
-  UniM f      -> HLam "_" (termToHT book f)
+  UniM f      -> HLam "_" (termToHT book i f)
   Bit         -> typeToHT book term
   Bt0         -> HBt0
   Bt1         -> HBt1
-  BitM f t    -> HLam "x" (HMat [HVar "x"] [([HBt0], termToHT book f), ([HBt1], termToHT book t)])
+  BitM f t    -> HLam "_'x" (HMat [HVar "_'x"] [([HBt0], termToHT book i f), ([HBt1], termToHT book i t)])
   Nat         -> typeToHT book term
   Zer         -> HZer
-  Suc p       -> HSuc (termToHT book p)
-  NatM z s    -> HLam "x" (HMat [HVar "x"] [([HZer], termToHT book z), ([HSuc (HVar "n")], HApp (termToHT book s) (HVar "n"))])
+  Suc p       -> HSuc (termToHT book i p)
+  NatM z s    -> HLam "_'x" (HMat [HVar "_'x"] [([HZer], termToHT book i z), ([HSuc (HVar "_'p")], HApp (termToHT book i s) (HVar "_'p"))])
   Lst _       -> typeToHT book term
   Nil         -> HNil
-  Con h t     -> HCon (termToHT book h) (termToHT book t)
-  LstM n c    -> HLam "x" (HMat [HVar "x"] [([HNil], termToHT book n), ([HCon (HVar "h") (HVar "t")], HApp (HApp (termToHT book c) (HVar "h")) (HVar "t"))])
+  Con h t     -> HCon (termToHT book i h) (termToHT book i t)
+  LstM n c    -> HLam "_'x" (HMat [HVar "_'x"] [([HNil], termToHT book i n), ([HCon (HVar "_'h") (HVar "_'t")], HApp (HApp (termToHT book i c) (HVar "_'h")) (HVar "_'t"))])
   Enu _       -> HEnu
   Sym s       -> HSym s
-  EnuM cs d   -> HLam "x" (HMat [HVar "x"] ((map (\(k,f) -> ([HSym k], termToHT book f)) cs) ++ [([HVar "x"], HApp (termToHT book d) (HVar "x"))]))
+  EnuM cs d   -> HLam "_'x" (HMat [HVar "_'x"] ((map (\(k,f) -> ([HSym k], termToHT book i f)) cs) ++ [([HVar "_'x"], HApp (termToHT book i d) (HVar "_'x"))]))
   Num _       -> typeToHT book term
   Val v       -> HVal v
-  Op2 o a b   -> HOp2 o (termToHT book a) (termToHT book b)
-  Op1 o a     -> HOp1 o (termToHT book a)
+  Op2 o a b   -> HOp2 o (termToHT book i a) (termToHT book i b)
+  Op1 o a     -> HOp1 o (termToHT book i a)
   Sig _ _     -> typeToHT book term
-  Tup a b     -> HTup (termToHT book a) (termToHT book b)
-  SigM f      -> HLam "x" (HMat [HVar "x"] [([HTup (HVar "a") (HVar "b")], HApp (HApp (termToHT book f) (HVar "a")) (HVar "b"))])
+  Tup a b     -> HTup (termToHT book i a) (termToHT book i b)
+  SigM f      -> HLam "_'x" (HMat [HVar "_'x"] [([HTup (HVar "_'a") (HVar "_'b")], HApp (HApp (termToHT book i f) (HVar "_'a")) (HVar "_'b"))])
   All _ _     -> typeToHT book term
-  Lam n _ f   -> HLam n (termToHT book (f (Var n 0)))
+  Lam n _ f   -> HLam (varNam i n) (termToHT book (i+1) (f (Var (varNam i n) 0)))
   -- App (BitM f t) x -> HMat [termToHT book x] [([HBt0], termToHT book f), ([HBt1], termToHT book t)]
   -- App (NatM z s) x -> HMat [termToHT book x] [([HZer], termToHT book z), ([HSuc (HVar "n")], HApp (termToHT book s) (HVar "n"))]
   -- App (LstM n c) x -> HMat [termToHT book x] [([HNil], termToHT book n), ([HCon (HVar "h") (HVar "t")], HApp (HApp (termToHT book c) (HVar "h")) (HVar "t"))]
   -- App (SigM f)   x -> HMat [termToHT book x] [([HTup (HVar "a") (HVar "b")], HApp (HApp (termToHT book f) (HVar "a")) (HVar "b"))]
-  App f x     -> HApp (termToHT book f) (termToHT book x)
+  App f x     -> HApp (termToHT book i f) (termToHT book i x)
   Eql _ _ _   -> typeToHT book term
   Rfl         -> HEra
-  EqlM f      -> HLam "_" (termToHT book f)
-  Rwt _ f     -> termToHT book f
+  EqlM f      -> HLam "_" (termToHT book i f)
+  Rwt _ f     -> termToHT book i f
   Met _ _ _   -> error "Metas not supported for Haskell compilation"
   Era         -> HEra
   Sup _ _ _   -> error "Superpositions not supported for Haskell compilation"
   SupM _ _    -> error "Superposition matches not supported for Haskell compilation"
-  Log s x     -> HLog (termToHT book s) (termToHT book x)
-  Loc _ t     -> termToHT book t
+  Log s x     -> HLog (termToHT book i s) (termToHT book i x)
+  Loc _ t     -> termToHT book i t
   Pri p       -> HPri p
-  Pat xs _ cs -> HMat (map (termToHT book) xs) (map (\(ps, b) -> (map (termToHT book) ps, termToHT book b)) cs)
+  Pat xs _ cs -> HMat (map (termToHT book i) xs) (map (\(ps, b) -> (map (termToHT book i) ps, termToHT book i b)) cs)
   Frk _ _ _   -> error "Fork not supported for Haskell compilation"
 
 -- Convert a type to a Haskell term.
 -- Falls back to HAny on types not supported by Haskell (Set, dependent, etc)
 typeToHT :: Book -> Type -> HT
 typeToHT book t = case whnf book t of
-  Var n _     -> HVar n
+  Var n _     -> HVar ("t'" ++ n)
   Uni         -> HUni
   Bit         -> HBit
   Nat         -> HNat
   Lst t       -> HLst (typeToHT book t)
   Enu ss      -> HEnu
   Num t       -> HNum t
-  Sig a b     -> HSig (typeToHT book a) (typeToHT book (whnf book (App b Emp)))
+  Sig a (Lam n _ f) -> HSig (typeToHT book a) (typeToHT book (f (Var n 0)))
+  All a (Lam n _ f) -> HAll (typeToHT book a) (typeToHT book (f (Var n 0)))
+  Sig a b     -> HSig (typeToHT book a) (typeToHT book (whnf book (App b Emp))) 
   All a b     -> HAll (typeToHT book a) (typeToHT book (whnf book (App b Emp)))
-  Set         -> HAny
+  Set         -> HUni
   Emp         -> HAny
   Eql t a b   -> HAny
   Era         -> HAny
   _           -> HAny
 
 -- Clean function names for Haskell
-cleanName :: String -> String
-cleanName = map (\c -> if c == '/' then '\'' else c)
+refNam :: String -> String
+refNam = map (\c -> if c == '/' then '\'' else c)
+
+varNam :: Int -> String -> String
+varNam i n = "_" ++ show i ++ "'" ++ n
 
 -- Printing of Haskell Terms
 ----------------------------
@@ -187,8 +193,8 @@ indent i = replicate i ' '
 showTerm :: Int -> HT -> String
 showTerm i term = case term of
   HVar n         -> n
-  HRef n         -> cleanName n
-  HLam n f       -> "(\\" ++ n ++ " -> " ++ showTerm i f ++ ")"
+  HRef n         -> refNam n
+  HLam n f       -> showLam i term []
   HApp f x       -> showApp i term []
   HLet n v f     -> "let " ++ n ++ " = " ++ showTerm (i+7+length n) v ++ " in\n" ++ indent i ++ showTerm i f
   HAnn v t       -> "(" ++ showTerm i v ++ " :: " ++ showTerm i t ++ ")"
@@ -232,6 +238,10 @@ showCoerce i x = "(unsafeCoerce (" ++ showTerm i x ++ "))"
 showApp :: Int -> HT -> [HT] -> String
 showApp i (HApp f x) acc = showApp i f (x:acc)
 showApp i          t acc = "(" ++ unwords (map (showCoerce i) (t:acc)) ++ ")"
+
+showLam :: Int -> HT -> [String] -> String
+showLam i (HLam n f) ks = showLam i f (n:ks)
+showLam i          t ks = "(\\" ++ unwords (reverse ks) ++ " -> " ++ showTerm i t ++ ")"
 
 showAll :: Int -> HT -> [HT] -> String
 showAll i (HAll a b) acc = showAll i b (a:acc)
