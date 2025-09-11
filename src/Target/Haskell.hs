@@ -6,6 +6,7 @@ module Target.Haskell where
 
 import Core.Type
 import Core.WHNF
+import Data.Char (isUpper)
 import Data.List (intercalate)
 import qualified Data.Map as M
 
@@ -22,7 +23,7 @@ compile book@(Book defs _) =
 prelude :: String
 prelude = unlines [
     "{-# LANGUAGE ViewPatterns #-}",
-    "import Prelude (print, fromIntegral, (==), (>=), (/=), (+), (-), (*), div, mod, (^), (<), (>), (<=), negate, id, pred, Integer, Bool(..), IO)",
+    "import Prelude (print, fromIntegral, (==), (>=), (/=), (+), (-), (*), div, mod, (^), (<), (>), (<=), negate, id, pred, Integer, Bool(..), IO, undefined, String)",
     "import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR, complement)",
     "import Data.Char (chr, ord)",
     "import Data.Int (Int64)",
@@ -104,45 +105,45 @@ termToHT book i term = case term of
   Fix n f     -> HLet n (termToHT book i (f (Var n 0))) (HVar n)
   Let k _ v f -> HLet (varNam i k) (termToHT book (i+1) v) (termToHT book (i+1) (f (Var (varNam i k) 0)))
   Use k v f   -> termToHT book i(f v)
-  Set         -> typeToHT book term
-  Chk v t     -> HAnn (termToHT book i v) (termToHT book i t)
+  Set         -> HOne
+  Chk v t     -> HAnn (termToHT book i v) (typeToHT book t)
   Tst v       -> termToHT book i v
-  Emp         -> typeToHT book term
-  EmpM        -> HLam "_'x" HEra
-  Uni         -> typeToHT book term
+  Emp         -> HOne
+  EmpM        -> HLam "_'x" HOne
+  Uni         -> HOne
   One         -> HOne
   UniM f      -> HLam "_" (termToHT book i f)
-  Bit         -> typeToHT book term
+  Bit         -> HOne
   Bt0         -> HBt0
   Bt1         -> HBt1
   BitM f t    -> HLam "_'x" (HMat [HVar "_'x"] [([HBt0], termToHT book i f), ([HBt1], termToHT book i t)])
-  Nat         -> typeToHT book term
+  Nat         -> HOne
   Zer         -> HZer
   Suc p       -> HSuc (termToHT book i p)
   NatM z s    -> HLam "_'x" (HMat [HVar "_'x"] [([HZer], termToHT book i z), ([HSuc (HVar "_'p")], HApp (termToHT book i s) (HVar "_'p"))])
-  Lst _       -> typeToHT book term
+  Lst _       -> HOne
   Nil         -> HNil
   Con h t     -> HCon (termToHT book i h) (termToHT book i t)
   LstM n c    -> HLam "_'x" (HMat [HVar "_'x"] [([HNil], termToHT book i n), ([HCon (HVar "_'h") (HVar "_'t")], HApp (HApp (termToHT book i c) (HVar "_'h")) (HVar "_'t"))])
   Enu _       -> HEnu
   Sym s       -> HSym s
   EnuM cs d   -> HLam "_'x" (HMat [HVar "_'x"] ((map (\(k,f) -> ([HSym k], termToHT book i f)) cs) ++ [([HVar "_'x"], HApp (termToHT book i d) (HVar "_'x"))]))
-  Num _       -> typeToHT book term
+  Num _       -> HOne
   Val v       -> HVal v
   Op2 o a b   -> HOp2 o (termToHT book i a) (termToHT book i b)
   Op1 o a     -> HOp1 o (termToHT book i a)
-  Sig _ _     -> typeToHT book term
+  Sig _ _     -> HOne
   Tup a b     -> HTup (termToHT book i a) (termToHT book i b)
   SigM f      -> HLam "_'x" (HMat [HVar "_'x"] [([HTup (HVar "_'a") (HVar "_'b")], HApp (HApp (termToHT book i f) (HVar "_'a")) (HVar "_'b"))])
-  All _ _     -> typeToHT book term
+  All _ _     -> HOne
   Lam n _ f   -> HLam (varNam i n) (termToHT book (i+1) (f (Var (varNam i n) 0)))
   -- App (BitM f t) x -> HMat [termToHT book x] [([HBt0], termToHT book f), ([HBt1], termToHT book t)]
   -- App (NatM z s) x -> HMat [termToHT book x] [([HZer], termToHT book z), ([HSuc (HVar "n")], HApp (termToHT book s) (HVar "n"))]
   -- App (LstM n c) x -> HMat [termToHT book x] [([HNil], termToHT book n), ([HCon (HVar "h") (HVar "t")], HApp (HApp (termToHT book c) (HVar "h")) (HVar "t"))]
   -- App (SigM f)   x -> HMat [termToHT book x] [([HTup (HVar "a") (HVar "b")], HApp (HApp (termToHT book f) (HVar "a")) (HVar "b"))]
   App f x     -> HApp (termToHT book i f) (termToHT book i x)
-  Eql _ _ _   -> typeToHT book term
-  Rfl         -> HEra
+  Eql _ _ _   -> HOne
+  Rfl         -> HOne
   EqlM f      -> HLam "_" (termToHT book i f)
   Rwt _ f     -> termToHT book i f
   Met _ _ _   -> error "Metas not supported for Haskell compilation"
@@ -155,11 +156,11 @@ termToHT book i term = case term of
   Pat xs _ cs -> HMat (map (termToHT book i) xs) (map (\(ps, b) -> (map (termToHT book i) ps, termToHT book i b)) cs)
   Frk _ _ _   -> error "Fork not supported for Haskell compilation"
 
--- Convert a type to a Haskell term.
--- Falls back to HAny on types not supported by Haskell (Set, dependent, etc)
+-- Convert a Bend term to a Haskell type.
 typeToHT :: Book -> Type -> HT
 typeToHT book t = case whnf book t of
   Var n _     -> HVar ("t'" ++ n)
+  -- App f x     -> HApp (typeToHT book f) (typeToHT book x)
   Uni         -> HUni
   Bit         -> HBit
   Nat         -> HNat
@@ -171,14 +172,14 @@ typeToHT book t = case whnf book t of
   Sig a b     -> HSig (typeToHT book a) (typeToHT book (whnf book (App b Emp))) 
   All a b     -> HAll (typeToHT book a) (typeToHT book (whnf book (App b Emp)))
   Set         -> HUni
-  Emp         -> HAny
-  Eql t a b   -> HAny
+  Emp         -> HUni
+  Eql t a b   -> HUni
   Era         -> HAny
   _           -> HAny
 
 -- Clean function names for Haskell
 refNam :: String -> String
-refNam = map (\c -> if c == '/' then '\'' else c)
+refNam n = "_f'" ++ (map (\c -> if c == '/' then '\'' else c) n)
 
 varNam :: Int -> String -> String
 varNam i n = "_" ++ show i ++ "'" ++ n
@@ -196,7 +197,7 @@ showTerm i term = case term of
   HRef n         -> refNam n
   HLam n f       -> showLam i term []
   HApp f x       -> showApp i term []
-  HLet n v f     -> "let " ++ n ++ " = " ++ showTerm (i+7+length n) v ++ " in\n" ++ indent i ++ showTerm i f
+  HLet n v f     -> "let " ++ n ++ " = " ++ showTerm (i+6) v ++ " in\n" ++ indent i ++ showTerm i f
   HAnn v t       -> "(" ++ showTerm i v ++ " :: " ++ showTerm i t ++ ")"
   HAll a b       -> showAll i term []
   HAny           -> "Any"
@@ -225,7 +226,7 @@ showTerm i term = case term of
   HVal (F64_V n) -> "(" ++ show n ++ " :: Double)"
   HVal (CHR_V c) -> show c
   -- TODO: We need to know the type of the operands and then coerce.
-  -- Since op2/op1 are polymorphic with infer on args, we can't coerce directly without annotation.
+  -- Since op2/op1 are polymorphic with infer on args, we can't coerce directly without manual annotations.
   HOp2 op a b    -> "(" ++ showCoerce i a ++ " " ++ showOp2 op ++ " (fromIntegral " ++ showCoerce i b ++ "))"
   HOp1 op a      -> "(" ++ showOp1 op ++ " " ++ showCoerce i a ++ ")"
   HLog s x       -> "(trace (" ++ showTerm i s ++ ") (" ++ showTerm i x ++ "))"
@@ -241,7 +242,7 @@ showApp i          t acc = "(" ++ unwords (map (showCoerce i) (t:acc)) ++ ")"
 
 showLam :: Int -> HT -> [String] -> String
 showLam i (HLam n f) ks = showLam i f (n:ks)
-showLam i          t ks = "(\\" ++ unwords (reverse ks) ++ " -> " ++ showTerm i t ++ ")"
+showLam i          t ks = "(\\" ++ unwords (reverse ks) ++ " ->\n" ++ indent (i+2) ++ showTerm (i+2) t ++ ")"
 
 showAll :: Int -> HT -> [HT] -> String
 showAll i (HAll a b) acc = showAll i b (a:acc)
