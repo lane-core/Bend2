@@ -23,7 +23,7 @@ compile book@(Book defs _) =
 prelude :: String
 prelude = unlines [
     "{-# LANGUAGE ViewPatterns #-}",
-    "import Prelude (print, fromIntegral, (==), (>=), (/=), (+), (-), (*), div, mod, (^), (<), (>), (<=), negate, id, pred, Integer, Bool(..), IO, undefined, String)",
+    "import Prelude (print, fromIntegral, (==), (>=), (/=), (+), (-), (*), div, mod, (^), (<), (>), (<=), negate, id, pred, Integer, Bool(..), IO, undefined, Char)",
     "import Data.Bits ((.&.), (.|.), xor, shiftL, shiftR, complement)",
     "import Data.Char (chr, ord)",
     "import Data.Int (Int64)",
@@ -31,28 +31,31 @@ prelude = unlines [
     "import Debug.Trace (trace)",
     "import GHC.Exts (Any)",
     "import Unsafe.Coerce (unsafeCoerce)",
+    "",
+    "main :: IO ()",
+    "main = print (f''main)",
     ""
   ]
 
 -- Compile a function definition
 compileFn :: Book -> Name -> Term -> Term -> String
 compileFn book name term typ =
-  let htm  = termToHT book 0 term
-      hty  = typeToHT book typ
-      namH = refNam name
-      args = collectArgs htm
-      sig  = namH ++ " :: " ++ showTerm 0 hty
-      body = namH ++ " =\n" ++ indent 2 ++ showTerm 2 htm
-  in sig ++ "\n" ++ body
+  -- TODO: remove irrelevant args
+  let htm = termToHT book 0 term
+      hty = typeToHT book typ
+      -- TODO: This is not general enough to get rid of all OTT-like equality values.
+      -- E.g. if a function returns '(x, 1n+{==})' (succ applied to an equality inside of a pair), it'll still go through and become a haskell type error.
+      irr = irrelevantBody hty 0
+      val = case irr of { Just irr -> irr; Nothing -> htm }
+      sig = refNam name ++ " :: " ++ showTerm 0 hty
+      bod = refNam name ++ " =\n" ++ indent 2 ++ showTerm 2 val
+  in sig ++ "\n" ++ bod
   where
-    collectArgs :: HT -> [String]
-    collectArgs (HLam n body) = n : collectArgs body
-    collectArgs _ = []
-    
-    removeArgs :: Int -> HT -> HT
-    removeArgs 0 t = t
-    removeArgs n (HLam _ body) = removeArgs (n-1) body
-    removeArgs _ t = t
+    -- If the fn is irrelevant (returns ()), replace with a simple "\args. ()"
+    irrelevantBody :: HT -> Int -> Maybe HT
+    irrelevantBody (HAll a b) n = irrelevantBody b (n+1)
+    irrelevantBody HUni       n = Just ((foldr (const $ HLam "_") HUni [1..n]))
+    irrelevantBody _          n = Nothing
 
 -- Compilation from Bend Term to Haskell Term
 ---------------------------------------------
@@ -86,7 +89,7 @@ data HT
   | HTup HT HT         -- Pair constructor
   | HSym String        -- Symbol
   -- Pattern matching
-  | HMat [HT] [([HT], HT)] -- Case expression with Term patterns
+  | HMat [HT] [([HT], HT)] -- case of expression
   -- Numeric values
   | HVal NVal          -- Numeric literals
   | HOp2 NOp2 HT HT    -- Binary operations
@@ -100,7 +103,7 @@ data HT
 termToHT :: Book -> Int -> Term -> HT
 termToHT book i term = case term of
   Var n _     -> HVar n
-  Ref k _     -> HRef k -- TODO: remove erased args from the reference
+  Ref k _     -> HRef k
   Sub t       -> termToHT book i t
   Fix n f     -> HLet n (termToHT book i (f (Var n 0))) (HVar n)
   Let k _ v f -> HLet (varNam i k) (termToHT book (i+1) v) (termToHT book (i+1) (f (Var (varNam i k) 0)))
@@ -109,38 +112,34 @@ termToHT book i term = case term of
   Chk v t     -> HAnn (termToHT book i v) (typeToHT book t)
   Tst v       -> termToHT book i v
   Emp         -> HOne
-  EmpM        -> HLam "_'x" HOne
+  EmpM        -> HLam "x''" HOne
   Uni         -> HOne
   One         -> HOne
   UniM f      -> HLam "_" (termToHT book i f)
   Bit         -> HOne
   Bt0         -> HBt0
   Bt1         -> HBt1
-  BitM f t    -> HLam "_'x" (HMat [HVar "_'x"] [([HBt0], termToHT book i f), ([HBt1], termToHT book i t)])
+  BitM f t    -> HLam "x''" (HMat [HVar "x''"] [([HBt0], termToHT book i f), ([HBt1], termToHT book i t)])
   Nat         -> HOne
   Zer         -> HZer
   Suc p       -> HSuc (termToHT book i p)
-  NatM z s    -> HLam "_'x" (HMat [HVar "_'x"] [([HZer], termToHT book i z), ([HSuc (HVar "_'p")], HApp (termToHT book i s) (HVar "_'p"))])
+  NatM z s    -> HLam "x''" (HMat [HVar "x''"] [([HZer], termToHT book i z), ([HSuc (HVar "p''")], HApp (termToHT book i s) (HVar "p''"))])
   Lst _       -> HOne
   Nil         -> HNil
   Con h t     -> HCon (termToHT book i h) (termToHT book i t)
-  LstM n c    -> HLam "_'x" (HMat [HVar "_'x"] [([HNil], termToHT book i n), ([HCon (HVar "_'h") (HVar "_'t")], HApp (HApp (termToHT book i c) (HVar "_'h")) (HVar "_'t"))])
+  LstM n c    -> HLam "x''" (HMat [HVar "x''"] [([HNil], termToHT book i n), ([HCon (HVar "h''") (HVar "t''")], HApp (HApp (termToHT book i c) (HVar "h''")) (HVar "t''"))])
   Enu _       -> HEnu
   Sym s       -> HSym s
-  EnuM cs d   -> HLam "_'x" (HMat [HVar "_'x"] ((map (\(k,f) -> ([HSym k], termToHT book i f)) cs) ++ [([HVar "_'x"], HApp (termToHT book i d) (HVar "_'x"))]))
+  EnuM cs d   -> HLam "x''" (HMat [HVar "x''"] ((map (\(k,f) -> ([HSym k], termToHT book i f)) cs) ++ [([HVar "x''"], HApp (termToHT book i d) (HVar "x''"))]))
   Num _       -> HOne
   Val v       -> HVal v
   Op2 o a b   -> HOp2 o (termToHT book i a) (termToHT book i b)
   Op1 o a     -> HOp1 o (termToHT book i a)
   Sig _ _     -> HOne
   Tup a b     -> HTup (termToHT book i a) (termToHT book i b)
-  SigM f      -> HLam "_'x" (HMat [HVar "_'x"] [([HTup (HVar "_'a") (HVar "_'b")], HApp (HApp (termToHT book i f) (HVar "_'a")) (HVar "_'b"))])
+  SigM f      -> HLam "x''" (HMat [HVar "x''"] [([HTup (HVar "a''") (HVar "b''")], HApp (HApp (termToHT book i f) (HVar "a''")) (HVar "b''"))])
   All _ _     -> HOne
   Lam n _ f   -> HLam (varNam i n) (termToHT book (i+1) (f (Var (varNam i n) 0)))
-  -- App (BitM f t) x -> HMat [termToHT book x] [([HBt0], termToHT book f), ([HBt1], termToHT book t)]
-  -- App (NatM z s) x -> HMat [termToHT book x] [([HZer], termToHT book z), ([HSuc (HVar "n")], HApp (termToHT book s) (HVar "n"))]
-  -- App (LstM n c) x -> HMat [termToHT book x] [([HNil], termToHT book n), ([HCon (HVar "h") (HVar "t")], HApp (HApp (termToHT book c) (HVar "h")) (HVar "t"))]
-  -- App (SigM f)   x -> HMat [termToHT book x] [([HTup (HVar "a") (HVar "b")], HApp (HApp (termToHT book f) (HVar "a")) (HVar "b"))]
   App f x     -> HApp (termToHT book i f) (termToHT book i x)
   Eql _ _ _   -> HOne
   Rfl         -> HOne
@@ -159,8 +158,7 @@ termToHT book i term = case term of
 -- Convert a Bend term to a Haskell type.
 typeToHT :: Book -> Type -> HT
 typeToHT book t = case whnf book t of
-  Var n _     -> HVar ("t'" ++ n)
-  -- App f x     -> HApp (typeToHT book f) (typeToHT book x)
+  Var n _     -> HVar ("t''" ++ n)
   Uni         -> HUni
   Bit         -> HBit
   Nat         -> HNat
@@ -179,10 +177,10 @@ typeToHT book t = case whnf book t of
 
 -- Clean function names for Haskell
 refNam :: String -> String
-refNam n = "_f'" ++ (map (\c -> if c == '/' then '\'' else c) n)
+refNam n = "f''" ++ (map (\c -> if c == '/' then '\'' else c) n)
 
 varNam :: Int -> String -> String
-varNam i n = "_" ++ show i ++ "'" ++ n
+varNam i n = "x" ++ show i ++ "''" ++ n
 
 -- Printing of Haskell Terms
 ----------------------------
@@ -242,7 +240,7 @@ showApp i          t acc = "(" ++ unwords (map (showCoerce i) (t:acc)) ++ ")"
 
 showLam :: Int -> HT -> [String] -> String
 showLam i (HLam n f) ks = showLam i f (n:ks)
-showLam i          t ks = "(\\" ++ unwords (reverse ks) ++ " ->\n" ++ indent (i+2) ++ showTerm (i+2) t ++ ")"
+showLam i          t ks = "(\\" ++ unwords (reverse ks) ++ " ->\n" ++ indent (i+2) ++ showCoerce (i+2) t ++ ")"
 
 showAll :: Int -> HT -> [HT] -> String
 showAll i (HAll a b) acc = showAll i b (a:acc)
@@ -280,7 +278,7 @@ showOp2 op = case op of
   GRT -> ">"
   LEQ -> "<="
   GEQ -> ">="
-  AND -> ".&."  -- Bitwise operations
+  AND -> ".&."
   OR  -> ".|."
   XOR -> "`xor`"
   SHL -> "`shiftL`"
