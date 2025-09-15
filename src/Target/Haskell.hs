@@ -195,7 +195,7 @@ showTerm i term = case term of
   HRef n         -> refNam n
   HLam n f       -> showLam i term []
   HApp f x       -> showApp i term []
-  HLet n v f     -> "let " ++ n ++ " = " ++ showTerm (i+6) v ++ " in\n" ++ indent i ++ showTerm i f
+  HLet n v f     -> "let " ++ n ++ " = " ++ showTerm (i+6) v ++ " in\n" ++ indent i ++ showCoerce i f
   HAnn v t       -> "(" ++ showTerm i v ++ " :: " ++ showTerm i t ++ ")"
   HAll a b       -> showAll i term []
   HAny           -> "Any"
@@ -232,6 +232,7 @@ showTerm i term = case term of
   HEra           -> "undefined"
 
 showCoerce :: Int -> HT -> String
+showCoerce i t@(HLet _ _ _) = showTerm i t -- unsafeCoerce goes through let bindings for easier indentation
 showCoerce i x = "(unsafeCoerce (" ++ showTerm i x ++ "))"
 
 showApp :: Int -> HT -> [HT] -> String
