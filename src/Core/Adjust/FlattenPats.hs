@@ -141,6 +141,8 @@ flattenPat d span book pat =
         drops   = Pat (var d : ss) ms ds
     flattenPatGo d book pat@(Pat [] ms (([],rhs):cs)) =
       flattenPats d span book rhs
+    flattenPatGo d book pat@(Pat (_:_) _ []) =
+      Loc span EmpM  -- Empty pattern match becomes EmpM with original location
     flattenPatGo d book (Loc l t) =
       Loc l (flattenPat d span book t)
     flattenPatGo d book pat =
