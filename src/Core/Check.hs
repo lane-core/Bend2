@@ -29,6 +29,42 @@ import Core.WHNF
 extend :: Ctx -> Name -> Term -> Term -> Ctx
 extend (Ctx ctx) k v t = Ctx (ctx ++ [(k, v, t)])
 
+-- Extract the most specific span from a term, fallback to provided span
+getSpan :: Span -> Term -> Span
+getSpan fallback term = case term of
+  Loc span _ -> span
+  _          -> fallback
+
+-- Get span for the left operand of a binary operation by estimating from the operator span
+getLeftOperandSpan :: Span -> Span
+getLeftOperandSpan opSpan =
+  let (begLine, begCol) = spanBeg opSpan
+      (endLine, endCol) = spanEnd opSpan
+      src = spanSrc opSpan
+      pth = spanPth opSpan
+  in if begLine == endLine
+     then
+       -- Try to find the '+' operator and end the span just before it
+       let line = lines src !! (begLine - 1)
+           beforeCol = take (endCol - 1) line
+           -- Find the last '+' in the span and end just before it
+           plusPos = case reverse $ zip [1..] beforeCol of
+             [] -> begCol
+             positions -> case [(pos, c) | (pos, c) <- positions, c == '+'] of
+               [] -> begCol  -- No + found, use beginning
+               ((pos, _):_) -> pos - 1  -- End just before the +
+       in Span (begLine, begCol) (begLine, max begCol plusPos) pth src
+     else opSpan  -- Multi-line, just use original span
+
+-- Check if a type is valid for binary operations (more precise than canOp2)
+isValidForOp2 :: Term -> Bool
+isValidForOp2 typ = case typ of
+  Num _ -> True
+  Nat   -> True
+  Bit   -> True
+  All _ _ -> False  -- Function types are not valid for binary operations
+  _     -> False
+
 -- Check if a Sigma type represents a constructor
 -- Constructor types are sigma lists that:
 -- 1. Start with an Enum (constructor tag)
@@ -396,7 +432,16 @@ infer d span book@(Book defs names) ctx term =
     Op2 op a b -> do
       ta <- infer d span book ctx a
       tb <- infer d span book ctx b
-      inferOp2Type d span book ctx op ta tb
+      -- Early check: if either operand is definitely not valid for operations, fail immediately
+      let aForced = force book ta
+      let bForced = force book tb
+      case (aForced, bForced) of
+        (ta', _) | not (isValidForOp2 ta') ->
+          Fail $ TypeMismatch (getLeftOperandSpan span) (normalCtx book ctx) (normal book (Var "Num/Bit/Nat" 0)) (normal book ta) Nothing
+        (_, tb') | not (isValidForOp2 tb') ->
+          Fail $ TypeMismatch (getSpan span b) (normalCtx book ctx) (normal book (Var "Num/Bit/Nat" 0)) (normal book tb) Nothing
+        _ ->
+          inferOp2Type d span book ctx op ta tb
 
     -- ctx |- a : ta
     -- inferOp1Type op ta = tr
@@ -935,10 +980,19 @@ check d span book ctx term      goal =
     (Op2 op a b, _) -> do
       ta <- infer d span book ctx a
       tb <- infer d span book ctx b
-      tr <- inferOp2Type d span book ctx op ta tb
-      if equal d book tr goal
-        then Done ()
-        else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book tr) Nothing
+      -- Early check: if either operand is definitely not valid for operations, fail immediately
+      let aForced = force book ta
+      let bForced = force book tb
+      case (aForced, bForced) of
+        (ta', _) | not (isValidForOp2 ta') ->
+          Fail $ TypeMismatch (getLeftOperandSpan span) (normalCtx book ctx) (normal book (Var "Num/Bit/Nat" 0)) (normal book ta) Nothing
+        (_, tb') | not (isValidForOp2 tb') ->
+          Fail $ TypeMismatch (getSpan span b) (normalCtx book ctx) (normal book (Var "Num/Bit/Nat" 0)) (normal book tb) Nothing
+        _ -> do
+          tr <- inferOp2Type d span book ctx op ta tb
+          if equal d book tr goal
+            then Done ()
+            else Fail $ TypeMismatch span (normalCtx book ctx) (normal book goal) (normal book tr) Nothing
 
     -- ctx |- a : ta
     -- inferOp1Type op ta = tr
