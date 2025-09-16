@@ -59,33 +59,28 @@ extractEnums (Book defs _) =
       let baseName = case reverse (splitOn "::" enumName) of
             (base:_) -> base  -- Take the last part after ::
             [] -> enumName
-          -- For lookup, we use the base name
-      in M.insertWith (++) baseName [enumName] emap
-
--- | Check if an enum name is already fully qualified
-isFullyQualified :: String -> Bool
-isFullyQualified s = "::" `isInfixOf` s
-  where
-    isInfixOf needle haystack = any (isPrefixOf needle) (tails haystack)
-    isPrefixOf [] _ = True
-    isPrefixOf _ [] = False
-    isPrefixOf (x:xs) (y:ys) = x == y && isPrefixOf xs ys
-    tails [] = [[]]
-    tails xs@(_:xs') = xs : tails xs'
+          -- Extract type name from typeFQN: "c::T" -> "T"
+          typeName = case reverse (splitOn "::" typeFQN) of
+            (base:_) -> base
+            [] -> typeFQN
+          -- Create qualified type::enum mapping: "T::A" -> "c::T::A"
+          qualifiedName = typeName ++ "::" ++ baseName
+          -- Add ALL possible mappings:
+          emap1 = M.insertWith (++) baseName [enumName] emap           -- A -> c::T::A
+          emap2 = M.insertWith (++) qualifiedName [enumName] emap1     -- T::A -> c::T::A
+          emap3 = M.insertWith (++) enumName [enumName] emap2          -- c::T::A -> c::T::A
+      in emap3
 
 -- | Resolve a single enum name
 resolveEnum :: Span -> EnumMap -> String -> Result String
 resolveEnum span emap enumName =
-  if isFullyQualified enumName
-  then Done enumName  -- Already qualified, leave as-is
-  else
-    case M.lookup enumName emap of
-      Nothing -> Done enumName  -- Not a known enum, leave as-is
-      Just [fqn] -> Done fqn    -- Unique, auto-prefix
-      Just fqns ->
-        -- Ambiguous Enum
-        Fail $ AmbiguousEnum span (Ctx []) enumName fqns
-                 (Just $ "Please use one of: " ++ intercalate ", " (map ("&" ++) fqns))
+  case M.lookup enumName emap of
+    Nothing -> Done enumName  -- Not found in map, leave as-is
+    Just [fqn] -> Done fqn    -- Unique match, use it
+    Just fqns ->
+      -- Ambiguous Enum
+      Fail $ AmbiguousEnum span (Ctx []) enumName fqns
+               (Just $ "Please use one of: " ++ intercalate ", " (map ("&" ++) fqns))
 
 -- | Resolve enums in a term
 resolveEnumsInTerm :: EnumMap -> Term -> Result Term
