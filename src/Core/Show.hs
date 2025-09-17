@@ -573,7 +573,6 @@ instance Show Error where
 
 -- Exception wrapper for Error
 newtype BendException = BendException Error
-  deriving (Typeable)
 
 instance Show BendException where
   show (BendException e) = show e
