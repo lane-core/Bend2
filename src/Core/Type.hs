@@ -189,6 +189,8 @@ data Error
   | UnknownTermination Term
   | ImportError Span String
   | AmbiguousEnum Span Ctx String [String] (Maybe String)
+  | CompilationError String
+
 
 data Result a
   = Done a
