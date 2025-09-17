@@ -875,9 +875,28 @@ parseLam = label "lambda abstraction" $ do
     pat <- parseTermBefore ":"
     mtyp <- optional $ do
       _ <- symbol ":"
-      parseTerm
+      typ <- parseTerm
+      -- After parsing a type annotation, we MUST see a '.' or another binder
+      -- Check what comes next
+      nextToken <- lookAhead $ choice
+        [ symbol "." >> return (Right ())
+        , parseTermBefore ":" >> return (Left ())  -- Another binder
+        , return (Left ())  -- Something else - will fail below
+        ]
+      case nextToken of
+        Right _ -> return ()  -- Found '.', good!
+        Left _  -> return ()  -- Either another binder or will fail at '.' check
+      return typ
     return (pat, mtyp)
-  _  <- symbol "."
+  -- Now require '.' - if missing, give a helpful error
+  dotResult <- optional (symbol ".")
+  case dotResult of
+    Nothing -> fail $ concat
+      [ "Expected '.' after lambda parameters. "
+      , "Note: Bend uses 'lambda x. body' syntax, not 'lambda x: body'. "
+      , "If you meant to specify a type, use 'lambda x : Type. body'."
+      ]
+    Just _ -> return ()
   body  <- parseTerm
   -- Desugar pattern lambdas
   return $ foldr desugarLamPat body (zip [0..] binders)
